@@ -18,6 +18,6 @@ if __name__ == "__main__":
         seed=1,
         adr_method="avg",
     )
-    adr1(sim)
+    adr1(sim, capture_mode="flora")
     sim.run(1000)
     print(sim.get_metrics())
