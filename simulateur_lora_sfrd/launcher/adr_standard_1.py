@@ -16,7 +16,7 @@ from .channel import Channel
 # ---------------------------------------------------------------------------
 
 
-def _degrade_params(profile: str) -> dict:
+def _degrade_params(profile: str, capture_mode: str) -> dict:
     """Return channel degradation parameters for ``profile``.
 
     ``profile`` selects path loss and shadowing values from
@@ -52,6 +52,13 @@ def _degrade_params(profile: str) -> dict:
             fading = None
         rician_k = cp.getfloat("channel", "rician_k", fallback=rician_k)
 
+    if capture_mode == "flora":
+        advanced_capture = False
+        flora_capture = True
+    else:
+        advanced_capture = True
+        flora_capture = False
+
     return {
         "propagation_model": "log_distance",  # or "cost231" with adjusted n
         "fading": fading,  # or None
@@ -62,15 +69,19 @@ def _degrade_params(profile: str) -> dict:
         "fine_fading_std": fine_fading_std,
         "freq_offset_std_hz": 1500.0,
         "sync_offset_std_s": 0.005,
-        "advanced_capture": True,
-        "flora_capture": True,
+        "advanced_capture": advanced_capture,
+        "flora_capture": flora_capture,
         "flora_loss_model": "lognorm",
         "detection_threshold_dBm": -130.0,
         "capture_threshold_dB": 6.0,
     }
 
 def apply(
-    sim: Simulator, *, degrade_channel: bool = False, profile: str = "flora"
+    sim: Simulator,
+    *,
+    degrade_channel: bool = False,
+    profile: str = "flora",
+    capture_mode: str = "advanced",
 ) -> None:
     """Configure ADR variant ``adr_standard_1`` (LoRaWAN defaults).
 
@@ -85,6 +96,10 @@ def apply(
     profile : str, optional
         Environment key used to select ``path_loss_exp`` and ``shadowing_std``
         from :data:`Channel.ENV_PRESETS`. Defaults to ``"flora"``.
+    capture_mode : str, optional
+        Selects which capture model to enable. ``"advanced"`` enables the
+        detailed capture effect while ``"flora"`` uses the simplified FLoRa
+        capture model. Defaults to ``"advanced"``.
     """
     # Marge ADR
     Simulator.MARGIN_DB = 15.0
@@ -110,7 +125,7 @@ def apply(
 
     if degrade_channel:
         new_channels = []
-        base_params = _degrade_params(profile)
+        base_params = _degrade_params(profile, capture_mode)
         for ch in sim.multichannel.channels:
             params = dict(base_params)
             # Conserver les paramètres spécifiques au canal original

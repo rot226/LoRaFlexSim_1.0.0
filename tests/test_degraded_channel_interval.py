@@ -17,7 +17,7 @@ def test_interval_with_degraded_channel():
         mobility=False,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True)
+    apply_adr(sim, degrade_channel=True, capture_mode="flora")
     sim.run()
     node = sim.nodes[0]
     average = node._last_arrival_time / node.packets_sent
@@ -43,7 +43,7 @@ def test_channels_identical_after_degrade():
         channels=multi,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True)
+    apply_adr(sim, degrade_channel=True, capture_mode="flora")
 
     attrs = [
         "path_loss_exp",
