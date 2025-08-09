@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 import random
 
+from .omnet_modulation import calculate_ber, calculate_ser
+
 
 class FloraPHY:
     """Replicate FLoRa path loss and capture formulas.
@@ -127,6 +129,19 @@ class FloraPHY:
         return winners
 
     def packet_error_rate(self, snr: float, sf: int, payload_bytes: int = 20) -> float:
-        """Return PER based on a logistic approximation of FLoRa curves."""
-        th = self.SNR_THRESHOLDS.get(sf, -10.0) + 2.0
-        return 1.0 / (1.0 + math.exp(2.0 * (snr - th)))
+        """Return PER using the full BER/SER curves from FLoRa."""
+        bitrate = (
+            sf
+            * self.channel.bandwidth
+            * 4.0
+            / ((1 << sf) * (self.channel.coding_rate + 4))
+        )
+        snir = 10 ** (snr / 10.0)
+        ber = calculate_ber(snir, self.channel.bandwidth, bitrate)
+        ser = calculate_ser(snir, self.channel.bandwidth, bitrate)
+        n_bits = payload_bytes * 8
+        per_bit = 1.0 - (1.0 - ber) ** n_bits
+        n_sym = math.ceil(n_bits / 4)
+        per_sym = 1.0 - (1.0 - ser) ** n_sym
+        per = max(per_bit, per_sym)
+        return min(max(per, 0.0), 1.0)

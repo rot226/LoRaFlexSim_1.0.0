@@ -377,6 +377,8 @@ class Channel:
         self.last_rssi_dBm = 0.0
         self.last_noise_dBm = 0.0
         self.last_filter_att_dB = 0.0
+        # Track the effective carrier after oscillator drift.
+        self.last_freq_hz = self.frequency_hz
 
         if self.phy_model in ("omnet", "omnet_full"):
             from .omnet_phy import OmnetPHY
@@ -435,7 +437,10 @@ class Channel:
         original = self.omnet.temperature_K
         self.omnet.temperature_K = temp
         eff_bw = min(self.bandwidth, self.frontend_filter_bw)
-        thermal = self.omnet.variable_thermal_noise_dBm(eff_bw)
+        # Thermal noise according to current temperature with a slowly varying
+        # component matching FLoRa's LoRaAnalogModel.
+        thermal = self.omnet.thermal_noise_dBm(eff_bw)
+        thermal += self.omnet.noise_variation()
         self.omnet.temperature_K = original
         base = thermal + self.noise_figure_dB
         power = 10 ** (base / 10.0)
@@ -567,7 +572,9 @@ class Channel:
         rssi += self.rssi_offset_dB
         if freq_offset_hz is None:
             freq_offset_hz = self.frequency_offset_hz
+        # Apply oscillator drift similar to FLoRa's analog model
         freq_offset_hz += self.omnet.frequency_drift()
+        self.last_freq_hz = self.frequency_hz + freq_offset_hz
         if sync_offset_s is None:
             sync_offset_s = self.sync_offset_s
         sync_offset_s += self.omnet.clock_drift()
