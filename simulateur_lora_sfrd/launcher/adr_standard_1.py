@@ -54,12 +54,17 @@ DEGRADE_PARAMS = {
     "freq_offset_std_hz": 1500.0,
     #"sync_offset_std_s": 0.005,
     "sync_offset_std_s": 0.005,
-    "advanced_capture": True,            # ou "flora_capture": True si dispo
+    # Le mode de capture est défini dynamiquement via ``capture_mode``
     "detection_threshold_dBm": -130.0,
     "capture_threshold_dB": 6.0,
 }
 
-def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
+def apply(
+    sim: Simulator,
+    *,
+    degrade_channel: bool = False,
+    capture_mode: str = "advanced",
+) -> None:
     """Configure ADR variant ``adr_standard_1`` (LoRaWAN defaults).
 
     Parameters
@@ -70,6 +75,9 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
         If ``True``, replace existing :class:`~launcher.channel.Channel` objects
         with :class:`~launcher.advanced_channel.AdvancedChannel` instances using
         more realistic propagation impairments.
+    capture_mode : str, optional
+        ``"advanced"`` to enable :code:`advanced_capture` (default) or
+        ``"flora"`` to enable :code:`flora_capture` for FLoRa compatibility.
     """
     # Marge ADR
     Simulator.MARGIN_DB = 15.0
@@ -94,6 +102,9 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
         node.adr_ack_delay = 32
 
     if degrade_channel:
+        capture_mode = capture_mode.lower()
+        if capture_mode not in {"advanced", "flora"}:
+            raise ValueError("capture_mode must be 'advanced' or 'flora'")
         new_channels = []
         for ch in sim.multichannel.channels:
             params = dict(DEGRADE_PARAMS)
@@ -103,6 +114,11 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
                 params["bandwidth"] = ch.bandwidth
             if hasattr(ch, "coding_rate"):
                 params["coding_rate"] = ch.coding_rate
+            # Choix du mode de capture
+            if capture_mode == "flora":
+                params.update({"advanced_capture": False, "flora_capture": True})
+            else:
+                params.update({"advanced_capture": True, "flora_capture": False})
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             new_channels.append(adv)
