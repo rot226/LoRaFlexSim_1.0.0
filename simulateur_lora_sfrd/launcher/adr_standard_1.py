@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import configparser
+from pathlib import Path
+
 from .simulator import Simulator
 from . import server
 from .advanced_channel import AdvancedChannel
@@ -18,18 +21,45 @@ def _degrade_params(profile: str) -> dict:
 
     ``profile`` selects path loss and shadowing values from
     :data:`Channel.ENV_PRESETS`.  Unknown profiles fall back to ``"flora"``.
+    Parameters ``variable_noise_std``, ``fine_fading_std``, ``fading`` and
+    ``rician_k`` can be overridden in a ``config.ini`` file under the ``[channel]``
+    section.
     """
 
     ple, shadow, *_ = Channel.ENV_PRESETS.get(
         profile, Channel.ENV_PRESETS["flora"]
     )
+
+    # Default degradation values (milder than before)
+    variable_noise_std = 2.0
+    fine_fading_std = 2.0
+    fading = "rician"
+    rician_k = 1.0
+
+    # Override with values from config.ini when available
+    cp = configparser.ConfigParser()
+    cfg_path = Path(__file__).resolve().parents[2] / "config.ini"
+    cp.read(cfg_path)
+    if cp.has_section("channel"):
+        variable_noise_std = cp.getfloat(
+            "channel", "variable_noise_std", fallback=variable_noise_std
+        )
+        fine_fading_std = cp.getfloat(
+            "channel", "fine_fading_std", fallback=fine_fading_std
+        )
+        fading = cp.get("channel", "fading", fallback=fading)
+        if fading and fading.lower() == "none":
+            fading = None
+        rician_k = cp.getfloat("channel", "rician_k", fallback=rician_k)
+
     return {
         "propagation_model": "log_distance",  # or "cost231" with adjusted n
-        "fading": "rician",  # or None
+        "fading": fading,  # or None
+        "rician_k": rician_k,
         "path_loss_exp": ple,
         "shadowing_std": shadow,
-        "variable_noise_std": 10.0,
-        "fine_fading_std": 10.0,
+        "variable_noise_std": variable_noise_std,
+        "fine_fading_std": fine_fading_std,
         "freq_offset_std_hz": 1500.0,
         "sync_offset_std_s": 0.005,
         "advanced_capture": True,
