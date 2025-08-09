@@ -68,3 +68,18 @@ ser = 1.0 - (1.0 - ber) ** 4
 return min(max(ser, 0.0), 1.0)
 ```
 【F:simulateur_lora_sfrd/launcher/omnet_modulation.py†L8-L35】
+
+## Seuil de détection (sensibilité)
+
+Pour rester compatible avec FLoRa, le seuil de détection est obtenu à
+partir de la table de sensibilité ``FLORA_SENSITIVITY``. Pour un spreading
+factor ``SF`` et une largeur de bande ``BW`` donnés, le seuil appliqué est :
+
+```python
+threshold = Channel.FLORA_SENSITIVITY[sf][int(bandwidth)]
+```
+
+Une méthode utilitaire expose ce calcul via
+``Channel.flora_detection_threshold`` qui fournit ``-110`` dBm par défaut
+lorsque la paire ``(SF, BW)`` n'est pas présente dans la table
+【F:simulateur_lora_sfrd/launcher/channel.py†L52-L63】.

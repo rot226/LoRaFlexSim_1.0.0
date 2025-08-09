@@ -89,6 +89,9 @@ def apply(
                 params["bandwidth"] = ch.bandwidth
             if hasattr(ch, "coding_rate"):
                 params["coding_rate"] = ch.coding_rate
+            sf = 12
+            bw = params.get("bandwidth", 125000)
+            params["detection_threshold_dBm"] = Channel.flora_detection_threshold(sf, bw)
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             new_channels.append(adv)
@@ -100,3 +103,6 @@ def apply(
         # Mettre à jour la référence de canal de chaque nœud
         for node in sim.nodes:
             node.channel = sim.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
+            node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
+                getattr(node, "sf", 12), node.channel.bandwidth
+            )

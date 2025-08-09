@@ -64,6 +64,18 @@ class Channel:
         12: {125000: -137, 250000: -135, 500000: -129},
     }
 
+    @classmethod
+    def flora_detection_threshold(cls, sf: int, bandwidth: float) -> float:
+        """Return sensitivity in dBm for ``sf`` and ``bandwidth``.
+
+        The values come from :data:`FLORA_SENSITIVITY` to mirror the
+        detection logic used in FLoRa. If the pair ``(sf, bandwidth)`` is not
+        present in the table the classical ``-110`` dBm threshold is
+        returned.
+        """
+
+        return cls.FLORA_SENSITIVITY.get(sf, {}).get(int(bandwidth), -110.0)
+
     @staticmethod
     def parse_flora_noise_table(path: str | os.PathLike) -> dict[int, dict[int, float]]:
         """Parse LoRaAnalogModel.cc to load exact noise values."""
