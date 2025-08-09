@@ -50,8 +50,33 @@ def test_channels_identical_after_degrade():
         "shadowing_std",
         "detection_threshold_dBm",
         "capture_threshold_dB",
+        "flora_capture",
+        "flora_loss_model",
     ]
     reference = sim.multichannel.channels[0]
+    ple, shad, *_ = Channel.ENV_PRESETS["flora"]
+    assert reference.path_loss_exp == ple
+    assert reference.shadowing_std == shad
+    assert reference.flora_capture is True
+    assert reference.flora_loss_model == "lognorm"
     for ch in sim.multichannel.channels[1:]:
         for attr in attrs:
             assert getattr(ch, attr) == getattr(reference, attr)
+
+
+def test_custom_profile_changes_params():
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        transmission_mode="Random",
+        packet_interval=1.0,
+        packets_to_send=1,
+        pure_poisson_mode=True,
+        mobility=False,
+        seed=1,
+    )
+    apply_adr(sim, degrade_channel=True, profile="urban")
+    ple, shad, *_ = Channel.ENV_PRESETS["urban"]
+    ch = sim.multichannel.channels[0]
+    assert ch.path_loss_exp == ple
+    assert ch.shadowing_std == shad

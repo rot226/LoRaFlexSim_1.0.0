@@ -4,62 +4,44 @@ from .simulator import Simulator
 from . import server
 from .advanced_channel import AdvancedChannel
 from .lorawan import TX_POWER_INDEX_TO_DBM
+from .channel import Channel
 
 # ---------------------------------------------------------------------------
-# Default parameters used when degrading channels to a more realistic model.
-# These values are applied uniformly to all channels and may be tweaked from a
-# single location.
+# Channel degradation profiles.
+# Values common to all profiles are defined here while ``path_loss_exp`` and
+# ``shadowing_std`` are obtained from :data:`Channel.ENV_PRESETS`.
 # ---------------------------------------------------------------------------
 
-#DEGRADE_PARAMS = {
- #   "propagation_model": "cost231",
-  #  "fading": "rayleigh",
-    # Légère atténuation pour validation
-   # "path_loss_exp": 3.5,
-    #"shadowing_std": 7.0,
-    # Réduction du bruit et des variations rapides
-   # "variable_noise_std": 200.0,
- #   "fine_fading_std": 100.0,
-    # Réduction des erreurs de fréquence et de synchronisation
-  #  "freq_offset_std_hz": 50_000.0,  # 50 kHz de dérive standard
-  #  "sync_offset_std_s": 1.0,        # 0,5 s de dérive standard
-  #  "advanced_capture": True,
-  #  "detection_threshold_dBm": -130.0,
-  #  "capture_threshold_dB": 6.0,
-#}
 
-#DEGRADE_PARAMS = {
-    #"propagation_model": "cost231",
-    #"fading": "rayleigh",
-    # Increased attenuation to validate channel robustness
-    # Stronger degradation for validation campaigns
-    #"path_loss_exp": 15.0,
-    #"shadowing_std": 20.0,
-    #"variable_noise_std": 2000.0,
-    #"fine_fading_std": 800.0,
-    #"freq_offset_std_hz": 600000.0,
-    #"sync_offset_std_s": 3.0,
-    #"advanced_capture": True,
-    #"detection_threshold_dBm": -90.0,
-    #"capture_threshold_dB": 18.0,
-#}
+def _degrade_params(profile: str) -> dict:
+    """Return channel degradation parameters for ``profile``.
 
-DEGRADE_PARAMS = {
-    "propagation_model": "log_distance",  # ou "cost231" avec n ajusté
-    "fading": "rician",                   # ou None
-    "path_loss_exp": 3.5,
-    "shadowing_std": 6.0,
-    "variable_noise_std": 10.0,
-    "fine_fading_std": 10.0,
-    "freq_offset_std_hz": 1500.0,
-    #"sync_offset_std_s": 0.005,
-    "sync_offset_std_s": 0.005,
-    "advanced_capture": True,            # ou "flora_capture": True si dispo
-    "detection_threshold_dBm": -130.0,
-    "capture_threshold_dB": 6.0,
-}
+    ``profile`` selects path loss and shadowing values from
+    :data:`Channel.ENV_PRESETS`.  Unknown profiles fall back to ``"flora"``.
+    """
 
-def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
+    ple, shadow, *_ = Channel.ENV_PRESETS.get(
+        profile, Channel.ENV_PRESETS["flora"]
+    )
+    return {
+        "propagation_model": "log_distance",  # or "cost231" with adjusted n
+        "fading": "rician",  # or None
+        "path_loss_exp": ple,
+        "shadowing_std": shadow,
+        "variable_noise_std": 10.0,
+        "fine_fading_std": 10.0,
+        "freq_offset_std_hz": 1500.0,
+        "sync_offset_std_s": 0.005,
+        "advanced_capture": True,
+        "flora_capture": True,
+        "flora_loss_model": "lognorm",
+        "detection_threshold_dBm": -130.0,
+        "capture_threshold_dB": 6.0,
+    }
+
+def apply(
+    sim: Simulator, *, degrade_channel: bool = False, profile: str = "flora"
+) -> None:
     """Configure ADR variant ``adr_standard_1`` (LoRaWAN defaults).
 
     Parameters
@@ -70,6 +52,9 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
         If ``True``, replace existing :class:`~launcher.channel.Channel` objects
         with :class:`~launcher.advanced_channel.AdvancedChannel` instances using
         more realistic propagation impairments.
+    profile : str, optional
+        Environment key used to select ``path_loss_exp`` and ``shadowing_std``
+        from :data:`Channel.ENV_PRESETS`. Defaults to ``"flora"``.
     """
     # Marge ADR
     Simulator.MARGIN_DB = 15.0
@@ -95,8 +80,9 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
 
     if degrade_channel:
         new_channels = []
+        base_params = _degrade_params(profile)
         for ch in sim.multichannel.channels:
-            params = dict(DEGRADE_PARAMS)
+            params = dict(base_params)
             # Conserver les paramètres spécifiques au canal original
             params["frequency_hz"] = ch.frequency_hz
             if hasattr(ch, "bandwidth"):
