@@ -3,11 +3,15 @@ from pathlib import Path
 
 import pytest
 
+try:
+    pytest.importorskip('pandas')
+except Exception:
+    pytest.skip('pandas import failed', allow_module_level=True)
+
 from simulateur_lora_sfrd.launcher.compare_flora import compare_with_sim
 
 
 def test_flora_example_matches_flora():
-    pytest.importorskip('pandas')
     # Execute the example script as if run directly
     globals_dict = runpy.run_path('examples/run_flora_example.py', run_name='__main__')
     sim = globals_dict['sim']

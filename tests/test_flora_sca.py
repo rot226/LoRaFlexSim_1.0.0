@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pytest
 
+try:
+    pytest.importorskip("pandas")
+except Exception:
+    pytest.skip("pandas import failed", allow_module_level=True)
+
 from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as adr1
 from simulateur_lora_sfrd.launcher.compare_flora import (
     compare_with_sim,
@@ -14,7 +19,6 @@ CONFIG = "flora-master/simulations/examples/n100-gw1.ini"
 
 @pytest.mark.slow
 def test_flora_sca_compare():
-    pytest.importorskip("pandas")
     sca = Path(__file__).parent / "data" / "n100_gw1_expected.sca"
     sim = Simulator(flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg")
     adr1(sim)
@@ -25,3 +29,23 @@ def test_flora_sca_compare():
     load_flora_rx_stats(sca)  # ensure parser works
 
     assert compare_with_sim(metrics, sca, pdr_tol=0.01)
+
+
+@pytest.mark.slow
+def test_flora_sca_quantization_trace():
+    sim = Simulator(flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg")
+    adr1(sim)
+    sim.run(1000)
+    sim_q = Simulator(
+        flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg", tick_ns=1
+    )
+    adr1(sim_q)
+    sim_q.run(1000)
+
+    def to_ns(log):
+        return [
+            (int(round(e["start_time"] * 1e9)), int(round(e["end_time"] * 1e9)))
+            for e in log
+        ]
+
+    assert to_ns(sim.events_log) == to_ns(sim_q.events_log)
