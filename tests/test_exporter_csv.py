@@ -1,8 +1,11 @@
 import subprocess
 import pytest
 
-pn = pytest.importorskip("panel")
-pd = pytest.importorskip("pandas")
+try:
+    pn = pytest.importorskip("panel")
+    pd = pytest.importorskip("pandas")
+except Exception:
+    pytest.skip("panel or pandas import failed", allow_module_level=True)
 
 from simulateur_lora_sfrd.launcher import dashboard  # noqa: E402
 

@@ -12,10 +12,10 @@ from dataclasses import dataclass
 
 
 # Earlier versions used integer nanoseconds for event timestamps to mimic
-# OMNeT++'s scheduler tick.  For validation scenarios we rely on continuous
-# double precision times, hence events directly store their timestamp in
-# seconds as ``float`` values.  This avoids any quantisation effects that could
-# slightly bias statistics when using sub-second intervals.
+# OMNeT++'s scheduler tick.  By default we rely on continuous double precision
+# times expressed in seconds to avoid any quantisation effects that could
+# slightly bias statistics.  The optional ``tick_ns`` parameter allows to
+# reintroduce integer nanosecond scheduling when required.
 from enum import IntEnum
 
 try:
@@ -48,7 +48,7 @@ class EventType(IntEnum):
 
 @dataclass(order=True, slots=True)
 class Event:
-    time: float
+    time: int | float
     type: int
     id: int
     node_id: int
@@ -117,6 +117,7 @@ class Simulator:
         clock_jitter_std_s: float = 0.0,
         pa_ramp_up_s: float = 0.0,
         pa_ramp_down_s: float = 0.0,
+        tick_ns: int | None = None,
     ):
         """
         Initialise la simulation LoRa avec les entités et paramètres donnés.
@@ -199,6 +200,8 @@ class Simulator:
         :param clock_jitter_std_s: Gigue d'horloge ajoutée à chaque calcul (s).
         :param pa_ramp_up_s: Temps de montée du PA (s).
         :param pa_ramp_down_s: Temps de descente du PA (s).
+        :param tick_ns: Quand défini, quantifie chaque instant à des entiers de
+            ``tick_ns`` nanosecondes pour la file d'événements.
         """
         # Paramètres de simulation
         if flora_mode and packet_interval == 60.0 and first_packet_interval is None:
@@ -550,6 +553,9 @@ class Simulator:
         self.network_server.nodes = self.nodes
         self.network_server.gateways = self.gateways
         self.network_server.channel = self.channel
+        self.tick_ns = tick_ns
+        if self.tick_ns is not None and self.tick_ns <= 0:
+            raise ValueError("tick_ns must be positive")
 
         # File d'événements (min-heap)
         self.event_queue: list[Event] = []
@@ -620,23 +626,39 @@ class Simulator:
             if node.class_type.upper() in ("B", "C"):
                 eid = self.event_id_counter
                 self.event_id_counter += 1
-                heapq.heappush(
-                    self.event_queue,
-                    Event(0.0, EventType.RX_WINDOW, eid, node.id),
-                )
+                self._push_event(0.0, EventType.RX_WINDOW, eid, node.id)
 
         # Première émission de beacon pour la synchronisation Class B
         eid = self.event_id_counter
         self.event_id_counter += 1
-        heapq.heappush(
-            self.event_queue,
-            Event(0.0, EventType.BEACON, eid, 0),
-        )
+        self._push_event(0.0, EventType.BEACON, eid, 0)
         self.last_beacon_time = 0.0
         self.network_server.last_beacon_time = 0.0
 
         # Indicateur d'exécution de la simulation
         self.running = True
+
+    # ------------------------------------------------------------------
+    # Internal time helpers
+    # ------------------------------------------------------------------
+    def _seconds_to_ticks(self, t: float) -> int | float:
+        if self.tick_ns is None:
+            return t
+        return int(round(t * 1_000_000_000 / self.tick_ns)) * self.tick_ns
+
+    def _ticks_to_seconds(self, t: int | float) -> float:
+        if self.tick_ns is None:
+            return float(t)
+        return float(t) / 1_000_000_000
+
+    def _quantize(self, t: float) -> float:
+        return self._ticks_to_seconds(self._seconds_to_ticks(t))
+
+    def _push_event(self, time_s: float, event_type: EventType, eid: int, node_id: int) -> None:
+        heapq.heappush(
+            self.event_queue,
+            Event(self._seconds_to_ticks(time_s), event_type, eid, node_id),
+        )
 
     def schedule_event(self, node: Node, time: float, *, reason: str = "poisson"):
         """Planifie un événement de transmission pour un nœud."""
@@ -657,11 +679,9 @@ class Simulator:
             if enforced > time:
                 time = enforced
                 reason = "duty_cycle"
+        time = self._quantize(time)
         node.channel = self.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
-        heapq.heappush(
-            self.event_queue,
-            Event(time, EventType.TX_START, event_id, node.id),
-        )
+        self._push_event(time, EventType.TX_START, event_id, node.id)
         node.interval_log.append(
             {
                 "poisson_time": requested_time,
@@ -671,18 +691,17 @@ class Simulator:
         )
         logger.debug(
             f"Scheduled transmission {event_id} for node {node.id} at t={time:.2f}s"
+
         )
 
     def schedule_mobility(self, node: Node, time: float):
         """Planifie un événement de mobilité (déplacement aléatoire) pour un nœud à l'instant donné."""
         if not node.alive:
             return
+        time = self._quantize(time)
         event_id = self.event_id_counter
         self.event_id_counter += 1
-        heapq.heappush(
-            self.event_queue,
-            Event(time, EventType.MOBILITY, event_id, node.id),
-        )
+        self._push_event(time, EventType.MOBILITY, event_id, node.id)
         logger.debug(
             f"Scheduled mobility {event_id} for node {node.id} at t={time:.2f}s"
         )
@@ -693,7 +712,7 @@ class Simulator:
             return False
         # Extraire le prochain événement (le plus tôt dans le temps)
         event = heapq.heappop(self.event_queue)
-        time = event.time
+        time = self._ticks_to_seconds(event.time)
         priority = event.type
         event_id = event.id
         node = self.node_map.get(event.node_id)
@@ -842,24 +861,18 @@ class Simulator:
             node.last_rssi = best_rssi if heard_by_any else None
             node.last_snr = best_snr if heard_by_any else None
             # Planifier l'événement de fin de transmission correspondant
-            heapq.heappush(
-                self.event_queue,
-                Event(end_time, EventType.TX_END, event_id, node.id),
-            )
+            end_time = self._quantize(end_time)
+            self._push_event(end_time, EventType.TX_END, event_id, node.id)
             # Planifier les fenêtres de réception LoRaWAN
             rx1, rx2 = node.schedule_receive_windows(end_time)
+            rx1 = self._quantize(rx1)
+            rx2 = self._quantize(rx2)
             ev1 = self.event_id_counter
             self.event_id_counter += 1
-            heapq.heappush(
-                self.event_queue,
-                Event(rx1, EventType.RX_WINDOW, ev1, node.id),
-            )
+            self._push_event(rx1, EventType.RX_WINDOW, ev1, node.id)
             ev2 = self.event_id_counter
             self.event_id_counter += 1
-            heapq.heappush(
-                self.event_queue,
-                Event(rx2, EventType.RX_WINDOW, ev2, node.id),
-            )
+            self._push_event(rx2, EventType.RX_WINDOW, ev2, node.id)
 
             # Journaliser l'événement de transmission (résultat inconnu à ce stade)
             self.events_log.append(
@@ -1101,23 +1114,17 @@ class Simulator:
                     self.packets_to_send != 0
                     and all(n.packets_sent >= self.packets_to_send for n in self.nodes)
                 ):
-                    nxt = time + self.class_c_rx_interval
+                    nxt = self._quantize(time + self.class_c_rx_interval)
                     eid = self.event_id_counter
                     self.event_id_counter += 1
-                    heapq.heappush(
-                        self.event_queue,
-                        Event(nxt, EventType.RX_WINDOW, eid, node.id),
-                    )
+                    self._push_event(nxt, EventType.RX_WINDOW, eid, node.id)
             return True
 
         elif priority == EventType.BEACON:
-            nxt = self.network_server.next_beacon_time(time)
+            nxt = self._quantize(self.network_server.next_beacon_time(time))
             eid = self.event_id_counter
             self.event_id_counter += 1
-            heapq.heappush(
-                self.event_queue,
-                Event(nxt, EventType.BEACON, eid, 0),
-            )
+            self._push_event(nxt, EventType.BEACON, eid, 0)
             self.last_beacon_time = time
             self.network_server.notify_beacon(time)
             end_of_cycle = nxt
@@ -1131,20 +1138,19 @@ class Simulator:
                         n.miss_beacon(self.beacon_interval)
                     periodicity = 2 ** (getattr(n, "ping_slot_periodicity", 0) or 0)
                     interval = self.ping_slot_interval * periodicity
-                    slot = n.next_ping_slot_time(
-                        time,
-                        self.beacon_interval,
-                        self.ping_slot_interval,
-                        self.ping_slot_offset,
+                    slot = self._quantize(
+                        n.next_ping_slot_time(
+                            time,
+                            self.beacon_interval,
+                            self.ping_slot_interval,
+                            self.ping_slot_offset,
+                        )
                     )
                     while slot < end_of_cycle:
                         eid = self.event_id_counter
                         self.event_id_counter += 1
-                        heapq.heappush(
-                            self.event_queue,
-                            Event(slot, EventType.PING_SLOT, eid, n.id),
-                        )
-                        slot += interval
+                        self._push_event(slot, EventType.PING_SLOT, eid, n.id)
+                        slot = self._quantize(slot + interval)
             return True
 
         elif priority == EventType.PING_SLOT:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import heapq
 
 from typing import TYPE_CHECKING
 from .downlink_scheduler import DownlinkScheduler
@@ -197,14 +196,20 @@ class NetworkServer:
             elif node.class_type.upper() == "C":
                 self.scheduler.schedule_class_c(node, at_time, frame, gw, priority=priority)
                 if self.simulator is not None:
-                    from .simulator import Event, EventType
+                    from .simulator import EventType
 
                     eid = self.simulator.event_id_counter
                     self.simulator.event_id_counter += 1
-                    heapq.heappush(
-                        self.simulator.event_queue,
-                        Event(at_time, EventType.RX_WINDOW, eid, node.id),
-                    )
+                    if hasattr(self.simulator, "_push_event"):
+                        self.simulator._push_event(at_time, EventType.RX_WINDOW, eid, node.id)
+                    else:
+                        from .simulator import Event
+                        import heapq
+
+                        heapq.heappush(
+                            self.simulator.event_queue,
+                            Event(at_time, EventType.RX_WINDOW, eid, node.id),
+                        )
             else:
                 self.scheduler.schedule(node.id, at_time, frame, gw, priority=priority)
         try:
@@ -236,7 +241,7 @@ class NetworkServer:
             self.receive(event_id, node_id, gateway_id, rssi, frame, end_time=at_time)
             return
 
-        from .simulator import Event, EventType
+        from .simulator import EventType
 
         arrival_time = (
             (at_time if at_time is not None else self.simulator.current_time)
@@ -257,27 +262,39 @@ class NetworkServer:
             frame,
             at_time,
         )
-        heapq.heappush(
-            self.simulator.event_queue,
-            Event(arrival_time, EventType.SERVER_RX, eid, node_id),
-        )
+        if hasattr(self.simulator, "_push_event"):
+            self.simulator._push_event(arrival_time, EventType.SERVER_RX, eid, node_id)
+        else:
+            from .simulator import Event
+            import heapq
+
+            heapq.heappush(
+                self.simulator.event_queue,
+                Event(arrival_time, EventType.SERVER_RX, eid, node_id),
+            )
 
     def _handle_network_arrival(self, eid: int) -> None:
         """Planifie le traitement d'un paquet arrivé au serveur."""
         info = self.pending_process.pop(eid, None)
         if not info:
             return
-        from .simulator import Event, EventType
+        from .simulator import EventType
 
         process_time = self.simulator.current_time + self.process_delay
         new_id = self.simulator.event_id_counter
         self.simulator.event_id_counter += 1
         self.pending_process[new_id] = info
         node_id = info[1]
-        heapq.heappush(
-            self.simulator.event_queue,
-            Event(process_time, EventType.SERVER_PROCESS, new_id, node_id),
-        )
+        if hasattr(self.simulator, "_push_event"):
+            self.simulator._push_event(process_time, EventType.SERVER_PROCESS, new_id, node_id)
+        else:
+            from .simulator import Event
+            import heapq
+
+            heapq.heappush(
+                self.simulator.event_queue,
+                Event(process_time, EventType.SERVER_PROCESS, new_id, node_id),
+            )
 
     def _process_scheduled(self, eid: int) -> None:
         """Exécute le traitement différé d'un paquet."""
