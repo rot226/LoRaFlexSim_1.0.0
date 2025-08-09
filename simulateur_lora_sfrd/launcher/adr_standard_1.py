@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import configparser
+from pathlib import Path
+
 from .simulator import Simulator
 from . import server
 from .advanced_channel import AdvancedChannel
@@ -47,10 +50,11 @@ from .lorawan import TX_POWER_INDEX_TO_DBM
 DEGRADE_PARAMS = {
     "propagation_model": "log_distance",  # ou "cost231" avec n ajusté
     "fading": "rician",                   # ou None
+    "rician_k": 1.0,
     "path_loss_exp": 3.5,
     "shadowing_std": 6.0,
-    "variable_noise_std": 10.0,
-    "fine_fading_std": 10.0,
+    "variable_noise_std": 2.0,
+    "fine_fading_std": 2.0,
     "freq_offset_std_hz": 1500.0,
     #"sync_offset_std_s": 0.005,
     "sync_offset_std_s": 0.005,
@@ -58,6 +62,38 @@ DEGRADE_PARAMS = {
     "detection_threshold_dBm": -130.0,
     "capture_threshold_dB": 6.0,
 }
+
+
+def _load_degrade_overrides() -> dict:
+    """Return channel degradation parameters overridden in ``config.ini``.
+
+    The optional ``[channel]`` section of ``config.ini`` can define any of the
+    keys used in :data:`DEGRADE_PARAMS`.  Only ``variable_noise_std``,
+    ``fine_fading_std``, ``rician_k`` and ``fading`` are currently interpreted.
+    """
+
+    overrides: dict[str, object] = {}
+    config_path = Path(__file__).resolve().parents[2] / "config.ini"
+    if not config_path.is_file():
+        return overrides
+
+    cp = configparser.ConfigParser()
+    cp.read(config_path)
+    if not cp.has_section("channel"):
+        return overrides
+
+    section = cp["channel"]
+    if "variable_noise_std" in section:
+        overrides["variable_noise_std"] = float(section["variable_noise_std"])
+    if "fine_fading_std" in section:
+        overrides["fine_fading_std"] = float(section["fine_fading_std"])
+    if "rician_k" in section:
+        overrides["rician_k"] = float(section["rician_k"])
+    if "fading" in section:
+        fad = section["fading"].strip().lower()
+        overrides["fading"] = None if fad in {"", "none"} else fad
+
+    return overrides
 
 def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
     """Configure ADR variant ``adr_standard_1`` (LoRaWAN defaults).
@@ -95,8 +131,10 @@ def apply(sim: Simulator, *, degrade_channel: bool = False) -> None:
 
     if degrade_channel:
         new_channels = []
+        overrides = _load_degrade_overrides()
         for ch in sim.multichannel.channels:
             params = dict(DEGRADE_PARAMS)
+            params.update(overrides)
             # Conserver les paramètres spécifiques au canal original
             params["frequency_hz"] = ch.frequency_hz
             if hasattr(ch, "bandwidth"):
