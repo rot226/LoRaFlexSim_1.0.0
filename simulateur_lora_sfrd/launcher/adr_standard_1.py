@@ -123,6 +123,12 @@ def apply(
         node.adr_ack_limit = 64
         node.adr_ack_delay = 32
 
+    if not degrade_channel:
+        for ch in sim.multichannel.channels:
+            ch.detection_threshold_dBm = Channel.flora_detection_threshold(
+                node.sf, ch.bandwidth
+            )
+
     if degrade_channel:
         new_channels = []
         base_params = _degrade_params(profile, capture_mode)
