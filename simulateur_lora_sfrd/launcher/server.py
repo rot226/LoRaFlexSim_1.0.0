@@ -452,7 +452,7 @@ class NetworkServer:
                         node.sf = sf
                         node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
                             node.sf, node.channel.bandwidth
-                        )
+                        ) + node.channel.sensitivity_margin_dB
                         node.tx_power = power
                         self.send_downlink(
                             node, adr_command=(sf, power, node.chmask, node.nb_trans)

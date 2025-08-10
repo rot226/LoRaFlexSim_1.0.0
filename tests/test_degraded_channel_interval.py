@@ -87,7 +87,7 @@ def test_degraded_channel_reduces_pdr():
     sim_ideal = Simulator(
         num_nodes=1,
         num_gateways=1,
-        area_size=10000,
+        area_size=4000,
         transmission_mode="Periodic",
         packet_interval=1.0,
         packets_to_send=10,
@@ -102,7 +102,7 @@ def test_degraded_channel_reduces_pdr():
     sim_degraded = Simulator(
         num_nodes=1,
         num_gateways=1,
-        area_size=10000,
+        area_size=4000,
         transmission_mode="Periodic",
         packet_interval=1.0,
         packets_to_send=10,

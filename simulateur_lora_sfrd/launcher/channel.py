@@ -161,6 +161,7 @@ class Channel:
         tx_power_std: float = 0.0,
         interference_dB: float = 0.0,
         detection_threshold_dBm: float = -float("inf"),
+        sensitivity_margin_dB: float = 0.0,
         band_interference: list[tuple[float, float, float]] | None = None,
         environment: str | None = None,
         region: str | None = None,
@@ -195,6 +196,8 @@ class Channel:
         :param interference_dB: Bruit supplémentaire moyen dû aux interférences.
         :param detection_threshold_dBm: RSSI minimal détectable (dBm). Les
             signaux plus faibles sont ignorés.
+        :param sensitivity_margin_dB: Marge ajoutée aux seuils de détection
+            FLoRa pour ajuster la sensibilité (dB).
         :param band_interference: Liste optionnelle de tuples ``(freq, bw, dB)``
             décrivant des brouilleurs sélectifs. ``freq`` est la fréquence
             centrale en Hz, ``bw`` la largeur de bande et ``dB`` la puissance
@@ -309,6 +312,7 @@ class Channel:
         self.interference_dB = interference_dB
         self.band_interference = list(band_interference or [])
         self.detection_threshold_dBm = detection_threshold_dBm
+        self.sensitivity_margin_dB = sensitivity_margin_dB
         self.frequency_offset_hz = frequency_offset_hz
         self.freq_offset_std_hz = freq_offset_std_hz
         self.sync_offset_s = sync_offset_s
