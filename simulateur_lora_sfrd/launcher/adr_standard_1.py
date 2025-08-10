@@ -133,7 +133,7 @@ def apply(
         for ch in sim.multichannel.channels:
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
                 sf, ch.bandwidth
-            )
+            ) + ch.sensitivity_margin_dB
             # Allow different SFs to interfere like in FLoRa
             ch.orthogonal_sf = False
             ch.non_orth_delta = FLORA_NON_ORTH_DELTA
@@ -160,7 +160,10 @@ def apply(
                 params["coding_rate"] = ch.coding_rate
             sf = 12
             bw = params.get("bandwidth", 125000)
-            params["detection_threshold_dBm"] = Channel.flora_detection_threshold(sf, bw)
+            params["sensitivity_margin_dB"] = getattr(ch, "sensitivity_margin_dB", 0.0)
+            params["detection_threshold_dBm"] = Channel.flora_detection_threshold(
+                sf, bw
+            ) + params["sensitivity_margin_dB"]
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             adv.orthogonal_sf = False
@@ -176,7 +179,7 @@ def apply(
             node.channel = sim.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
             node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
                 getattr(node, "sf", 12), node.channel.bandwidth
-            )
+            ) + node.channel.sensitivity_margin_dB
             node.channel.orthogonal_sf = False
             node.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
 

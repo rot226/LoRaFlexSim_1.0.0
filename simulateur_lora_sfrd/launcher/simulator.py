@@ -681,6 +681,9 @@ class Simulator:
                 reason = "duty_cycle"
         time = self._quantize(time)
         node.channel = self.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
+        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
+            node.sf, node.channel.bandwidth
+        ) + node.channel.sensitivity_margin_dB
         self._push_event(time, EventType.TX_START, event_id, node.id)
         node.interval_log.append(
             {

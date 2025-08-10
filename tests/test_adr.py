@@ -38,6 +38,6 @@ def test_adr_decreases_sf_with_good_link():
 
 
 def test_adr_increases_sf_with_poor_link():
-    node = _run(distance=20000.0, initial_sf=8)
+    node = _run(distance=10000.0, initial_sf=8)
     assert node.sf == 12
     assert node.tx_power == 14.0
