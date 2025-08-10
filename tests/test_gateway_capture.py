@@ -106,3 +106,44 @@ def test_cross_sf_capture_after_delay():
     gw.end_reception(2, server, 2)
 
     assert server.packets_received == 1
+
+
+def test_non_orth_same_sf_uses_capture_threshold():
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    # Two packets with the same SF start simultaneously with a 5 dB RSSI gap.
+    # With ``orthogonal_sf`` disabled, the capture matrix should NOT apply to
+    # same-SF collisions, so the regular capture threshold (6 dB) must be used.
+    gw.start_reception(
+        1,
+        1,
+        7,
+        -50,
+        1.0,
+        6.0,
+        0.0,
+        868e6,
+        orthogonal_sf=False,
+        non_orth_delta=FLORA_NON_ORTH_DELTA,
+        capture_window_symbols=0,
+    )
+    gw.start_reception(
+        2,
+        2,
+        7,
+        -55,
+        1.0,
+        6.0,
+        0.0,
+        868e6,
+        orthogonal_sf=False,
+        non_orth_delta=FLORA_NON_ORTH_DELTA,
+        capture_window_symbols=0,
+    )
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    # RSSI difference (5 dB) is below capture threshold (6 dB) so none captured
+    assert server.packets_received == 0

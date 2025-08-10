@@ -277,7 +277,11 @@ class Gateway:
                 if not orthogonal_sf and matrix is not None:
                     sf_w = strongest.get('sf', sf)
                     sf_i = t.get('sf', sf)
-                    if 7 <= sf_w <= 12 and 7 <= sf_i <= 12:
+                    if (
+                        sf_w != sf_i
+                        and 7 <= sf_w <= 12
+                        and 7 <= sf_i <= 12
+                    ):
                         threshold = matrix[sf_w - 7][sf_i - 7]
                 if strongest_metric - metric < threshold:
                     capture = False
