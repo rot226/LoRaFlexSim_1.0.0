@@ -76,6 +76,10 @@ class Channel:
 
         return cls.FLORA_SENSITIVITY.get(sf, {}).get(int(bandwidth), -110.0)
 
+    def detection_threshold(self, sf: int) -> float:
+        """Return detection threshold in dBm for ``sf`` including margin."""
+        return self.flora_detection_threshold(sf, self.bandwidth) + self.sensitivity_margin_dB
+
     @staticmethod
     def parse_flora_noise_table(path: str | os.PathLike) -> dict[int, dict[int, float]]:
         """Parse LoRaAnalogModel.cc to load exact noise values."""
@@ -160,6 +164,7 @@ class Channel:
         capture_window_symbols: int = 5,
         tx_power_std: float = 0.0,
         interference_dB: float = 0.0,
+        sensitivity_margin_dB: float = 0.0,
         detection_threshold_dBm: float = -float("inf"),
         band_interference: list[tuple[float, float, float]] | None = None,
         environment: str | None = None,
@@ -193,6 +198,8 @@ class Channel:
             avant qu'un paquet plus fort puisse capturer la réception.
         :param tx_power_std: Écart-type de la variation aléatoire de puissance TX.
         :param interference_dB: Bruit supplémentaire moyen dû aux interférences.
+        :param sensitivity_margin_dB: Marge appliquée aux seuils de détection
+            FLoRa (dB).
         :param detection_threshold_dBm: RSSI minimal détectable (dBm). Les
             signaux plus faibles sont ignorés.
         :param band_interference: Liste optionnelle de tuples ``(freq, bw, dB)``
@@ -308,6 +315,7 @@ class Channel:
         self.tx_power_std = tx_power_std
         self.interference_dB = interference_dB
         self.band_interference = list(band_interference or [])
+        self.sensitivity_margin_dB = sensitivity_margin_dB
         self.detection_threshold_dBm = detection_threshold_dBm
         self.frequency_offset_hz = frequency_offset_hz
         self.freq_offset_std_hz = freq_offset_std_hz

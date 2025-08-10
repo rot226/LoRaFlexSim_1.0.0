@@ -450,9 +450,6 @@ class NetworkServer:
 
                     if sf != node.sf or power != node.tx_power:
                         node.sf = sf
-                        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-                            node.sf, node.channel.bandwidth
-                        )
                         node.tx_power = power
                         self.send_downlink(
                             node, adr_command=(sf, power, node.chmask, node.nb_trans)

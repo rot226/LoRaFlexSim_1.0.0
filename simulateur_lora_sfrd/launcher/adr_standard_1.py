@@ -126,9 +126,7 @@ def apply(
     if not degrade_channel:
         sf = 12  # Default spreading factor used at start
         for ch in sim.multichannel.channels:
-            ch.detection_threshold_dBm = Channel.flora_detection_threshold(
-                sf, ch.bandwidth
-            )
+            ch.detection_threshold_dBm = ch.detection_threshold(sf)
 
     if degrade_channel:
         new_channels = []
@@ -143,9 +141,9 @@ def apply(
                 params["coding_rate"] = ch.coding_rate
             sf = 12
             bw = params.get("bandwidth", 125000)
-            params["detection_threshold_dBm"] = Channel.flora_detection_threshold(sf, bw)
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
+            adv.detection_threshold_dBm = adv.detection_threshold(sf)
             new_channels.append(adv)
 
         # Remplacer la liste des canaux par les nouveaux canaux dégradés
@@ -155,6 +153,3 @@ def apply(
         # Mettre à jour la référence de canal de chaque nœud
         for node in sim.nodes:
             node.channel = sim.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
-            node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-                getattr(node, "sf", 12), node.channel.bandwidth
-            )

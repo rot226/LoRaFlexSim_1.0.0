@@ -94,13 +94,14 @@ class Node:
         self.orientation_az = orientation_az
         self.orientation_el = orientation_el
         self.initial_sf = sf
-        self.sf = sf
+        self._sf = sf
         self.initial_tx_power = tx_power
         self.tx_power = tx_power
         # Canal radio attribué (peut être modifié par le simulateur)
         # Utiliser un canal par défaut si aucun n'est fourni pour éviter
         # des erreurs lors des calculs d'airtime ou de RSSI.
-        self.channel = channel or Channel()
+        self._channel = channel or Channel()
+        self._update_detection_threshold()
         # Offsets de fréquence et de synchronisation (corrélés dans le temps)
         from .advanced_channel import _CorrelatedValue
 
@@ -260,6 +261,28 @@ class Node:
         else:
             self.state = "rx" if self.class_type.upper() == "C" else "sleep"
             self._startup_end = 0.0
+
+    def _update_detection_threshold(self) -> None:
+        if hasattr(self, "_channel") and hasattr(self, "_sf"):
+            self._channel.detection_threshold_dBm = self._channel.detection_threshold(self._sf)
+
+    @property
+    def sf(self) -> int:
+        return self._sf
+
+    @sf.setter
+    def sf(self, value: int) -> None:
+        self._sf = int(value)
+        self._update_detection_threshold()
+
+    @property
+    def channel(self) -> Channel:
+        return self._channel
+
+    @channel.setter
+    def channel(self, ch: Channel) -> None:
+        self._channel = ch
+        self._update_detection_threshold()
 
     @property
     def battery_level(self) -> float:

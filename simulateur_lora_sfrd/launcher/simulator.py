@@ -105,6 +105,7 @@ class Simulator:
         mobility_model=None,
         beacon_drift: float = 0.0,
         *,
+        sensitivity_margin_dB: float = 0.0,
         clock_accuracy: float = 0.0,
         beacon_loss_prob: float = 0.0,
         ping_slot_interval: float = 1.0,
@@ -185,6 +186,8 @@ class Simulator:
         :param mobility_model: Instance personnalisée de modèle de mobilité
             (prioritaire sur ``terrain_map`` et ``path_map``).
         :param beacon_drift: Dérive relative appliquée aux beacons (ppm).
+        :param sensitivity_margin_dB: Marge appliquée aux seuils de détection
+            FLoRa (dB).
         :param clock_accuracy: Écart-type de la dérive d'horloge des nœuds
             (ppm). Chaque nœud se voit attribuer un décalage aléatoire selon
             cette précision.
@@ -245,6 +248,7 @@ class Simulator:
             detection_threshold_dBm = -float("inf")
             min_interference_time = float("inf")
         self.detection_threshold_dBm = detection_threshold_dBm
+        self.sensitivity_margin_dB = sensitivity_margin_dB
         self.min_interference_time = min_interference_time
         self.pure_poisson_mode = pure_poisson_mode
         self.lock_step_poisson = lock_step_poisson
@@ -310,9 +314,10 @@ class Simulator:
         # Initialiser la gestion multi-canaux
         if isinstance(channels, MultiChannel):
             self.multichannel = channels
-            if detection_threshold_dBm != -float("inf"):
-                for ch in self.multichannel.channels:
+            for ch in self.multichannel.channels:
+                if detection_threshold_dBm != -float("inf"):
                     ch.detection_threshold_dBm = detection_threshold_dBm
+                ch.sensitivity_margin_dB = sensitivity_margin_dB
             if flora_mode:
                 for ch in self.multichannel.channels:
                     ch.phy_model = "omnet_full"
@@ -348,6 +353,7 @@ class Simulator:
                 ch_list = [
                     Channel(
                         detection_threshold_dBm=detection_threshold_dBm,
+                        sensitivity_margin_dB=sensitivity_margin_dB,
                         phy_model=ch_phy_model,
                         environment=env,
                         flora_loss_model=flora_loss_model,
@@ -364,6 +370,7 @@ class Simulator:
                     if isinstance(ch, Channel):
                         if detection_threshold_dBm != -float("inf"):
                             ch.detection_threshold_dBm = detection_threshold_dBm
+                        ch.sensitivity_margin_dB = sensitivity_margin_dB
                         if flora_mode:
                             ch.phy_model = "omnet_full"
                         if (flora_mode or phy_model.startswith("flora")) and getattr(
@@ -395,6 +402,7 @@ class Simulator:
                             Channel(
                                 frequency_hz=float(ch),
                                 detection_threshold_dBm=detection_threshold_dBm,
+                                sensitivity_margin_dB=sensitivity_margin_dB,
                                 phy_model="omnet_full" if flora_mode else phy_model,
                                 environment=(
                                     "flora"
