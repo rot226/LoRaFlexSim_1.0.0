@@ -111,9 +111,13 @@ def apply(
     sim.network_server.adr_enabled = True
     sim.network_server.adr_method = "avg"
     for node in sim.nodes:
-        # Démarre au SF12 pour une sensibilité maximale
-        node.sf = 12
-        node.initial_sf = 12
+        # Démarre au SF12 pour une sensibilité maximale sauf si un SF fixe est
+        # déjà défini par le simulateur
+        if getattr(sim, "fixed_sf", None) is None:
+            node.sf = 12
+            node.initial_sf = 12
+        else:
+            node.initial_sf = node.sf
         # Démarre avec la puissance TX maximale (14 dBm, index 0)
         max_tx_power = TX_POWER_INDEX_TO_DBM[0]
         node.tx_power = max_tx_power
@@ -129,6 +133,16 @@ def apply(
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
                 sf, ch.bandwidth
             )
+            # Allow different SFs to interfere like in FLoRa
+            ch.orthogonal_sf = False
+        # Propagate the non-orthogonal behaviour to existing node channels
+        for node in sim.nodes:
+            node.channel.orthogonal_sf = False
+        # For fixed spreading factor scenarios keep a very permissive
+        # detection threshold to mirror the original behaviour
+        if getattr(sim, "fixed_sf", None) is not None:
+            for ch in sim.multichannel.channels:
+                ch.detection_threshold_dBm = -float("inf")
 
     if degrade_channel:
         new_channels = []
@@ -146,6 +160,7 @@ def apply(
             params["detection_threshold_dBm"] = Channel.flora_detection_threshold(sf, bw)
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
+            adv.orthogonal_sf = False
             new_channels.append(adv)
 
         # Remplacer la liste des canaux par les nouveaux canaux dégradés
@@ -158,3 +173,9 @@ def apply(
             node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
                 getattr(node, "sf", 12), node.channel.bandwidth
             )
+            node.channel.orthogonal_sf = False
+
+    # Ensure server and first channel reflect the non-orthogonal setting
+    sim.channel = sim.multichannel.channels[0]
+    sim.channel.orthogonal_sf = False
+    sim.network_server.channel = sim.channel
