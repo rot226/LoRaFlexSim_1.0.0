@@ -124,9 +124,10 @@ def apply(
         node.adr_ack_delay = 32
 
     if not degrade_channel:
+        sf = 12  # Default spreading factor used at start
         for ch in sim.multichannel.channels:
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
-                node.sf, ch.bandwidth
+                sf, ch.bandwidth
             )
 
     if degrade_channel:
