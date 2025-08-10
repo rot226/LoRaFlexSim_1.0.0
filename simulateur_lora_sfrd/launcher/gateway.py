@@ -64,6 +64,7 @@ class Gateway:
         flora_phy=None,
         orthogonal_sf: bool = True,
         capture_window_symbols: int = 5,
+        non_orth_delta: list[list[float]] | None = None,
     ):
         """
         Tente de démarrer la réception d'une nouvelle transmission sur cette passerelle.
@@ -87,6 +88,9 @@ class Gateway:
             sont ignorées pour la détection de collision.
         :param capture_window_symbols: Nombre de symboles de préambule exigés
             avant qu'un paquet puisse capturer la réception.
+        :param non_orth_delta: Matrice 6×6 des seuils de capture utilisés
+            lorsque ``orthogonal_sf`` vaut ``False``. Les indices 0‑5
+            correspondent aux SF7‑SF12 pour ``(SF_signal, SF_interférence)``.
         """
         key = (sf, frequency)
         symbol_duration = (2 ** sf) / bandwidth
@@ -172,6 +176,7 @@ class Gateway:
             return True
 
         flora_mode = False
+        snr_map = None
 
         if capture_mode in {"advanced", "omnet"} and noise_floor is not None:
             def _snr(i: int) -> float:
@@ -193,15 +198,11 @@ class Gateway:
                     total += weight * 10 ** ((other['rssi'] - pen) / 10)
                 return rssi_i - 10 * math.log10(total)
 
-            snrs = [ _snr(i) for i in range(len(colliders)) ]
+            snrs = [_snr(i) for i in range(len(colliders))]
             indices = sorted(range(len(colliders)), key=lambda i: snrs[i], reverse=True)
             strongest = colliders[indices[0]]
             strongest_metric = snrs[indices[0]]
-            second = None
-            for idx in indices[1:]:
-                metric = snrs[idx]
-                if second is None or metric > second:
-                    second = metric
+            snr_map = {colliders[i]: snrs[i] for i in range(len(colliders))}
         elif capture_mode == "flora" and flora_phy is not None:
             colliders.sort(key=lambda t: t['rssi'], reverse=True)
             sf_list = [t['sf'] for t in colliders]
@@ -216,7 +217,6 @@ class Gateway:
                 strongest = colliders[win_idx]
             else:
                 strongest = colliders[0]
-            second = None
         elif (
             capture_mode == "omnet"
             and getattr(self, "omnet_phy", None) is not None
@@ -241,27 +241,41 @@ class Gateway:
                 strongest = colliders[win_idx]
             else:
                 strongest = colliders[0]
-            second = None
             flora_mode = True
         else:
             colliders.sort(key=lambda t: t['rssi'], reverse=True)
             strongest = colliders[0]
             strongest_metric = strongest['rssi']
-            second = None
-            for t in colliders[1:]:
-                metric = t['rssi'] - _penalty(strongest, t)
-                if second is None or metric > second:
-                    second = metric
+            snr_map = None
         if capture_mode != "flora" and not flora_mode:
-            capture = False
-            if second is not None:
+            capture = True
+            for t in colliders:
+                if t is strongest:
+                    continue
                 if (
-                    strongest_metric - second >= capture_threshold
-                    and _enough_preamble(strongest, colliders)
+                    capture_mode in {"advanced", "omnet"}
+                    and noise_floor is not None
+                    and snr_map is not None
                 ):
-                    capture = True
-            else:
-                capture = True
+                    metric = snr_map.get(t, strongest_metric)
+                else:
+                    metric = t['rssi'] - _penalty(strongest, t)
+                threshold = capture_threshold
+                if not orthogonal_sf and non_orth_delta is not None:
+                    sf_sig = strongest.get('sf', sf)
+                    sf_int = t.get('sf', sf)
+                    i_sig = sf_sig - 7
+                    i_int = sf_int - 7
+                    if (
+                        0 <= i_sig < len(non_orth_delta)
+                        and 0 <= i_int < len(non_orth_delta[i_sig])
+                    ):
+                        threshold = non_orth_delta[i_sig][i_int]
+                if strongest_metric - metric < threshold:
+                    capture = False
+                    break
+            if capture:
+                capture = _enough_preamble(strongest, colliders)
 
         if capture:
             # Apply preamble rule: the winning packet must have started

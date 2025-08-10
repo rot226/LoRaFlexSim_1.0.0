@@ -9,6 +9,16 @@ from .advanced_channel import AdvancedChannel
 from .lorawan import TX_POWER_INDEX_TO_DBM
 from .channel import Channel
 
+# Matrice de seuils de capture pour SF non orthogonaux (SF7–SF12)
+NON_ORTH_DELTA = [
+    [1, -8, -9, -9, -9, -9],
+    [-11, 1, -11, -12, -13, -13],
+    [-15, -13, 1, -13, -14, -15],
+    [-19, -18, -17, 1, -17, -18],
+    [-22, -22, -21, -20, 1, -20],
+    [-25, -25, -25, -24, -23, 1],
+]
+
 # ---------------------------------------------------------------------------
 # Channel degradation profiles.
 # Values common to all profiles are defined here while ``path_loss_exp`` and
@@ -129,6 +139,7 @@ def apply(
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
                 sf, ch.bandwidth
             )
+            ch.non_orth_delta = NON_ORTH_DELTA
 
     if degrade_channel:
         new_channels = []
@@ -141,6 +152,7 @@ def apply(
                 params["bandwidth"] = ch.bandwidth
             if hasattr(ch, "coding_rate"):
                 params["coding_rate"] = ch.coding_rate
+            params["non_orth_delta"] = NON_ORTH_DELTA
             sf = 12
             bw = params.get("bandwidth", 125000)
             params["detection_threshold_dBm"] = Channel.flora_detection_threshold(sf, bw)

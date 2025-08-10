@@ -158,6 +158,7 @@ class Channel:
         coding_rate: int = 1,
         capture_threshold_dB: float = 6.0,
         capture_window_symbols: int = 5,
+        non_orth_delta: list[list[float]] | None = None,
         tx_power_std: float = 0.0,
         interference_dB: float = 0.0,
         detection_threshold_dBm: float = -float("inf"),
@@ -385,6 +386,7 @@ class Channel:
         # Seuil de capture (différence de RSSI en dB pour qu'un signal plus fort capture la réception)
         self.capture_threshold_dB = capture_threshold_dB
         self.capture_window_symbols = int(capture_window_symbols)
+        self.non_orth_delta = non_orth_delta
         self.orthogonal_sf = orthogonal_sf
         self.last_rssi_dBm = 0.0
         self.last_noise_dBm = 0.0
