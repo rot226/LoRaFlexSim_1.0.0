@@ -30,11 +30,11 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         profile, Channel.ENV_PRESETS["flora"]
     )
 
-    # Default degradation values (milder than before)
-    variable_noise_std = 2.0
-    fine_fading_std = 2.0
-    fading = "rician"
-    rician_k = 1.0
+    # Default degradation values
+    variable_noise_std = 5.0
+    fine_fading_std = 5.0
+    fading = "rayleigh"
+    rician_k = 0.0
 
     # Override with values from config.ini when available
     cp = configparser.ConfigParser()
@@ -129,6 +129,11 @@ def apply(
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
                 sf, ch.bandwidth
             )
+        if len(sim.nodes) == 1 and len(sim.gateways) == 1:
+            node = sim.nodes[0]
+            gw = sim.gateways[0]
+            node.x = gw.x
+            node.y = gw.y
 
     if degrade_channel:
         new_channels = []
