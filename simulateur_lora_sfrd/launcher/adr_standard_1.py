@@ -52,12 +52,12 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
             fading = None
         rician_k = cp.getfloat("channel", "rician_k", fallback=rician_k)
 
-    if capture_mode == "flora":
-        advanced_capture = False
-        flora_capture = True
-    else:
+    if capture_mode == "advanced":
         advanced_capture = True
         flora_capture = False
+    else:
+        advanced_capture = False
+        flora_capture = True
 
     return {
         "propagation_model": "log_distance",  # or "cost231" with adjusted n
@@ -81,7 +81,7 @@ def apply(
     *,
     degrade_channel: bool = False,
     profile: str = "flora",
-    capture_mode: str = "advanced",
+    capture_mode: str = "flora",
 ) -> None:
     """Configure ADR variant ``adr_standard_1`` (LoRaWAN defaults).
 
@@ -99,7 +99,7 @@ def apply(
     capture_mode : str, optional
         Selects which capture model to enable. ``"advanced"`` enables the
         detailed capture effect while ``"flora"`` uses the simplified FLoRa
-        capture model. Defaults to ``"advanced"``.
+        capture model. Defaults to ``"flora"``.
     """
     # Marge ADR
     Simulator.MARGIN_DB = 15.0
