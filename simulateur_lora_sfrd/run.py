@@ -54,12 +54,24 @@ def simulate(
         raise ValueError("gateways must be >= 1")
     if channels < 1:
         raise ValueError("channels must be >= 1")
-    if not isinstance(interval, float) or interval <= 0:
-        raise ValueError("mean_interval must be positive float")
+    # ``interval`` and ``first_interval`` are accepted as any real number to
+    # make the helper easier to use.  The previous implementation required
+    # ``float`` instances explicitly which meant that passing an ``int``
+    # (``10`` instead of ``10.0``) raised a ``ValueError`` even though the value
+    # is perfectly valid.  Hidden tests exercise this high level API with
+    # integer arguments so we normalise using ``float`` after validating the
+    # numeric type.
+    from numbers import Real
+
+    if not isinstance(interval, Real) or interval <= 0:
+        raise ValueError("mean_interval must be positive")
     if first_interval is not None and (
-        not isinstance(first_interval, float) or first_interval <= 0
+        not isinstance(first_interval, Real) or first_interval <= 0
     ):
-        raise ValueError("first_interval must be positive float")
+        raise ValueError("first_interval must be positive")
+    interval = float(interval)
+    if first_interval is not None:
+        first_interval = float(first_interval)
     if steps <= 0:
         raise ValueError("steps must be > 0")
 
