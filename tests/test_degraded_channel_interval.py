@@ -2,6 +2,7 @@ from simulateur_lora_sfrd.launcher.simulator import Simulator
 from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as apply_adr
 from simulateur_lora_sfrd.launcher.channel import Channel
 from simulateur_lora_sfrd.launcher.multichannel import MultiChannel
+from simulateur_lora_sfrd.launcher.advanced_channel import AdvancedChannel
 
 
 def test_interval_with_degraded_channel():
@@ -17,7 +18,7 @@ def test_interval_with_degraded_channel():
         mobility=False,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True, capture_mode="flora")
+    apply_adr(sim, degrade_channel=True, profile="flora", capture_mode="flora")
     sim.run()
     node = sim.nodes[0]
     average = node._last_arrival_time / node.packets_sent
@@ -43,7 +44,7 @@ def test_channels_identical_after_degrade():
         channels=multi,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True, capture_mode="flora")
+    apply_adr(sim, degrade_channel=True, profile="flora", capture_mode="flora")
 
     attrs = [
         "path_loss_exp",
@@ -80,3 +81,38 @@ def test_custom_profile_changes_params():
     ch = sim.multichannel.channels[0]
     assert ch.path_loss_exp == ple
     assert ch.shadowing_std == shad
+
+
+def test_degraded_channel_reduces_pdr():
+    sim_ideal = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        area_size=10000,
+        transmission_mode="Periodic",
+        packet_interval=1.0,
+        packets_to_send=10,
+        mobility=False,
+        fixed_sf=7,
+        seed=0,
+    )
+    apply_adr(sim_ideal)
+    sim_ideal.run()
+    pdr_ideal = sim_ideal.get_metrics()["PDR"]
+
+    sim_degraded = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        area_size=10000,
+        transmission_mode="Periodic",
+        packet_interval=1.0,
+        packets_to_send=10,
+        mobility=False,
+        fixed_sf=7,
+        seed=0,
+    )
+    apply_adr(sim_degraded, degrade_channel=True, profile="flora")
+    node = sim_degraded.nodes[0]
+    assert isinstance(node.channel, AdvancedChannel)
+    sim_degraded.run()
+    pdr_degraded = sim_degraded.get_metrics()["PDR"]
+    assert pdr_degraded < pdr_ideal
