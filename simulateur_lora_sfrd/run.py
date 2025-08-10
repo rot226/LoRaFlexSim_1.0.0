@@ -1,6 +1,7 @@
 import argparse
 import configparser
 import csv
+import numbers
 
 from traffic.exponential import sample_interval
 from traffic.rng_manager import RngManager
@@ -54,10 +55,20 @@ def simulate(
         raise ValueError("gateways must be >= 1")
     if channels < 1:
         raise ValueError("channels must be >= 1")
-    if not isinstance(interval, float) or interval <= 0:
+
+    # Accept values that behave like floats (e.g. numpy floating types) while
+    # still rejecting integers and booleans to remain consistent with the
+    # documented API which expects real-valued parameters.
+    if not (
+        isinstance(interval, numbers.Real)
+        and not isinstance(interval, numbers.Integral)
+        and interval > 0
+    ):
         raise ValueError("mean_interval must be positive float")
-    if first_interval is not None and (
-        not isinstance(first_interval, float) or first_interval <= 0
+    if first_interval is not None and not (
+        isinstance(first_interval, numbers.Real)
+        and not isinstance(first_interval, numbers.Integral)
+        and first_interval > 0
     ):
         raise ValueError("first_interval must be positive float")
     if steps <= 0:
