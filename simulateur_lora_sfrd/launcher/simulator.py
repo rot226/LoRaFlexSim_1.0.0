@@ -855,6 +855,7 @@ class Simulator:
                     ),
                     orthogonal_sf=node.channel.orthogonal_sf,
                     capture_window_symbols=node.channel.capture_window_symbols,
+                    non_orth_delta=getattr(node.channel, "non_orth_delta", None),
                 )
 
             # Retenir le meilleur RSSI/SNR mesuré pour cette transmission
