@@ -21,7 +21,7 @@ CONFIG = "flora-master/simulations/examples/n100-gw1.ini"
 def test_flora_sca_compare():
     sca = Path(__file__).parent / "data" / "n100_gw1_expected.sca"
     sim = Simulator(flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg")
-    adr1(sim, capture_mode="flora")
+    adr1(sim, degrade_channel=True, profile="flora", capture_mode="flora")
     sim.run(1000)
     metrics = sim.get_metrics()
 
@@ -34,12 +34,12 @@ def test_flora_sca_compare():
 @pytest.mark.slow
 def test_flora_sca_quantization_trace():
     sim = Simulator(flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg")
-    adr1(sim, capture_mode="flora")
+    adr1(sim, degrade_channel=True, profile="flora", capture_mode="flora")
     sim.run(1000)
     sim_q = Simulator(
         flora_mode=True, config_file=CONFIG, seed=1, adr_method="avg", tick_ns=1
     )
-    adr1(sim_q, capture_mode="flora")
+    adr1(sim_q, degrade_channel=True, profile="flora", capture_mode="flora")
     sim_q.run(1000)
 
     def to_ns(log):
