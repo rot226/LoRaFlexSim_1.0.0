@@ -8,6 +8,7 @@ from . import server
 from .advanced_channel import AdvancedChannel
 from .lorawan import TX_POWER_INDEX_TO_DBM
 from .channel import Channel
+from .gateway import FLORA_NON_ORTH_DELTA
 
 # ---------------------------------------------------------------------------
 # Channel degradation profiles.
@@ -135,9 +136,11 @@ def apply(
             )
             # Allow different SFs to interfere like in FLoRa
             ch.orthogonal_sf = False
+            ch.non_orth_delta = FLORA_NON_ORTH_DELTA
         # Propagate the non-orthogonal behaviour to existing node channels
         for node in sim.nodes:
             node.channel.orthogonal_sf = False
+            node.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
         # For fixed spreading factor scenarios keep a very permissive
         # detection threshold to mirror the original behaviour
         if getattr(sim, "fixed_sf", None) is not None:
@@ -161,6 +164,7 @@ def apply(
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             adv.orthogonal_sf = False
+            adv.non_orth_delta = FLORA_NON_ORTH_DELTA
             new_channels.append(adv)
 
         # Remplacer la liste des canaux par les nouveaux canaux dégradés
@@ -174,8 +178,10 @@ def apply(
                 getattr(node, "sf", 12), node.channel.bandwidth
             )
             node.channel.orthogonal_sf = False
+            node.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
 
     # Ensure server and first channel reflect the non-orthogonal setting
     sim.channel = sim.multichannel.channels[0]
     sim.channel.orthogonal_sf = False
+    sim.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
     sim.network_server.channel = sim.channel
