@@ -14,7 +14,7 @@ Les principales équations sont décrites dans docs/equations_flora.md.
    ```
 3. **Lancez le tableau de bord :**
 ```bash
-panel serve launcher/dashboard.py --show
+panel serve simulateur_lora_sfrd/launcher/dashboard.py --show
 ```
 Définissez la valeur du champ **Graine** pour réutiliser le même placement de
 nœuds et la même suite d'intervalles pseudo‑aléatoires d'une simulation à
