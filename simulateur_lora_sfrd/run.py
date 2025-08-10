@@ -64,7 +64,7 @@ def simulate(
         and not isinstance(interval, numbers.Integral)
         and interval > 0
     ):
-        raise ValueError("mean_interval must be positive float")
+        raise ValueError("interval must be a positive float")
     if first_interval is not None and not (
         isinstance(first_interval, numbers.Real)
         and not isinstance(first_interval, numbers.Integral)
