@@ -30,11 +30,11 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         profile, Channel.ENV_PRESETS["flora"]
     )
 
-    # Default degradation values (milder than before)
-    variable_noise_std = 2.0
-    fine_fading_std = 2.0
-    fading = "rician"
-    rician_k = 1.0
+    # Default degradation values (closer to FLoRa assumptions)
+    variable_noise_std = 5.0
+    fine_fading_std = 5.0
+    fading = "rayleigh"
+    rician_k = 0.0
 
     # Override with values from config.ini when available
     cp = configparser.ConfigParser()
