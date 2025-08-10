@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 from .downlink_scheduler import DownlinkScheduler
 from .join_server import JoinServer  # re-export
+from .channel import Channel
 
 __all__ = ["NetworkServer", "JoinServer"]
 
@@ -449,6 +450,9 @@ class NetworkServer:
 
                     if sf != node.sf or power != node.tx_power:
                         node.sf = sf
+                        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
+                            node.sf, node.channel.bandwidth
+                        )
                         node.tx_power = power
                         self.send_downlink(
                             node, adr_command=(sf, power, node.chmask, node.nb_trans)
