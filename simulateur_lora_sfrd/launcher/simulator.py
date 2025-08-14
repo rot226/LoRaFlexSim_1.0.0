@@ -891,6 +891,7 @@ class Simulator:
                     "sf": sf,
                     "start_time": time,
                     "end_time": end_time,
+                    "frequency_hz": node.channel.frequency_hz,
                     "energy_J": energy_J,
                     "heard": heard_by_any,
                     "rssi_dBm": best_rssi,
@@ -1329,17 +1330,18 @@ class Simulator:
                 # Déplacer le nœud de manière progressive
                 self.mobility_model.move(node, self.current_time)
                 self.events_log.append(
-                    {
-                        "event_id": event_id,
-                        "node_id": node_id,
-                        "sf": node.sf,
-                        "start_time": time,
-                        "end_time": time,
-                        "heard": None,
-                        "result": "Mobility",
-                        "energy_J": 0.0,
-                        "gateway_id": None,
-                        "rssi_dBm": None,
+                {
+                    "event_id": event_id,
+                    "node_id": node_id,
+                    "sf": node.sf,
+                    "start_time": time,
+                    "end_time": time,
+                    "frequency_hz": node.channel.frequency_hz,
+                    "heard": None,
+                    "result": "Mobility",
+                    "energy_J": 0.0,
+                    "gateway_id": None,
+                    "rssi_dBm": None,
                         "snr_dB": None,
                     }
                 )
