@@ -14,13 +14,32 @@ avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `n`
 
 ## Taux d'erreur paquet (PER)
 
-La probabilité d'erreur est approchée par une loi logistique :
+La fonction `FloraPHY.packet_error_rate` accepte un paramètre `per_model`
+permettant de basculer entre deux approximations :
 
-```python
-PER = 1 / (1 + math.exp(2 * (snr - (th + 2))))
-```
+- ``"logistic"`` — approximation historique de FLoRa :
 
-où `th` correspond au seuil SNR du spreading factor courant【F:README.md†L434-L441】【F:simulateur_lora_sfrd/launcher/flora_phy.py†L127-L130】.
+  ```python
+  PER = 1 / (1 + math.exp(2 * (snr - (th + 2))))
+  ```
+
+  où `th` est le seuil SNR du spreading factor courant【F:simulateur_lora_sfrd/launcher/flora_phy.py†L149-L152】.
+
+- ``"croce"`` — modèle analytique issu des expressions BER/SER :
+
+  ```python
+  snir = 10 ** (snr / 10.0)
+  ber = calculate_ber(snir, sf)
+  ser = calculate_ser(snir, sf)
+  n_bits = payload_bytes * 8
+  per_bit = 1.0 - (1.0 - ber) ** n_bits
+  n_sym = math.ceil(n_bits / sf)
+  per_sym = 1.0 - (1.0 - ser) ** n_sym
+  per = max(per_bit, per_sym)
+  ```
+
+  Cette formule suit l'approximation de Croce *et al.* pour un paquet de
+  ``payload_bytes`` octets【F:simulateur_lora_sfrd/launcher/flora_phy.py†L154-L161】.
 
 ## Calcul de l'airtime
 

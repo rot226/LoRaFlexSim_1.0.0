@@ -128,8 +128,28 @@ class FloraPHY:
 
         return winners
 
-    def packet_error_rate(self, snr: float, sf: int, payload_bytes: int = 20) -> float:
-        """Return PER using BER/SER expressions from Croce et al."""
+    def packet_error_rate(
+        self, snr: float, sf: int, payload_bytes: int = 20, per_model: str = "croce"
+    ) -> float:
+        """Return PER using either a logistic or Croce et al. model.
+
+        Parameters
+        ----------
+        snr: float
+            Signal-to-noise ratio in dB.
+        sf: int
+            Spreading factor of the signal.
+        payload_bytes: int
+            Payload length in bytes. Only used by the ``croce`` model.
+        per_model: str
+            ``"logistic"`` to use the FLoRa-style logistic approximation or
+            ``"croce"`` to rely on BER/SER expressions from Croce et al.
+        """
+
+        if per_model == "logistic":
+            th = self.SNR_THRESHOLDS[sf]
+            per = 1.0 / (1.0 + math.exp(2 * (snr - (th + 2))))
+            return min(max(per, 0.0), 1.0)
 
         snir = 10 ** (snr / 10.0)
         ber = calculate_ber(snir, sf)
