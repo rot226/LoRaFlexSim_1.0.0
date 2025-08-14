@@ -2,7 +2,7 @@
 
 This utility executes four predefined scenarios combining mobile/static nodes
 and single/three-channel configurations.  Metrics for each scenario are
-exported as CSV files under the ``results`` directory.
+collected and saved to a single CSV file under the ``results`` directory.
 
 Usage::
 
@@ -28,8 +28,8 @@ RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
 
 def run_scenario(name: str, mobility: bool, channels: MultiChannel,
-                 num_nodes: int, packets: int, seed: int) -> None:
-    """Run a single scenario and save metrics to CSV."""
+                 num_nodes: int, packets: int, seed: int) -> dict:
+    """Run a single scenario and return its metrics."""
     sim = Simulator(
         num_nodes=num_nodes,
         num_gateways=1,
@@ -40,11 +40,8 @@ def run_scenario(name: str, mobility: bool, channels: MultiChannel,
     )
     sim.run()
     metrics = sim.get_metrics()
-
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    out_path = os.path.join(RESULTS_DIR, f"mobility_multichannel_{name}.csv")
-    pd.json_normalize(metrics).to_csv(out_path, index=False)
-    print(f"Saved {out_path}")
+    metrics["scenario"] = name
+    return metrics
 
 
 def main() -> None:
@@ -76,9 +73,23 @@ def main() -> None:
         },
     }
 
+    runs = []
     for name, params in scenarios.items():
-        run_scenario(name, params["mobility"], params["channels"],
-                     args.nodes, args.packets, args.seed)
+        runs.append(
+            run_scenario(
+                name,
+                params["mobility"],
+                params["channels"],
+                args.nodes,
+                args.packets,
+                args.seed,
+            )
+        )
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    out_path = os.path.join(RESULTS_DIR, "mobility_multichannel.csv")
+    pd.DataFrame(runs).to_csv(out_path, index=False)
+    print(f"Saved {out_path}")
 
 
 if __name__ == "__main__":

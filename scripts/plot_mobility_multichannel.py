@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Plot metrics from a mobility multichannel simulation.
+"""Plot metrics from an aggregated mobility multichannel simulation.
 
-Usage:
+Usage::
+
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 """
 
@@ -83,7 +84,7 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("csv", help="Path to mobility_multichannel.csv")
+    parser.add_argument("csv", help="Path to aggregated mobility_multichannel.csv")
     parser.add_argument(
         "-o",
         "--output-dir",
