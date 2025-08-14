@@ -1,6 +1,8 @@
 import logging
 import math
 
+from .energy_profiles import EnergyProfile, FLORA_PROFILE
+
 logger = logging.getLogger(__name__)
 diag_logger = logging.getLogger("diagnostics")
 
@@ -18,6 +20,10 @@ FLORA_NON_ORTH_DELTA = [
     [-25, -25, -25, -24, -23, 1],
 ]
 
+
+# Default energy profile for gateways (same as nodes by default)
+DEFAULT_ENERGY_PROFILE = FLORA_PROFILE
+
 class Gateway:
     """Représente une passerelle LoRa recevant les paquets des nœuds."""
 
@@ -31,6 +37,7 @@ class Gateway:
         rx_gain_dB: float = 0.0,
         orientation_az: float = 0.0,
         orientation_el: float = 0.0,
+        energy_profile: EnergyProfile | str | None = None,
     ):
         """
         Initialise une passerelle LoRa.
@@ -51,12 +58,74 @@ class Gateway:
         self.rx_gain_dB = rx_gain_dB
         self.orientation_az = orientation_az
         self.orientation_el = orientation_el
+        if isinstance(energy_profile, str):
+            from .energy_profiles import get_profile
+
+            self.profile = get_profile(energy_profile)
+        else:
+            self.profile = energy_profile or DEFAULT_ENERGY_PROFILE
+        self.energy_consumed = 0.0
+        self.energy_tx = 0.0
+        self.energy_rx = 0.0
+        self.energy_listen = 0.0
+        self.last_state_time = 0.0
         # Transmissions en cours indexées par (sf, frequency)
         self.active_map: dict[tuple[int, float], list[dict]] = {}
         # Mapping event_id -> (key, dict) for quick removal
         self.active_by_event: dict[int, tuple[tuple[int, float], dict]] = {}
         # Downlink frames waiting for the corresponding node receive windows
         self.downlink_buffer: dict[int, list] = {}
+
+    # ------------------------------------------------------------------
+    # Energy accounting helpers
+    # ------------------------------------------------------------------
+    def add_energy(
+        self, energy_joules: float, state: str = "rx", power_dBm: float | None = None
+    ) -> None:
+        """Accumulate energy consumption for the gateway."""
+        extra = 0.0
+        if state == "tx":
+            current = self.profile.get_tx_current(power_dBm or 0.0)
+            extra = (
+                current
+                * self.profile.voltage_v
+                * (self.profile.ramp_up_s + self.profile.ramp_down_s)
+            )
+        elif state == "rx" and (
+            self.profile.ramp_up_s > 0.0 or self.profile.ramp_down_s > 0.0
+        ):
+            current = (
+                self.profile.listen_current_a
+                if self.profile.listen_current_a > 0.0
+                else self.profile.rx_current_a
+            )
+            extra = (
+                current
+                * self.profile.voltage_v
+                * (self.profile.ramp_up_s + self.profile.ramp_down_s)
+            )
+        total = energy_joules + extra
+        self.energy_consumed += total
+        if state == "tx":
+            self.energy_tx += total
+        elif state == "rx":
+            self.energy_rx += total
+        elif state == "listen":
+            self.energy_listen += total
+
+    def consume_until(self, current_time: float) -> None:
+        """Accumulate listening energy up to ``current_time``."""
+        dt = current_time - self.last_state_time
+        if dt <= 0:
+            return
+        current = (
+            self.profile.listen_current_a
+            if self.profile.listen_current_a > 0.0
+            else self.profile.rx_current_a
+        )
+        state_name = "listen" if self.profile.listen_current_a > 0.0 else "rx"
+        self.add_energy(current * self.profile.voltage_v * dt, state_name)
+        self.last_state_time = current_time
 
     def start_reception(
         self,
