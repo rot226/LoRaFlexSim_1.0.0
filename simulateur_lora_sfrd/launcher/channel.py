@@ -621,18 +621,16 @@ class Channel:
         if getattr(self, "flora_phy", None) and self.use_flora_curves:
             return self.flora_phy.packet_error_rate(snr, sf, payload_bytes)
 
-        from .omnet_modulation import calculate_ber
+        from .omnet_modulation import calculate_ber, calculate_ser
 
-        bitrate = (
-            sf
-            * self.bandwidth
-            * 4.0
-            / ((1 << sf) * (self.coding_rate + 4))
-        )
         snir = 10 ** (snr / 10.0)
-        ber = calculate_ber(snir, self.bandwidth, bitrate)
+        ber = calculate_ber(snir, sf)
+        ser = calculate_ser(snir, sf)
         n_bits = payload_bytes * 8
-        per = 1.0 - (1.0 - ber) ** n_bits
+        per_bit = 1.0 - (1.0 - ber) ** n_bits
+        n_sym = math.ceil(n_bits / sf)
+        per_sym = 1.0 - (1.0 - ser) ** n_sym
+        per = max(per_bit, per_sym)
         return min(max(per, 0.0), 1.0)
 
     def _multipath_fading_db(self) -> float:

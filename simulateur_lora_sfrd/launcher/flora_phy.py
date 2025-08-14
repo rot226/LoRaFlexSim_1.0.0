@@ -129,19 +129,14 @@ class FloraPHY:
         return winners
 
     def packet_error_rate(self, snr: float, sf: int, payload_bytes: int = 20) -> float:
-        """Return PER using the full BER/SER curves from FLoRa."""
-        bitrate = (
-            sf
-            * self.channel.bandwidth
-            * 4.0
-            / ((1 << sf) * (self.channel.coding_rate + 4))
-        )
+        """Return PER using BER/SER expressions from Croce et al."""
+
         snir = 10 ** (snr / 10.0)
-        ber = calculate_ber(snir, self.channel.bandwidth, bitrate)
-        ser = calculate_ser(snir, self.channel.bandwidth, bitrate)
+        ber = calculate_ber(snir, sf)
+        ser = calculate_ser(snir, sf)
         n_bits = payload_bytes * 8
         per_bit = 1.0 - (1.0 - ber) ** n_bits
-        n_sym = math.ceil(n_bits / 4)
+        n_sym = math.ceil(n_bits / sf)
         per_sym = 1.0 - (1.0 - ser) ** n_sym
         per = max(per_bit, per_sym)
         return min(max(per, 0.0), 1.0)
