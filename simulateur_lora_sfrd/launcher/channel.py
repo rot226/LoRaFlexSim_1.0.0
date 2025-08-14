@@ -1,9 +1,12 @@
 import math
 import os
+from pathlib import Path
 import re
-import numpy as np
-from .omnet_model import OmnetModel
 
+import numpy as np
+
+from .obstacle_loss import ObstacleLoss
+from .omnet_model import OmnetModel
 
 class _CorrelatedValue:
     """Correlated random walk used for optional impairments."""
@@ -153,6 +156,8 @@ class Channel:
         idle_current_a: float = 0.0,
         voltage_v: float = 3.3,
         flora_noise_path: str | os.PathLike | None = None,
+        obstacle_map: str | os.PathLike | None = None,
+        obstacle_loss: ObstacleLoss | None = None,
         *,
         bandwidth: float = 125e3,
         coding_rate: int = 1,
@@ -260,6 +265,9 @@ class Channel:
             n'interfèrent pas entre elles.
         :param flora_noise_path: Chemin vers un fichier ``LoRaAnalogModel.cc``
             pour charger la table de bruit FLoRa.
+        :param obstacle_map: Chemin vers une carte d'obstacles (GeoJSON ou raster)
+            pour appliquer une perte additionnelle due aux bâtiments.
+        :param obstacle_loss: Instance préconfigurée de :class:`ObstacleLoss`.
         """
 
         if environment is not None:
@@ -346,6 +354,12 @@ class Channel:
             self.flora_noise_table = self.parse_flora_noise_table(flora_noise_path)
         else:
             self.flora_noise_table = self.FLORA_SENSITIVITY
+        if obstacle_loss is not None:
+            self.obstacle_loss = obstacle_loss
+        elif obstacle_map is not None:
+            self.obstacle_loss = ObstacleLoss.from_file(obstacle_map)
+        else:
+            self.obstacle_loss = None
         self.omnet = OmnetModel(
             fine_fading_std,
             fading_correlation,
@@ -525,6 +539,8 @@ class Channel:
                 sync_offset_s=sync_offset_s,
             )
         loss = self.path_loss(distance)
+        if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
+            loss += self.obstacle_loss.loss(tx_pos, rx_pos)
         if self.shadowing_std > 0 and not getattr(self, "flora_phy", None):
             loss += self.rng.normal(0, self.shadowing_std)
 
