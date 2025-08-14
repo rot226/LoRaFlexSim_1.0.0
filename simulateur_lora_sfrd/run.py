@@ -9,6 +9,7 @@ import logging
 import sys
 from pathlib import Path
 
+from .launcher.non_orth_delta import load_non_orth_delta
 PAYLOAD_SIZE = 20  # octets simulés par paquet
 
 # Configuration du logger pour afficher les informations
@@ -41,6 +42,7 @@ def simulate(
     rx_current=0.011,
     idle_current=1e-6,
     rng_manager: RngManager | None = None,
+    non_orth_delta: list[list[float]] | None = None,
 ):
     """Exécute une simulation LoRa simplifiée et retourne les métriques.
 
@@ -94,6 +96,8 @@ def simulate(
         idle_current_a=idle_current,
         voltage_v=voltage,
     )
+    if non_orth_delta is not None:
+        channel.non_orth_delta = non_orth_delta
     airtime = channel.airtime(7, payload_size=PAYLOAD_SIZE)
     tx_energy = (tx_current - idle_current) * voltage * airtime
     rx_energy = (rx_current - idle_current) * voltage * airtime
@@ -105,6 +109,11 @@ def simulate(
     send_times = {node: [] for node in range(nodes)}
     node_channels = {node: node % channels for node in range(nodes)}
     node_gateways = {node: node % max(1, gateways) for node in range(nodes)}
+    # Random spreading factor for each node to allow cross-SF interference
+    node_sf = {
+        node: 7 + rng_manager.get_stream("sf", node).integers(0, 6)
+        for node in range(nodes)
+    }
     # Le paramètre phy_model est présent pour conserver une interface similaire
     # au tableau de bord mais n'influence pas ce modèle simplifié.
 
@@ -170,39 +179,78 @@ def simulate(
                                 f"t={t:.3f} gw={gw} ch={ch} collision=[{n}] cause=noise"
                             )
                 else:
-                    rng = rng_manager.get_stream("traffic", nodes_on_ch[0])
-                    winner = rng.choice(nodes_on_ch)
-                    success = True
-                    if (
-                        fine_fading_std > 0.0
-                        and rng.normal(0.0, fine_fading_std) < -3.0
-                    ):
-                        success = False
-                    if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
-                        success = False
-                    if success:
-                        collisions += nb_tx - 1
-                        delivered += 1
-                        delays.append(0)
-                        if debug_rx:
-                            for n in nodes_on_ch:
-                                if n == winner:
-                                    logging.debug(
-                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu après collision"
-                                    )
-                                else:
-                                    logging.debug(
-                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
-                                    )
-                        diag_logger.info(
-                            f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} winner={winner}"
-                        )
+                    # Several nodes transmit simultaneously on the same
+                    # frequency. Resolve the collision using the provided
+                    # non-orthogonal capture matrix when available.
+                    rssi_map = {
+                        n: rng_manager.get_stream("rssi", n).normal(-100.0, 3.0)
+                        for n in nodes_on_ch
+                    }
+                    winners: list[int] = []
+                    if non_orth_delta is None:
+                        rng = rng_manager.get_stream("traffic", nodes_on_ch[0])
+                        winners = [rng.choice(nodes_on_ch)]
                     else:
+                        for n in nodes_on_ch:
+                            rssi_n = rssi_map[n]
+                            sf_n = node_sf[n]
+                            captured = True
+                            for m in nodes_on_ch:
+                                if m == n:
+                                    continue
+                                diff = rssi_n - rssi_map[m]
+                                th = non_orth_delta[sf_n - 7][node_sf[m] - 7]
+                                if diff < th:
+                                    captured = False
+                                    break
+                            if captured:
+                                winners.append(n)
+
+                    if len(winners) == 1:
+                        winner = winners[0]
+                        rng = rng_manager.get_stream("traffic", winner)
+                        success = True
+                        if (
+                            fine_fading_std > 0.0
+                            and rng.normal(0.0, fine_fading_std) < -3.0
+                        ):
+                            success = False
+                        if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
+                            success = False
+                        if success:
+                            collisions += nb_tx - 1
+                            delivered += 1
+                            delays.append(0)
+                            if debug_rx:
+                                for n in nodes_on_ch:
+                                    if n == winner:
+                                        logging.debug(
+                                            f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu après collision"
+                                        )
+                                    else:
+                                        logging.debug(
+                                            f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
+                                        )
+                            diag_logger.info(
+                                f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} winner={winner}"
+                            )
+                        else:
+                            collisions += nb_tx
+                            if debug_rx:
+                                for n in nodes_on_ch:
+                                    logging.debug(
+                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision/bruit)"
+                                    )
+                            diag_logger.info(
+                                f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} none"
+                            )
+                    else:
+                        # No unique winner -> all packets lost
                         collisions += nb_tx
                         if debug_rx:
                             for n in nodes_on_ch:
                                 logging.debug(
-                                    f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision/bruit)"
+                                    f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
                                 )
                         diag_logger.info(
                             f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} none"
@@ -332,6 +380,16 @@ def main(argv=None):
         action="store_true",
         help="Trace chaque paquet reçu ou rejeté",
     )
+    parser.add_argument(
+        "--non-orth-matrix",
+        dest="non_orth_matrix",
+        action="append",
+        help=(
+            "Chemin vers un fichier JSON/INI décrivant la matrice "
+            "NON_ORTH_DELTA. Peut être fourni plusieurs fois pour comparer l'impact "
+            "de différentes matrices."
+        ),
+    )
 
     # Preliminary parse to load configuration defaults
     pre_args, _ = parser.parse_known_args(argv)
@@ -372,86 +430,98 @@ def main(argv=None):
         logging.info(f"Exemple LoRaWAN : trame uplink FCnt={frame.fcnt}, RX1={rx1}s")
         sys.exit()
 
-    results = []
-    for i in range(args.runs):
-        seed = args.seed + i if args.seed is not None else i
-        rng_manager = RngManager(seed)
+    matrices = args.non_orth_matrix or [None]
+    all_results: list[tuple] = []
+    for matrix_path in matrices:
+        matrix = load_non_orth_delta(matrix_path) if matrix_path else None
+        if matrix_path:
+            logging.info(f"Utilisation de la matrice {matrix_path}")
+        results = []
+        for i in range(args.runs):
+            seed = args.seed + i if args.seed is not None else i
+            rng_manager = RngManager(seed)
 
-        delivered, collisions, pdr, energy, avg_delay, throughput = simulate(
-            args.nodes,
-            args.gateways,
-            args.mode,
-            args.interval,
-            args.steps,
-            args.channels,
-            first_interval=args.first_interval,
-            fine_fading_std=args.fine_fading,
-            noise_std=args.noise_std,
-            debug_rx=args.debug_rx,
-            phy_model=args.phy_model,
-            voltage=args.voltage,
-            tx_current=args.tx_current,
-            rx_current=args.rx_current,
-            idle_current=args.idle_current,
-            rng_manager=rng_manager,
-        )
-        results.append((delivered, collisions, pdr, energy, avg_delay, throughput))
-        logging.info(
-            f"Run {i + 1}/{args.runs} : PDR={pdr:.2f}% , Paquets livrés={delivered}, Collisions={collisions}, "
-            f"Énergie consommée={energy:.3f} J, Délai moyen={avg_delay:.2f} unités de temps, "
-            f"Débit moyen={throughput:.2f} bps"
-        )
-
-    averages = [
-        sum(r[i] for r in results) / len(results) for i in range(len(results[0]))
-    ]
-    logging.info(
-        f"Moyenne : PDR={averages[2]:.2f}% , Paquets livrés={averages[0]:.2f}, Collisions={averages[1]:.2f}, "
-        f"Énergie consommée={averages[3]:.3f} J, Délai moyen={averages[4]:.2f} unités de temps, "
-        f"Débit moyen={averages[5]:.2f} bps"
-    )
-
-    if args.output:
-        with open(args.output, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "nodes",
-                    "gateways",
-                    "channels",
-                    "mode",
-                    "interval",
-                    "steps",
-                    "run",
-                    "delivered",
-                    "collisions",
-                    "PDR(%)",
-                    "energy_J",
-                    "avg_delay",
-                    "throughput_bps",
-                ]
+            delivered, collisions, pdr, energy, avg_delay, throughput = simulate(
+                args.nodes,
+                args.gateways,
+                args.mode,
+                args.interval,
+                args.steps,
+                args.channels,
+                first_interval=args.first_interval,
+                fine_fading_std=args.fine_fading,
+                noise_std=args.noise_std,
+                debug_rx=args.debug_rx,
+                phy_model=args.phy_model,
+                voltage=args.voltage,
+                tx_current=args.tx_current,
+                rx_current=args.rx_current,
+                idle_current=args.idle_current,
+                rng_manager=rng_manager,
+                non_orth_delta=matrix,
             )
-            for run_idx, (d, c, p, e, ad, th) in enumerate(results, start=1):
+            results.append((delivered, collisions, pdr, energy, avg_delay, throughput))
+            logging.info(
+                f"Run {i + 1}/{args.runs} : PDR={pdr:.2f}% , Paquets livrés={delivered}, Collisions={collisions}, "
+                f"Énergie consommée={energy:.3f} J, Délai moyen={avg_delay:.2f} unités de temps, "
+                f"Débit moyen={throughput:.2f} bps"
+            )
+
+        averages = [
+            sum(r[i] for r in results) / len(results) for i in range(len(results[0]))
+        ]
+        logging.info(
+            f"Moyenne : PDR={averages[2]:.2f}% , Paquets livrés={averages[0]:.2f}, Collisions={averages[1]:.2f}, "
+            f"Énergie consommée={averages[3]:.3f} J, Délai moyen={averages[4]:.2f} unités de temps, "
+            f"Débit moyen={averages[5]:.2f} bps",
+        )
+        all_results.append((matrix_path, results, tuple(averages)))
+
+        if args.output:
+            out_path = args.output
+            if matrix_path:
+                p = Path(args.output)
+                out_path = str(p.with_name(f"{p.stem}_{Path(matrix_path).stem}{p.suffix}"))
+            with open(out_path, mode="w", newline="") as f:
+                writer = csv.writer(f)
                 writer.writerow(
                     [
-                        args.nodes,
-                        args.gateways,
-                        args.channels,
-                        args.mode,
-                        args.interval,
-                        args.steps,
-                        run_idx,
-                        d,
-                        c,
-                        f"{p:.2f}",
-                        f"{e:.3f}",
-                        f"{ad:.2f}",
-                        f"{th:.2f}",
+                        "nodes",
+                        "gateways",
+                        "channels",
+                        "mode",
+                        "interval",
+                        "steps",
+                        "run",
+                        "delivered",
+                        "collisions",
+                        "PDR(%)",
+                        "energy_J",
+                        "avg_delay",
+                        "throughput_bps",
                     ]
                 )
-        logging.info(f"Résultats enregistrés dans {args.output}")
+                for run_idx, (d, c, p_val, e, ad, th) in enumerate(results, start=1):
+                    writer.writerow(
+                        [
+                            args.nodes,
+                            args.gateways,
+                            args.channels,
+                            args.mode,
+                            args.interval,
+                            args.steps,
+                            run_idx,
+                            d,
+                            c,
+                            f"{p_val:.2f}",
+                            f"{e:.3f}",
+                            f"{ad:.2f}",
+                            f"{th:.2f}",
+                        ]
+                    )
+            logging.info(f"Résultats enregistrés dans {out_path}")
 
-    return results, tuple(averages)
+    return all_results
 
 
 if __name__ == "__main__":

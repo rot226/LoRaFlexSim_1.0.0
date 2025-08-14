@@ -1,22 +1,13 @@
 import logging
 import math
 
+from .non_orth_delta import (
+    DEFAULT_NON_ORTH_DELTA as FLORA_NON_ORTH_DELTA,
+    load_non_orth_delta,
+)
+
 logger = logging.getLogger(__name__)
 diag_logger = logging.getLogger("diagnostics")
-
-# Threshold matrix used when Spreading Factors are not considered orthogonal.
-# Values originate from FLoRa's ``LoRaReceiver.h`` where they represent the
-# minimum power difference (in dB) required for a packet of ``SF_signal`` to be
-# successfully decoded in the presence of an interfering packet of
-# ``SF_interference``. Indices 0–5 correspond to SF7–SF12 respectively.
-FLORA_NON_ORTH_DELTA = [
-    [1, -8, -9, -9, -9, -9],
-    [-11, 1, -11, -12, -13, -13],
-    [-15, -13, 1, -13, -14, -15],
-    [-19, -18, -17, 1, -17, -18],
-    [-22, -22, -21, -20, 1, -20],
-    [-25, -25, -25, -24, -23, 1],
-]
 
 class Gateway:
     """Représente une passerelle LoRa recevant les paquets des nœuds."""
