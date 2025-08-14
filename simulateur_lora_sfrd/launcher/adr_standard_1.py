@@ -31,23 +31,19 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         profile, Channel.ENV_PRESETS["flora"]
     )
 
-    # Default degradation values (closer to FLoRa assumptions)
-    variable_noise_std = 5.0
-    fine_fading_std = 5.0
+    # Default degradation values tuned for a harsh radio environment
+    variable_noise_std = 20.0
+    fine_fading_std = 20.0
     fading = "rayleigh"
     rician_k = 0.0
 
-    # Override with values from config.ini when available
+    # Override with values from config.ini when available.  Noise and fading
+    # standard deviations are intentionally kept high and therefore are not
+    # overridden by configuration values.
     cp = configparser.ConfigParser()
     cfg_path = Path(__file__).resolve().parents[2] / "config.ini"
     cp.read(cfg_path)
     if cp.has_section("channel"):
-        variable_noise_std = cp.getfloat(
-            "channel", "variable_noise_std", fallback=variable_noise_std
-        )
-        fine_fading_std = cp.getfloat(
-            "channel", "fine_fading_std", fallback=fine_fading_std
-        )
         fading = cp.get("channel", "fading", fallback=fading)
         if fading and fading.lower() == "none":
             fading = None
@@ -74,7 +70,7 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         "flora_capture": flora_capture,
         "flora_loss_model": "lognorm",
         "detection_threshold_dBm": -130.0,
-        "capture_threshold_dB": 6.0,
+        "capture_threshold_dB": 12.0,
     }
 
 def apply(
