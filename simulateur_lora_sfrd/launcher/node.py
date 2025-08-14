@@ -378,6 +378,8 @@ class Node:
     def add_energy(self, energy_joules: float, state: str = "tx"):
         """Ajoute de l'énergie consommée pour un état donné."""
         extra = 0.0
+        startup = 0.0
+        preamble = 0.0
         if state == "tx":
             current = self.profile.get_tx_current(self.tx_power)
             extra = (
@@ -385,6 +387,24 @@ class Node:
                 * self.profile.voltage_v
                 * (self.profile.ramp_up_s + self.profile.ramp_down_s)
             )
+            if (
+                self.profile.startup_current_a > 0.0
+                and self.profile.startup_time_s > 0.0
+            ):
+                startup = (
+                    self.profile.startup_current_a
+                    * self.profile.voltage_v
+                    * self.profile.startup_time_s
+                )
+            if (
+                self.profile.preamble_current_a > 0.0
+                and self.profile.preamble_time_s > 0.0
+            ):
+                preamble = (
+                    self.profile.preamble_current_a
+                    * self.profile.voltage_v
+                    * self.profile.preamble_time_s
+                )
         elif state == "rx" and (
             self.profile.ramp_up_s > 0.0 or self.profile.ramp_down_s > 0.0
         ):
@@ -399,12 +419,16 @@ class Node:
                 * (self.profile.ramp_up_s + self.profile.ramp_down_s)
             )
 
-        total = energy_joules + extra
+        total = energy_joules + extra + startup + preamble
         self.energy_consumed += total
         if state == "tx":
-            self.energy_tx += total
+            self.energy_tx += energy_joules + extra
+            if startup > 0.0:
+                self.energy_startup += startup
+            if preamble > 0.0:
+                self.energy_preamble += preamble
         elif state == "rx":
-            self.energy_rx += total
+            self.energy_rx += energy_joules + extra
         elif state == "sleep":
             self.energy_sleep += total
         elif state == "processing":
