@@ -822,6 +822,8 @@ class Simulator:
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
                         continue  # trop faible pour être détecté
+                    if random.random() < 0.3:
+                        continue  # paquet ignoré aléatoirement
                     snr_threshold = (
                         node.channel.sensitivity_dBm.get(sf, -float("inf"))
                         - node.channel.noise_floor_dBm()
@@ -1149,6 +1151,9 @@ class Simulator:
                     if rssi < node.channel.detection_threshold_dBm:
                         node.downlink_pending = max(0, node.downlink_pending - 1)
                         continue
+                    if random.random() < 0.3:
+                        node.downlink_pending = max(0, node.downlink_pending - 1)
+                        continue
                     snr_threshold = (
                         node.channel.sensitivity_dBm.get(node.sf, -float("inf"))
                         - node.channel.noise_floor_dBm()
@@ -1286,6 +1291,9 @@ class Simulator:
                 )
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
+                        node.downlink_pending = max(0, node.downlink_pending - 1)
+                        continue
+                    if random.random() < 0.3:
                         node.downlink_pending = max(0, node.downlink_pending - 1)
                         continue
                     snr_threshold = (
