@@ -3,6 +3,11 @@
 Bienvenue ! Ce projet est un **simulateur complet de réseau LoRa**, inspiré du fonctionnement de FLoRa sous OMNeT++, codé entièrement en Python.
 Pour un aperçu des différences avec FLoRa, consultez docs/lorawan_features.md.
 Les principales équations sont décrites dans docs/equations_flora.md.
+
+Par défaut, le module `Channel` charge la table de bruit de FLoRa en analysant
+`flora-master/src/LoRaPhy/LoRaAnalogModel.cc` si le fichier est présent. Cette
+table est injectée dans la fonction `_flora_noise_dBm` pour les calculs de
+sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
 ## 🛠️ Installation
 
 1. **Clonez ou téléchargez** le projet.

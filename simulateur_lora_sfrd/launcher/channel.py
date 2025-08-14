@@ -353,7 +353,18 @@ class Channel:
         if flora_noise_path:
             self.flora_noise_table = self.parse_flora_noise_table(flora_noise_path)
         else:
-            self.flora_noise_table = self.FLORA_SENSITIVITY
+            # Automatically look for FLoRa's noise definition file
+            flora_cc = (
+                Path(__file__).resolve().parents[2]
+                / "flora-master"
+                / "src"
+                / "LoRaPhy"
+                / "LoRaAnalogModel.cc"
+            )
+            if flora_cc.is_file():
+                self.flora_noise_table = self.parse_flora_noise_table(flora_cc)
+            else:
+                self.flora_noise_table = self.FLORA_SENSITIVITY
         if obstacle_loss is not None:
             self.obstacle_loss = obstacle_loss
         elif obstacle_map is not None:
