@@ -765,16 +765,11 @@ class Simulator:
             # Énergie consommée par la transmission (E = I * V * t)
             current_a = node.profile.get_tx_current(tx_power)
             energy_J = current_a * node.profile.voltage_v * duration
-            preamble_J = (
-                node.profile.preamble_current_a
-                * node.profile.voltage_v
-                * node.profile.preamble_time_s
-            )
-            self.total_energy_J += energy_J + preamble_J
-            self.energy_nodes_J += energy_J + preamble_J
-            if preamble_J > 0.0:
-                node.add_energy(preamble_J, "preamble")
+            prev = node.energy_consumed
             node.add_energy(energy_J, "tx")
+            delta = node.energy_consumed - prev
+            self.total_energy_J += delta
+            self.energy_nodes_J += delta
             if not node.alive:
                 return True
             node.state = "tx"

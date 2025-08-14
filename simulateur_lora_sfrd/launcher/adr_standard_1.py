@@ -130,7 +130,6 @@ def apply(
             ch.detection_threshold_dBm = Channel.flora_detection_threshold(
                 sf, ch.bandwidth
             ) + ch.sensitivity_margin_dB
-            ch.detection_threshold_dBm += 20
             # Allow different SFs to interfere like in FLoRa
             ch.orthogonal_sf = False
             ch.non_orth_delta = FLORA_NON_ORTH_DELTA
@@ -161,7 +160,6 @@ def apply(
             params["detection_threshold_dBm"] = Channel.flora_detection_threshold(
                 sf, bw
             ) + params["sensitivity_margin_dB"]
-            params["detection_threshold_dBm"] += 20
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             adv.orthogonal_sf = False
@@ -178,7 +176,6 @@ def apply(
             node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
                 getattr(node, "sf", 12), node.channel.bandwidth
             ) + node.channel.sensitivity_margin_dB
-            node.channel.detection_threshold_dBm += 20
             node.channel.orthogonal_sf = False
             node.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
 

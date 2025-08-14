@@ -38,7 +38,15 @@ class EnergyProfile:
 
 
 # Default profile based on the FLoRa model (OMNeT++)
-FLORA_PROFILE = EnergyProfile(tx_current_map_a=DEFAULT_TX_CURRENT_MAP_A)
+FLORA_PROFILE = EnergyProfile(
+    tx_current_map_a=DEFAULT_TX_CURRENT_MAP_A,
+    startup_current_a=1.6e-3,
+    startup_time_s=1e-3,
+    preamble_current_a=5e-3,
+    preamble_time_s=1e-3,
+    ramp_up_s=1e-3,
+    ramp_down_s=1e-3,
+)
 
 # Example of a lower power transceiver profile
 LOW_POWER_TX_MAP_A: dict[float, float] = {
