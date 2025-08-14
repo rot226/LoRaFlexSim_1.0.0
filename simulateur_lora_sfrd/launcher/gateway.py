@@ -5,6 +5,10 @@ from .non_orth_delta import (
     DEFAULT_NON_ORTH_DELTA as FLORA_NON_ORTH_DELTA,
     load_non_orth_delta,
 )
+from .energy_profiles import EnergyProfile, FLORA_PROFILE
+
+# Default energy profile for gateways (same as nodes by default)
+DEFAULT_ENERGY_PROFILE = FLORA_PROFILE
 
 logger = logging.getLogger(__name__)
 diag_logger = logging.getLogger("diagnostics")
@@ -22,6 +26,7 @@ class Gateway:
         rx_gain_dB: float = 0.0,
         orientation_az: float = 0.0,
         orientation_el: float = 0.0,
+        energy_profile: EnergyProfile | str | None = None,
     ):
         """
         Initialise une passerelle LoRa.
@@ -34,6 +39,7 @@ class Gateway:
         :param y: Position Y (mètres).
         :param altitude: Altitude de l'antenne (mètres).
         :param rx_gain_dB: Gain d’antenne additionnel (dB).
+        :param energy_profile: Profil énergétique utilisé pour la consommation.
         """
         self.id = gateway_id
         self.x = x
@@ -42,12 +48,35 @@ class Gateway:
         self.rx_gain_dB = rx_gain_dB
         self.orientation_az = orientation_az
         self.orientation_el = orientation_el
+        if isinstance(energy_profile, str):
+            from .energy_profiles import get_profile
+
+            self.profile = get_profile(energy_profile)
+        else:
+            self.profile = energy_profile or DEFAULT_ENERGY_PROFILE
+        self.energy_consumed = 0.0
+        self.energy_tx = 0.0
+        self.energy_rx = 0.0
+        self.energy_listen = 0.0
+        self.energy_preamble = 0.0
         # Transmissions en cours indexées par (sf, frequency)
         self.active_map: dict[tuple[int, float], list[dict]] = {}
         # Mapping event_id -> (key, dict) for quick removal
         self.active_by_event: dict[int, tuple[tuple[int, float], dict]] = {}
         # Downlink frames waiting for the corresponding node receive windows
         self.downlink_buffer: dict[int, list] = {}
+
+    def add_energy(self, energy_joules: float, state: str = "tx") -> None:
+        """Ajoute de l'énergie consommée par la passerelle."""
+        self.energy_consumed += energy_joules
+        if state == "tx":
+            self.energy_tx += energy_joules
+        elif state == "rx":
+            self.energy_rx += energy_joules
+        elif state == "listen":
+            self.energy_listen += energy_joules
+        elif state == "preamble":
+            self.energy_preamble += energy_joules
 
     def start_reception(
         self,

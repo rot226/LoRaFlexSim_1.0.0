@@ -569,6 +569,8 @@ class Simulator:
         self.packets_lost_collision = 0
         self.packets_lost_no_signal = 0
         self.total_energy_J = 0.0
+        self.energy_nodes_J = 0.0
+        self.energy_gateways_J = 0.0
         self.total_delay = 0.0
         self.delivered_count = 0
         # Counters for PDR computation
@@ -729,7 +731,12 @@ class Simulator:
                 if getattr(ch, "omnet_phy", None):
                     ch.omnet_phy.update(delta)
         if node is not None:
+            prev_energy = node.energy_consumed
             node.consume_until(time)
+            delta_energy = node.energy_consumed - prev_energy
+            if delta_energy > 0.0:
+                self.energy_nodes_J += delta_energy
+                self.total_energy_J += delta_energy
             if not node.alive:
                 return True
 
@@ -764,6 +771,7 @@ class Simulator:
                 * node.profile.preamble_time_s
             )
             self.total_energy_J += energy_J + preamble_J
+            self.energy_nodes_J += energy_J + preamble_J
             if preamble_J > 0.0:
                 node.add_energy(preamble_J, "preamble")
             node.add_energy(energy_J, "tx")
@@ -1052,12 +1060,14 @@ class Simulator:
                     else node.profile.rx_current_a
                 )
                 state = "listen" if node.profile.listen_current_a > 0.0 else "rx"
-                node.add_energy(
+                energy_J = (
                     current
                     * node.profile.voltage_v
-                    * node.profile.rx_window_duration,
-                    state,
+                    * node.profile.rx_window_duration
                 )
+                self.energy_nodes_J += energy_J
+                self.total_energy_J += energy_J
+                node.add_energy(energy_J, state)
             if not node.alive:
                 return True
             node.last_state_time = time + (
@@ -1072,6 +1082,44 @@ class Simulator:
                 frame = gw.pop_downlink(node.id)
                 if not frame:
                     continue
+                payload_len = 0
+                if hasattr(frame, "payload"):
+                    try:
+                        payload_len = len(frame.payload)
+                    except Exception:
+                        pass
+                elif hasattr(frame, "to_bytes"):
+                    try:
+                        payload_len = len(frame.to_bytes())
+                    except Exception:
+                        pass
+                duration_dl = node.channel.airtime(node.sf, payload_len)
+                tx_power_dl = node.tx_power
+                current_gw = gw.profile.get_tx_current(tx_power_dl)
+                energy_tx = current_gw * gw.profile.voltage_v * duration_dl
+                ramp = current_gw * gw.profile.voltage_v * (
+                    gw.profile.ramp_up_s + gw.profile.ramp_down_s
+                )
+                total_tx = energy_tx + ramp
+                self.energy_gateways_J += total_tx
+                self.total_energy_J += total_tx
+                gw.add_energy(total_tx, "tx")
+                preamble_J = (
+                    gw.profile.preamble_current_a
+                    * gw.profile.voltage_v
+                    * gw.profile.preamble_time_s
+                )
+                if preamble_J > 0.0:
+                    self.energy_gateways_J += preamble_J
+                    self.total_energy_J += preamble_J
+                    gw.add_energy(preamble_J, "preamble")
+                if node.class_type.upper() != "C":
+                    extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
+                    if extra_time > 0.0:
+                        extra_energy = current * node.profile.voltage_v * extra_time
+                        self.energy_nodes_J += extra_energy
+                        self.total_energy_J += extra_energy
+                        node.add_energy(extra_energy, state)
                 distance = node.distance_to(gw)
                 kwargs = {
                     "freq_offset_hz": 0.0,
@@ -1166,12 +1214,14 @@ class Simulator:
                 else node.profile.rx_current_a
             )
             state = "listen" if node.profile.listen_current_a > 0.0 else "rx"
-            node.add_energy(
+            energy_J = (
                 current
                 * node.profile.voltage_v
-                * node.profile.rx_window_duration,
-                state,
+                * node.profile.rx_window_duration
             )
+            self.energy_nodes_J += energy_J
+            self.total_energy_J += energy_J
+            node.add_energy(energy_J, state)
             if not node.alive:
                 return True
             node.last_state_time = time + node.profile.rx_window_duration
@@ -1181,12 +1231,49 @@ class Simulator:
                 frame = gw.pop_downlink(node.id)
                 if not frame:
                     continue
-                distance = node.distance_to(gw)
+                payload_len = 0
+                if hasattr(frame, "payload"):
+                    try:
+                        payload_len = len(frame.payload)
+                    except Exception:
+                        pass
+                elif hasattr(frame, "to_bytes"):
+                    try:
+                        payload_len = len(frame.to_bytes())
+                    except Exception:
+                        pass
                 sf = node.sf
                 if node.ping_slot_dr is not None:
                     from .lorawan import DR_TO_SF
 
                     sf = DR_TO_SF.get(node.ping_slot_dr, node.sf)
+                duration_dl = node.channel.airtime(sf, payload_len)
+                tx_power_dl = node.tx_power
+                current_gw = gw.profile.get_tx_current(tx_power_dl)
+                energy_tx = current_gw * gw.profile.voltage_v * duration_dl
+                ramp = current_gw * gw.profile.voltage_v * (
+                    gw.profile.ramp_up_s + gw.profile.ramp_down_s
+                )
+                total_tx = energy_tx + ramp
+                self.energy_gateways_J += total_tx
+                self.total_energy_J += total_tx
+                gw.add_energy(total_tx, "tx")
+                preamble_J = (
+                    gw.profile.preamble_current_a
+                    * gw.profile.voltage_v
+                    * gw.profile.preamble_time_s
+                )
+                if preamble_J > 0.0:
+                    self.energy_gateways_J += preamble_J
+                    self.total_energy_J += preamble_J
+                    gw.add_energy(preamble_J, "preamble")
+                extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
+                if extra_time > 0.0:
+                    extra_energy = current * node.profile.voltage_v * extra_time
+                    self.energy_nodes_J += extra_energy
+                    self.total_energy_J += extra_energy
+                    node.add_energy(extra_energy, state)
+                distance = node.distance_to(gw)
                 kwargs = {"freq_offset_hz": 0.0, "sync_offset_s": 0.0}
                 if hasattr(node.channel, "_obstacle_loss"):
                     kwargs["tx_pos"] = (gw.x, gw.y, getattr(gw, "altitude", 0.0))
@@ -1325,6 +1412,7 @@ class Simulator:
 
         energy_by_node = {n.id: n.energy_consumed for n in self.nodes}
         airtime_by_node = {n.id: n.total_airtime for n in self.nodes}
+        energy_by_gateway = {gw.id: gw.energy_consumed for gw in self.gateways}
 
         interval_sum = 0.0
         interval_count = 0
@@ -1354,6 +1442,8 @@ class Simulator:
             "collisions": self.packets_lost_collision,
             "duplicates": self.network_server.duplicate_packets,
             "energy_J": self.total_energy_J,
+            "energy_nodes_J": self.energy_nodes_J,
+            "energy_gateways_J": self.energy_gateways_J,
             "avg_delay_s": avg_delay,
             "avg_arrival_interval_s": avg_arrival_interval,
             "throughput_bps": throughput_bps,
@@ -1369,6 +1459,7 @@ class Simulator:
             "pdr_by_class": pdr_by_class,
             "energy_by_node": energy_by_node,
             "airtime_by_node": airtime_by_node,
+            "energy_by_gateway": energy_by_gateway,
             **{f"energy_class_{ct}_J": energy_by_class[ct] for ct in energy_by_class},
             "retransmissions": self.retransmissions,
         }
