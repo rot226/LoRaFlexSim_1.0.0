@@ -644,10 +644,14 @@ tableau de bord :
 python examples/plot_sf_distribution.py metrics1.csv metrics2.csv
 python examples/plot_energy.py metrics.csv            # énergie totale
 python examples/plot_energy.py --per-node metrics.csv # par nœud
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 ```
 
 `plot_sf_distribution.py` génère `sf_distribution.png` alors que
 `plot_energy.py` crée `energy_total.png` ou `energy_per_node.png`.
+`plot_mobility_multichannel.py` enregistre `pdr_vs_scenario.png`,
+`collision_rate_vs_scenario.png` et `avg_energy_per_node_vs_scenario.png`
+dans le dossier `figures/`.
 
 ## Calcul de l'airtime
 
