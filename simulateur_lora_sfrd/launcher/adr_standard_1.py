@@ -70,7 +70,7 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         "flora_capture": flora_capture,
         "flora_loss_model": "lognorm",
         "detection_threshold_dBm": -130.0,
-        "capture_threshold_dB": 12.0,
+        "capture_threshold_dB": 6.0,
     }
 
 def apply(
