@@ -715,6 +715,7 @@ l'utilisation du simulateur :
 python examples/run_basic.py          # simulation rapide avec 20 nœuds
 python examples/run_basic.py --dump-intervals  # exporte les intervalles
 python examples/run_flora_example.py  # reproduction d'un scénario FLoRa
+python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
 ```
 
 L'option `--dump-intervals` active `dump_interval_logs` : un fichier Parquet est
