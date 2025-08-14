@@ -53,21 +53,19 @@ return t_preamble + t_payload
 
 ## Modèle OMNeT++
 
-Les équations de calcul du taux d'erreur binaire (BER) et symbolique (SER) proviennent de `omnet_modulation.py` :
+Les équations de calcul du taux d'erreur binaire (BER) et symbolique (SER)
+proviennent de `omnet_modulation.py` et suivent l'approximation analytique
+de Croce *et al.* (2018) :
 
 ```python
-dsnr = 20.0 * snir * bandwidth / bitrate
-# Somme combinatoire
-dsumk = ...
-return (8.0 / 15.0) * (1.0 / 16.0) * dsumk
+n = 2 ** sf
+ber = 0.5 * math.erfc(math.sqrt(snir * n / (2 * math.pi)))
+ser = 1 - (1 - ber) ** sf
 ```
 
-```python
-ber = calculate_ber(snir, bandwidth, bitrate)
-ser = 1.0 - (1.0 - ber) ** 4
-return min(max(ser, 0.0), 1.0)
-```
-【F:simulateur_lora_sfrd/launcher/omnet_modulation.py†L8-L35】
+Cette expression donne directement la BER en fonction du rapport
+signal/bruit linéaire ``snir`` et du spreading factor ``sf``
+【F:simulateur_lora_sfrd/launcher/omnet_modulation.py†L7-L25】.
 
 ## Seuil de détection (sensibilité)
 

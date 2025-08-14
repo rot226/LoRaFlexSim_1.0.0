@@ -1,35 +1,27 @@
-"""Helpers for OMNeT++-style BER/SER calculations."""
+"""Helpers for BER/SER calculations using analytical LoRa expressions."""
 
 from __future__ import annotations
 
 import math
 
 
-def calculate_ber(snir: float, bandwidth: float, bitrate: float) -> float:
-    """Return BER using the formula from LoRaModulation::calculateBER."""
-    dsnr = 20.0 * snir * bandwidth / bitrate
-    dsumk = 0.0
-    for k in range(2, 8, 2):
-        comb = math.comb(16, k)
-        dsumk += comb * (
-            math.exp(dsnr * (1.0 / k - 1.0))
-            + math.exp(dsnr * (1.0 / (16 - k) - 1.0))
-        )
-    k = 8
-    dsumk += math.comb(16, k) * math.exp(dsnr * (1.0 / k - 1.0))
-    for k in range(3, 8, 2):
-        comb = math.comb(16, k)
-        dsumk -= comb * (
-            math.exp(dsnr * (1.0 / k - 1.0))
-            + math.exp(dsnr * (1.0 / (16 - k) - 1.0))
-        )
-    dsumk -= math.comb(16, 15) * math.exp(dsnr * (1.0 / 15 - 1.0))
-    dsumk += math.comb(16, 16) * math.exp(dsnr * (1.0 / 16 - 1.0))
-    return (8.0 / 15.0) * (1.0 / 16.0) * dsumk
+def calculate_ber(snir: float, sf: int) -> float:
+    r"""Return BER using Croce et al. (2018) approximation.
+
+    The expression models the bit error probability of LoRa in AWGN as
+    :math:`0.5\,\mathrm{erfc}\left(\sqrt{\mathrm{SNR}\,2^{SF}/(2\pi)}\right)`.
+    ``snir`` is the linear signal-to-noise ratio.
+    """
+
+    n = 2 ** sf
+    arg = math.sqrt(snir * n / (2.0 * math.pi))
+    ber = 0.5 * math.erfc(arg)
+    return min(max(ber, 0.0), 1.0)
 
 
-def calculate_ser(snir: float, bandwidth: float, bitrate: float) -> float:
-    """Return SER using a simple BER-to-SER approximation."""
-    ber = calculate_ber(snir, bandwidth, bitrate)
-    ser = 1.0 - (1.0 - ber) ** 4
+def calculate_ser(snir: float, sf: int) -> float:
+    """Return SER from BER for an ``sf``-bit LoRa symbol."""
+
+    ber = calculate_ber(snir, sf)
+    ser = 1.0 - (1.0 - ber) ** sf
     return min(max(ser, 0.0), 1.0)
