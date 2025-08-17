@@ -645,6 +645,7 @@ python examples/plot_sf_distribution.py metrics1.csv metrics2.csv
 python examples/plot_energy.py metrics.csv            # énergie totale
 python examples/plot_energy.py --per-node metrics.csv # par nœud
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
+python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 ```
 
 `plot_sf_distribution.py` génère `sf_distribution.png` alors que
@@ -652,6 +653,9 @@ python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 `plot_mobility_multichannel.py` enregistre `pdr_vs_scenario.png`,
 `collision_rate_vs_scenario.png` et `avg_energy_per_node_vs_scenario.png`
 dans le dossier `figures/`.
+`plot_mobility_latency_energy.py` crée `pdr_vs_scenario.svg`,
+`avg_delay_vs_scenario.svg` et `avg_energy_per_node_vs_scenario.svg` au
+format vectoriel.
 
 ## Calcul de l'airtime
 
@@ -720,7 +724,11 @@ python examples/run_basic.py          # simulation rapide avec 20 nœuds
 python examples/run_basic.py --dump-intervals  # exporte les intervalles
 python examples/run_flora_example.py  # reproduction d'un scénario FLoRa
 python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
+python scripts/run_mobility_latency_energy.py --nodes 50 --packets 100 --seed 1
 ```
+
+`run_mobility_latency_energy.py` produit `results/mobility_latency_energy.csv`
+que `plot_mobility_latency_energy.py` peut visualiser.
 
 L'option `--dump-intervals` active `dump_interval_logs` : un fichier Parquet est
 généré pour chaque nœud avec la date Poisson attendue et l'instant réel de
