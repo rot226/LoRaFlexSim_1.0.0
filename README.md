@@ -17,6 +17,11 @@ sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
    source env/bin/activate  # Sous Windows : env\Scripts\activate
    pip install -e .
    ```
+
+   > **Remarque :** les tests automatisés utilisent une version minimale de
+   > `numpy` située dans `tests/stubs`. Pour exécuter les scripts ou les
+   > exemples du simulateur, assurez‑vous que la véritable bibliothèque
+   > NumPy est installée dans votre environnement.
 3. **Lancez le tableau de bord :**
 ```bash
 panel serve simulateur_lora_sfrd/launcher/dashboard.py --show
