@@ -1,4 +1,4 @@
-import numpy as np
+import numpy_stub as np
 from simulateur_lora_sfrd.launcher.simulator import Simulator
 
 

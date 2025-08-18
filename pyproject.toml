@@ -27,4 +27,5 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["simulateur_lora_sfrd*", "traffic*"]
+exclude = ["tests*"]
 
