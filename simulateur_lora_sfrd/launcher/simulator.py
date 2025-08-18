@@ -580,6 +580,8 @@ class Simulator:
 
         # Journal des événements (pour export CSV)
         self.events_log: list[dict] = []
+        # Accès direct aux événements par identifiant
+        self._events_log_map: dict[int, dict] = {}
 
         # Planifier le premier envoi de chaque nœud
         for node in self.nodes:
@@ -884,22 +886,22 @@ class Simulator:
             self._push_event(rx2, EventType.RX_WINDOW, ev2, node.id)
 
             # Journaliser l'événement de transmission (résultat inconnu à ce stade)
-            self.events_log.append(
-                {
-                    "event_id": event_id,
-                    "node_id": node_id,
-                    "sf": sf,
-                    "start_time": time,
-                    "end_time": end_time,
-                    "frequency_hz": node.channel.frequency_hz,
-                    "energy_J": energy_J,
-                    "heard": heard_by_any,
-                    "rssi_dBm": best_rssi,
-                    "snr_dB": best_snr,
-                    "result": None,
-                    "gateway_id": None,
-                }
-            )
+            log_entry = {
+                "event_id": event_id,
+                "node_id": node_id,
+                "sf": sf,
+                "start_time": time,
+                "end_time": end_time,
+                "frequency_hz": node.channel.frequency_hz,
+                "energy_J": energy_J,
+                "heard": heard_by_any,
+                "rssi_dBm": best_rssi,
+                "snr_dB": best_snr,
+                "result": None,
+                "gateway_id": None,
+            }
+            self.events_log.append(log_entry)
+            self._events_log_map[event_id] = log_entry
             return True
 
         elif priority == EventType.TX_END:
@@ -921,17 +923,13 @@ class Simulator:
                 self.rx_delivered += 1
                 node.increment_success()
                 # Délai = temps de fin - temps de début de l'émission
-                start_time = next(
-                    item for item in self.events_log if item["event_id"] == event_id
-                )["start_time"]
+                start_time = self._events_log_map[event_id]["start_time"]
                 delay = self.current_time - start_time
                 self.total_delay += delay
                 self.delivered_count += 1
             else:
                 # Identifier la cause de perte: collision ou absence de couverture
-                log_entry = next(
-                    item for item in self.events_log if item["event_id"] == event_id
-                )
+                log_entry = self._events_log_map[event_id]
                 heard = log_entry["heard"]
                 if heard:
                     self.packets_lost_collision += 1
@@ -939,19 +937,17 @@ class Simulator:
                 else:
                     self.packets_lost_no_signal += 1
             # Mettre à jour le résultat et la passerelle du log de l'événement
-            for entry in self.events_log:
-                if entry["event_id"] == event_id:
-                    entry["result"] = (
-                        "Success"
-                        if delivered
-                        else ("CollisionLoss" if entry["heard"] else "NoCoverage")
-                    )
-                    entry["gateway_id"] = (
-                        self.network_server.event_gateway.get(event_id, None)
-                        if delivered
-                        else None
-                    )
-                    break
+            entry = self._events_log_map[event_id]
+            entry["result"] = (
+                "Success"
+                if delivered
+                else ("CollisionLoss" if entry["heard"] else "NoCoverage")
+            )
+            entry["gateway_id"] = (
+                self.network_server.event_gateway.get(event_id, None)
+                if delivered
+                else None
+            )
 
             if self.debug_rx:
                 if delivered:
@@ -1329,8 +1325,7 @@ class Simulator:
             else:
                 # Déplacer le nœud de manière progressive
                 self.mobility_model.move(node, self.current_time)
-                self.events_log.append(
-                {
+                log_entry = {
                     "event_id": event_id,
                     "node_id": node_id,
                     "sf": node.sf,
@@ -1342,9 +1337,10 @@ class Simulator:
                     "energy_J": 0.0,
                     "gateway_id": None,
                     "rssi_dBm": None,
-                        "snr_dB": None,
-                    }
-                )
+                    "snr_dB": None,
+                }
+                self.events_log.append(log_entry)
+                self._events_log_map[event_id] = log_entry
                 if self.mobility_enabled and (
                     self.packets_to_send == 0
                     or node.packets_sent < self.packets_to_send

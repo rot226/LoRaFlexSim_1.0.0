@@ -42,10 +42,13 @@ def test_flora_sca_quantization_trace():
     adr1(sim_q, degrade_channel=True, profile="flora", capture_mode="flora")
     sim_q.run(1000)
 
-    def to_ns(log):
+    def to_ns(log_map):
         return [
-            (int(round(e["start_time"] * 1e9)), int(round(e["end_time"] * 1e9)))
-            for e in log
+            (
+                int(round(e["start_time"] * 1e9)),
+                int(round(e["end_time"] * 1e9)),
+            )
+            for e in sorted(log_map.values(), key=lambda ev: ev["start_time"])
         ]
 
-    assert to_ns(sim.events_log) == to_ns(sim_q.events_log)
+    assert to_ns(sim._events_log_map) == to_ns(sim_q._events_log_map)
