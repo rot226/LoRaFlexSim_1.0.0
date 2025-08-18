@@ -5,8 +5,9 @@ import pathlib
 def test_battery_tracking_script(tmp_path, monkeypatch):
     repo_root = pathlib.Path(__file__).resolve().parents[1]
 
-    # Import real numpy/pandas by temporarily removing the repository and stub
-    # paths so that the genuine dependencies from the environment are used.
+    # Import real numpy/pandas by temporarily removing the repository and
+    # ``numpy_stub`` paths so that the genuine dependencies from the
+    # environment are used.
     original_path = sys.path.copy()
     stub_numpy = sys.modules.get("numpy")
     stub_numpy_random = sys.modules.get("numpy.random")

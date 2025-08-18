@@ -1,4 +1,4 @@
-import numpy as np
+import numpy_stub as np
 import pytest
 import math
 from scipy import stats

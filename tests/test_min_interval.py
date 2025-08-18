@@ -1,6 +1,6 @@
 from simulateur_lora_sfrd.launcher.simulator import Simulator
 from simulateur_lora_sfrd.launcher.node import Node
-import numpy as np
+import numpy_stub as np
 
 
 def test_next_event_after_airtime():

@@ -1,4 +1,4 @@
-import numpy as np
+import numpy_stub as np
 import pytest
 
 from traffic.exponential import sample_interval
