@@ -1440,6 +1440,8 @@ class Simulator:
 
         return {
             "PDR": pdr,
+            "tx_attempted": total_sent,
+            "delivered": delivered,
             "collisions": self.packets_lost_collision,
             "duplicates": self.network_server.duplicate_packets,
             "energy_J": self.total_energy_J,
