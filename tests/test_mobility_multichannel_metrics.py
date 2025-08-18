@@ -31,7 +31,7 @@ def test_mobility_multichannel_metrics() -> None:
 
     freqs = {
         e["frequency_hz"]
-        for e in sim_multi.events_log
+        for e in sim_multi._events_log_map.values()
         if e["result"] != "Mobility"
     }
     assert len(freqs) >= 2

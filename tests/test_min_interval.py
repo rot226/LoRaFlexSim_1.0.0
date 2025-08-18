@@ -15,7 +15,7 @@ def test_next_event_after_airtime():
         seed=1,
     )
     sim.run()
-    events = sim.events_log
+    events = sorted(sim._events_log_map.values(), key=lambda e: e["start_time"])
     for i in range(len(events) - 1):
         airtime = events[i]["end_time"] - events[i]["start_time"]
         delta = events[i + 1]["start_time"] - events[i]["start_time"]

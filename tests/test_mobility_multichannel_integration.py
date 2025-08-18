@@ -12,5 +12,9 @@ def test_mobility_multichannel_integration() -> None:
     sim.run()
     metrics = sim.get_metrics()
     assert metrics["PDR"] > 0
-    freqs = {ev["frequency_hz"] for ev in sim.events_log if ev["result"] != "Mobility"}
+    freqs = {
+        ev["frequency_hz"]
+        for ev in sim._events_log_map.values()
+        if ev["result"] != "Mobility"
+    }
     assert len(freqs) >= 2
