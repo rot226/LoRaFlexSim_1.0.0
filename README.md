@@ -760,6 +760,29 @@ Les points suivants ont été intégrés au simulateur :
 - **Suivi détaillé des ACK.** Chaque nœud mémorise les confirmations reçues pour appliquer fidèlement la logique ADR de FLoRa.
 - **Scheduler de downlinks prioritaire.** Le module `downlink_scheduler.py` organise les transmissions B/C en donnant la priorité aux commandes et accusés de réception.
 
+## Reproduction des figures
+
+Pour générer toutes les figures fournies avec le projet, utilisez:
+
+```bash
+python scripts/generate_all_figures.py --nodes 50 --packets 100 --seed 1
+```
+
+Les paramètres peuvent aussi être définis dans un fichier INI:
+
+```bash
+python scripts/generate_all_figures.py --config mon_fichier.ini
+```
+
+Contenu minimal de `mon_fichier.ini` :
+
+```ini
+[simulation]
+nodes = 50
+packets = 100
+seed = 1
+```
+
 ## Limites actuelles
 
 Le simulateur reste volontairement léger et certaines fonctionnalités manquent
