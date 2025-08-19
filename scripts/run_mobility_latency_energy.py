@@ -1,9 +1,9 @@
 """Run mobility/static and single/three-channel scenarios to collect latency, energy and PDR.
 
 This utility executes four predefined scenarios combining mobile/static nodes
-and mono/tri-channel configurations. Metrics for each scenario are aggregated
-into ``results/mobility_latency_energy.csv`` with columns:
-``scenario``, ``pdr``, ``avg_delay`` (seconds) and ``energy_per_node`` (J).
+and mono/tri-channel configurations.  Scenarios may be repeated via
+``--replicates`` and the mean/standard deviation of PDR, delay, collision rate
+and energy per node are written to ``results/mobility_latency_energy.csv``.
 
 Usage::
 
@@ -15,12 +15,13 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import csv
+import statistics
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from simulateur_lora_sfrd.launcher import MultiChannel, Simulator  # noqa: E402
-import csv
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
@@ -32,6 +33,10 @@ def run_scenario(
     num_nodes: int,
     packets: int,
     seed: int,
+    adr_node: bool,
+    adr_server: bool,
+    area_size: float,
+    interval: float,
 ) -> dict:
     """Run a single scenario and return selected metrics."""
     sim = Simulator(
@@ -41,14 +46,22 @@ def run_scenario(
         seed=seed,
         mobility=mobility,
         channels=channels,
+        adr_node=adr_node,
+        adr_server=adr_server,
+        area_size=area_size,
+        packet_interval=interval,
     )
     sim.run()
     metrics = sim.get_metrics()
+    total_packets = metrics["delivered"] + metrics["collisions"]
     return {
         "scenario": name,
-        "pdr": metrics["PDR"],
+        "pdr": metrics["PDR"] * 100,
         "avg_delay": metrics["avg_delay_s"],
         "energy_per_node": metrics["energy_nodes_J"] / num_nodes,
+        "collision_rate": metrics["collisions"] / total_packets * 100
+        if total_packets
+        else 0.0,
     }
 
 
@@ -59,6 +72,31 @@ def main() -> None:
     parser.add_argument("--nodes", type=int, default=50, help="Number of nodes")
     parser.add_argument("--packets", type=int, default=100, help="Packets per node")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
+    parser.add_argument(
+        "--adr-node",
+        action="store_true",
+        help="Enable ADR algorithm on nodes",
+    )
+    parser.add_argument(
+        "--adr-server",
+        action="store_true",
+        help="Enable ADR algorithm on server",
+    )
+    parser.add_argument(
+        "--area-size",
+        type=float,
+        default=1000.0,
+        help="Square area size in metres",
+    )
+    parser.add_argument(
+        "--interval", type=float, default=60.0, help="Mean packet interval (s)"
+    )
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=1,
+        help="Number of simulation replicates",
+    )
     args = parser.parse_args()
 
     scenarios = {
@@ -82,23 +120,45 @@ def main() -> None:
 
     rows: list[dict] = []
     for name, params in scenarios.items():
-        rows.append(
-            run_scenario(
-                name,
-                params["mobility"],
-                params["channels"],
-                args.nodes,
-                args.packets,
-                args.seed,
+        rep_rows = []
+        for r in range(args.replicates):
+            rep_rows.append(
+                run_scenario(
+                    name,
+                    params["mobility"],
+                    params["channels"],
+                    args.nodes,
+                    args.packets,
+                    args.seed + r,
+                    args.adr_node,
+                    args.adr_server,
+                    args.area_size,
+                    args.interval,
+                )
             )
-        )
+
+        agg = {"scenario": name}
+        for key in ["pdr", "avg_delay", "energy_per_node", "collision_rate"]:
+            values = [row[key] for row in rep_rows]
+            agg[f"{key}_mean"] = statistics.mean(values)
+            agg[f"{key}_std"] = statistics.pstdev(values)
+        rows.append(agg)
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     out_path = os.path.join(RESULTS_DIR, "mobility_latency_energy.csv")
+    fieldnames = [
+        "scenario",
+        "pdr_mean",
+        "pdr_std",
+        "avg_delay_mean",
+        "avg_delay_std",
+        "energy_per_node_mean",
+        "energy_per_node_std",
+        "collision_rate_mean",
+        "collision_rate_std",
+    ]
     with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["scenario", "pdr", "avg_delay", "energy_per_node"]
-        )
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     print(f"Saved {out_path}")
