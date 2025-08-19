@@ -18,74 +18,43 @@ import pandas as pd
 def plot(csv_path: str, output_dir: str = "figures") -> None:
     df = pd.read_csv(csv_path)
 
-    # Detect common column names
-    scenario_col = None
-    for name in ("scenario", "Scenario"):
-        if name in df.columns:
-            scenario_col = name
-            break
-    if scenario_col is None:
+    if "scenario" not in df.columns:
         raise ValueError("CSV must contain a 'scenario' column")
-
-    delivered_col = next((c for c in df.columns if c.lower() == "delivered"), None)
-    collisions_col = next((c for c in df.columns if c.lower() == "collisions"), None)
-    if delivered_col is None or collisions_col is None:
-        raise ValueError("CSV must contain 'delivered' and 'collisions' columns")
-
-    total_packets = df[delivered_col] + df[collisions_col]
-
-    # PDR may already be present in percent
-    pdr_col = next((c for c in df.columns if c.lower().startswith("pdr")), None)
-    if pdr_col:
-        df["pdr"] = df[pdr_col]
-    else:
-        df["pdr"] = df[delivered_col] / total_packets * 100
-
-    df["collision_rate"] = df[collisions_col] / total_packets * 100
-
-    energy_col = next((c for c in df.columns if c.lower().startswith("energy")), None)
-    nodes_col = next((c for c in df.columns if c.lower() == "nodes"), None)
-    if energy_col and nodes_col:
-        df["energy_per_node"] = df[energy_col] / df[nodes_col]
-
-    grouped = df.groupby(scenario_col).mean(numeric_only=True)
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # PDR vs scenario
-    plt.figure()
-    ax = grouped["pdr"].plot(kind="bar", color="C0")
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel("PDR (%)")
-    ax.set_title("PDR by scenario")
-    ax.bar_label(ax.containers[0], fmt="%.1f%%")
-    plt.tight_layout()
-    plt.savefig(out_dir / "pdr_vs_scenario.png")
-    plt.close()
+    metrics = {
+        "pdr": ("PDR (%)", "%.1f%%", "C0"),
+        "collision_rate": ("Collision rate (%)", "%.1f%%", "C1"),
+        "avg_delay_s": ("Average delay (s)", "%.2f s", "C2"),
+        "energy_per_node": (
+            "Average energy per node (J)",
+            "%.2f J",
+            "C3",
+        ),
+    }
 
-    # Collision rate vs scenario
-    plt.figure()
-    ax = grouped["collision_rate"].plot(kind="bar", color="C1")
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel("Collision rate (%)")
-    ax.set_title("Collision rate by scenario")
-    ax.bar_label(ax.containers[0], fmt="%.1f%%")
-    plt.tight_layout()
-    plt.savefig(out_dir / "collision_rate_vs_scenario.png")
-    plt.close()
-
-    # Average energy per node if available
-    if "energy_per_node" in grouped:
-        plt.figure()
-        ax = grouped["energy_per_node"].plot(kind="bar", color="C2")
+    for metric, (ylabel, fmt, color) in metrics.items():
+        mean_col = f"{metric}_mean"
+        std_col = f"{metric}_std"
+        if mean_col not in df.columns:
+            continue
+        fig, ax = plt.subplots()
+        bars = ax.bar(
+            df["scenario"],
+            df[mean_col],
+            yerr=df[std_col],
+            capsize=4,
+            color=color,
+        )
         ax.set_xlabel("Scenario")
-        ax.set_ylabel("Average energy per node (J)")
-        ax.set_title("Average energy per node by scenario")
-        ax.bar_label(ax.containers[0], fmt="%.2f J")
-        plt.tight_layout()
-        plt.savefig(out_dir / "avg_energy_per_node_vs_scenario.png")
-        plt.close()
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{ylabel} by scenario")
+        ax.bar_label(bars, fmt=fmt)
+        fig.tight_layout()
+        fig.savefig(out_dir / f"{metric}_vs_scenario.png")
+        plt.close(fig)
 
 
 def main(argv: list[str] | None = None) -> None:

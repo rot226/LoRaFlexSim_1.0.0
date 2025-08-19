@@ -12,56 +12,50 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import csv
+import pandas as pd
 
 
 def plot(csv_path: str, output_dir: str = "figures") -> None:
-    with open(csv_path, newline="") as f:
-        reader = list(csv.DictReader(f))
-
-    if not reader:
-        raise ValueError("CSV contains no data")
-
-    scenarios = [row["scenario"] for row in reader]
-    pdr = [float(row["pdr"]) * 100 for row in reader]
-    avg_delay = [float(row["avg_delay"]) for row in reader]
-    energy_per_node = [float(row["energy_per_node"]) for row in reader]
+    df = pd.read_csv(csv_path)
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # PDR vs scenario
-    fig, ax = plt.subplots()
-    bars = ax.bar(scenarios, pdr, color="C0")
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel("PDR (%)")
-    ax.set_title("PDR by scenario")
-    ax.bar_label(bars, fmt="%.1f%%")
-    fig.tight_layout()
-    fig.savefig(out_dir / "pdr_vs_scenario.svg")
-    plt.close(fig)
+    metrics = [
+        ("pdr", "PDR (%)", "%.1f%%", "C0", "pdr_vs_scenario.svg"),
+        ("avg_delay", "Average delay (s)", "%.2f s", "C1", "avg_delay_vs_scenario.svg"),
+        (
+            "energy_per_node",
+            "Average energy per node (J)",
+            "%.2f J",
+            "C2",
+            "avg_energy_per_node_vs_scenario.svg",
+        ),
+        (
+            "collision_rate",
+            "Collision rate (%)",
+            "%.1f%%",
+            "C3",
+            "collision_rate_vs_scenario.svg",
+        ),
+    ]
 
-    # Average delay vs scenario
-    fig, ax = plt.subplots()
-    bars = ax.bar(scenarios, avg_delay, color="C1")
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel("Average delay (s)")
-    ax.set_title("Average delay by scenario")
-    ax.bar_label(bars, fmt="%.2f s")
-    fig.tight_layout()
-    fig.savefig(out_dir / "avg_delay_vs_scenario.svg")
-    plt.close(fig)
-
-    # Average energy per node vs scenario
-    fig, ax = plt.subplots()
-    bars = ax.bar(scenarios, energy_per_node, color="C2")
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel("Average energy per node (J)")
-    ax.set_title("Average energy per node by scenario")
-    ax.bar_label(bars, fmt="%.2f J")
-    fig.tight_layout()
-    fig.savefig(out_dir / "avg_energy_per_node_vs_scenario.svg")
-    plt.close(fig)
+    for metric, ylabel, fmt, color, filename in metrics:
+        mean_col = f"{metric}_mean"
+        std_col = f"{metric}_std"
+        if mean_col not in df.columns:
+            continue
+        fig, ax = plt.subplots()
+        bars = ax.bar(
+            df["scenario"], df[mean_col], yerr=df[std_col], capsize=4, color=color
+        )
+        ax.set_xlabel("Scenario")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{ylabel} by scenario")
+        ax.bar_label(bars, fmt=fmt)
+        fig.tight_layout()
+        fig.savefig(out_dir / filename)
+        plt.close(fig)
 
 
 def main(argv: list[str] | None = None) -> None:
