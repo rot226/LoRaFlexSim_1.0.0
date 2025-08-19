@@ -1,9 +1,10 @@
 """Plot battery evolution from ``results/battery_tracking.csv``.
 
-The CSV is expected to contain columns ``time``, ``node_id`` and ``energy_j`` as
-produced by ``run_battery_tracking.py``.  This utility draws the remaining energy
-of each node over time and also plots the average across nodes.  The figure is
-saved to ``figures/battery_tracking.png``.
+The CSV is expected to contain columns ``time``, ``node_id``, ``energy_j`` and
+``capacity_j`` as produced by ``run_battery_tracking.py``.  This utility draws
+the remaining energy of each node over time, expressed as a percentage of the
+initial battery capacity, and also plots the average across nodes.  The figure
+is saved to ``figures/battery_tracking.png``.
 
 Usage::
 
@@ -24,6 +25,11 @@ try:  # pandas and matplotlib are optional but required for plotting
 except Exception as exc:  # pragma: no cover - handled at runtime
     raise SystemExit(f"Required plotting libraries missing: {exc}")
 
+try:  # Import default battery capacity constant
+    from .run_battery_tracking import DEFAULT_BATTERY_J
+except Exception:  # pragma: no cover - fallback when running as a script
+    from run_battery_tracking import DEFAULT_BATTERY_J
+
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 FIGURES_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
 
@@ -36,16 +42,32 @@ def main() -> None:
     df = pd.read_csv(in_path)
     if not {"time", "node_id", "energy_j"} <= set(df.columns):
         raise SystemExit("CSV must contain time, node_id and energy_j columns")
+    if "capacity_j" not in df.columns:
+        df["capacity_j"] = DEFAULT_BATTERY_J
+
+    df["energy_pct"] = df["energy_j"] / df["capacity_j"] * 100
 
     plt.figure()
     for node_id, group in df.groupby("node_id"):
-        plt.plot(group["time"], group["energy_j"], label=f"Node {node_id}")
+        plt.plot(
+            group["time"],
+            group["energy_pct"],
+            label=f"Residual energy of node {node_id}",
+        )
 
-    avg = df.groupby("time")["energy_j"].mean()
-    plt.plot(avg.index, avg.values, color="k", linewidth=2, label="Average")
+    avg = df.groupby("time")["energy_pct"].mean()
+    plt.plot(
+        avg.index,
+        avg.values,
+        color="k",
+        linewidth=2,
+        label="Mean residual energy",
+    )
+    plt.axhline(0, color="r", linestyle="--", label="Battery depleted")
 
     plt.xlabel("Time (s)")
-    plt.ylabel("Energy (J)")
+    plt.ylabel("Remaining energy (%)")
+    plt.title("Temporal evolution of residual battery energy")
     plt.grid(True)
     plt.legend()
 

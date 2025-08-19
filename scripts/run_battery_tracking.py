@@ -2,8 +2,8 @@
 
 This script executes the simulator step by step, collecting the remaining
 energy of each node after every processed event.  The collected data is stored
-in ``results/battery_tracking.csv`` with columns ``time``, ``node_id`` and
-``energy_j``.
+in ``results/battery_tracking.csv`` with columns ``time``, ``node_id``,
+``energy_j`` and ``capacity_j``.
 
 Usage::
 
@@ -47,7 +47,13 @@ def _collect(sim: Simulator) -> Iterable[dict[str, float | int]]:
             energy = getattr(node, "energy_total", None)
         if energy is None:
             energy = getattr(node, "energy_consumed", 0.0)
-        yield {"time": sim.current_time, "node_id": node.id, "energy_j": energy}
+        capacity = getattr(node, "battery_capacity_j", DEFAULT_BATTERY_J)
+        yield {
+            "time": sim.current_time,
+            "node_id": node.id,
+            "energy_j": energy,
+            "capacity_j": capacity,
+        }
 
 
 def main() -> None:
