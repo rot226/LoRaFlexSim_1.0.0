@@ -37,20 +37,30 @@ def main(argv: list[str] | None = None) -> None:
         seed=args.seed,
         mobility=False,
     )
-
     positions = [(n.x, n.y) for n in sim.nodes]
     xs, ys = zip(*positions)
+
+    gateway_positions = [(g.x, g.y) for g in sim.gateways]
+    gx, gy = (zip(*gateway_positions) if gateway_positions else ([], []))
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plt.figure()
-    plt.scatter(xs, ys)
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Node positions")
-    plt.savefig(output_path)
-    plt.close()
+    fig, ax = plt.subplots()
+    ax.scatter(xs, ys)
+    if gateway_positions:
+        ax.scatter(gx, gy, marker="*", color="red")
+
+    for n in sim.nodes:
+        ax.text(n.x, n.y, str(n.id))
+    for g in sim.gateways:
+        ax.text(g.x, g.y, str(g.id))
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_title("Node positions")
+    fig.savefig(output_path)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
