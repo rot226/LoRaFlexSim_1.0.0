@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import statistics as stats
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -32,6 +33,10 @@ def run_scenario(
     num_nodes: int,
     packets: int,
     seed: int,
+    adr_node: bool,
+    adr_server: bool,
+    area_size: float,
+    interval: float,
 ) -> dict:
     """Run a single scenario and return selected metrics."""
     sim = Simulator(
@@ -41,14 +46,23 @@ def run_scenario(
         seed=seed,
         mobility=mobility,
         channels=channels,
+        adr_node=adr_node,
+        adr_server=adr_server,
+        area_size=area_size,
+        packet_interval=interval,
     )
     sim.run()
     metrics = sim.get_metrics()
+    collisions = metrics.get("collisions", 0)
+    delivered = metrics.get("delivered", 0)
+    collision_rate = (
+        collisions / (collisions + delivered) if (collisions + delivered) > 0 else 0.0
+    )
     return {
-        "scenario": name,
         "pdr": metrics["PDR"],
         "avg_delay": metrics["avg_delay_s"],
         "energy_per_node": metrics["energy_nodes_J"] / num_nodes,
+        "collision_rate": collision_rate,
     }
 
 
@@ -59,6 +73,30 @@ def main() -> None:
     parser.add_argument("--nodes", type=int, default=50, help="Number of nodes")
     parser.add_argument("--packets", type=int, default=100, help="Packets per node")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
+    parser.add_argument(
+        "--adr-node", action="store_true", help="Enable ADR on nodes"
+    )
+    parser.add_argument(
+        "--adr-server", action="store_true", help="Enable ADR on server"
+    )
+    parser.add_argument(
+        "--area-size",
+        type=float,
+        default=1000.0,
+        help="Side length of the square simulation area in meters",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        help="Mean packet interval in seconds",
+    )
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=1,
+        help="Number of independent repetitions per scenario",
+    )
     args = parser.parse_args()
 
     scenarios = {
@@ -82,23 +120,44 @@ def main() -> None:
 
     rows: list[dict] = []
     for name, params in scenarios.items():
-        rows.append(
-            run_scenario(
-                name,
-                params["mobility"],
-                params["channels"],
-                args.nodes,
-                args.packets,
-                args.seed,
+        rep_metrics = []
+        for r in range(args.replicates):
+            rep_metrics.append(
+                run_scenario(
+                    name,
+                    params["mobility"],
+                    params["channels"],
+                    args.nodes,
+                    args.packets,
+                    args.seed + r,
+                    args.adr_node,
+                    args.adr_server,
+                    args.area_size,
+                    args.interval,
+                )
             )
-        )
+        row = {"scenario": name}
+        for key in rep_metrics[0].keys():
+            values = [m[key] for m in rep_metrics]
+            row[f"{key}_mean"] = stats.fmean(values)
+            row[f"{key}_std"] = stats.pstdev(values) if len(values) > 1 else 0.0
+        rows.append(row)
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     out_path = os.path.join(RESULTS_DIR, "mobility_latency_energy.csv")
     with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["scenario", "pdr", "avg_delay", "energy_per_node"]
-        )
+        fieldnames = [
+            "scenario",
+            "pdr_mean",
+            "pdr_std",
+            "avg_delay_mean",
+            "avg_delay_std",
+            "energy_per_node_mean",
+            "energy_per_node_std",
+            "collision_rate_mean",
+            "collision_rate_std",
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     print(f"Saved {out_path}")

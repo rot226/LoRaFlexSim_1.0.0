@@ -23,16 +23,21 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
         raise ValueError("CSV contains no data")
 
     scenarios = [row["scenario"] for row in reader]
-    pdr = [float(row["pdr"]) * 100 for row in reader]
-    avg_delay = [float(row["avg_delay"]) for row in reader]
-    energy_per_node = [float(row["energy_per_node"]) for row in reader]
+    pdr = [float(row["pdr_mean"]) * 100 for row in reader]
+    pdr_err = [float(row.get("pdr_std", 0)) * 100 for row in reader]
+    avg_delay = [float(row["avg_delay_mean"]) for row in reader]
+    avg_delay_err = [float(row.get("avg_delay_std", 0)) for row in reader]
+    energy_per_node = [float(row["energy_per_node_mean"]) for row in reader]
+    energy_err = [float(row.get("energy_per_node_std", 0)) for row in reader]
+    collision_rate = [float(row.get("collision_rate_mean", 0)) * 100 for row in reader]
+    collision_err = [float(row.get("collision_rate_std", 0)) * 100 for row in reader]
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # PDR vs scenario
     plt.figure()
-    plt.bar(scenarios, pdr, color="C0")
+    plt.bar(scenarios, pdr, yerr=pdr_err, color="C0", capsize=4)
     plt.ylabel("PDR (%)")
     plt.title("PDR by scenario")
     plt.tight_layout()
@@ -41,7 +46,7 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
 
     # Average delay vs scenario
     plt.figure()
-    plt.bar(scenarios, avg_delay, color="C1")
+    plt.bar(scenarios, avg_delay, yerr=avg_delay_err, color="C1", capsize=4)
     plt.ylabel("Average delay (s)")
     plt.title("Average delay by scenario")
     plt.tight_layout()
@@ -50,12 +55,28 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
 
     # Average energy per node vs scenario
     plt.figure()
-    plt.bar(scenarios, energy_per_node, color="C2")
+    plt.bar(scenarios, energy_per_node, yerr=energy_err, color="C2", capsize=4)
     plt.ylabel("Average energy per node (J)")
     plt.title("Average energy per node by scenario")
     plt.tight_layout()
     plt.savefig(out_dir / "avg_energy_per_node_vs_scenario.svg")
     plt.close()
+
+    # Collision rate vs scenario if available
+    if any(collision_rate):
+        plt.figure()
+        plt.bar(
+            scenarios,
+            collision_rate,
+            yerr=collision_err,
+            color="C3",
+            capsize=4,
+        )
+        plt.ylabel("Collision rate (%)")
+        plt.title("Collision rate by scenario")
+        plt.tight_layout()
+        plt.savefig(out_dir / "collision_rate_vs_scenario.svg")
+        plt.close()
 
 
 def main(argv: list[str] | None = None) -> None:

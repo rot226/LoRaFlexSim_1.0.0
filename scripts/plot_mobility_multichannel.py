@@ -17,64 +17,72 @@ import pandas as pd
 
 def plot(csv_path: str, output_dir: str = "figures") -> None:
     df = pd.read_csv(csv_path)
-
-    # Detect common column names
-    scenario_col = None
-    for name in ("scenario", "Scenario"):
-        if name in df.columns:
-            scenario_col = name
-            break
-    if scenario_col is None:
+    df.columns = [c.lower() for c in df.columns]
+    if "scenario" not in df.columns:
         raise ValueError("CSV must contain a 'scenario' column")
-
-    delivered_col = next((c for c in df.columns if c.lower() == "delivered"), None)
-    collisions_col = next((c for c in df.columns if c.lower() == "collisions"), None)
-    if delivered_col is None or collisions_col is None:
-        raise ValueError("CSV must contain 'delivered' and 'collisions' columns")
-
-    total_packets = df[delivered_col] + df[collisions_col]
-
-    # PDR may already be present in percent
-    pdr_col = next((c for c in df.columns if c.lower().startswith("pdr")), None)
-    if pdr_col:
-        df["pdr"] = df[pdr_col]
-    else:
-        df["pdr"] = df[delivered_col] / total_packets * 100
-
-    df["collision_rate"] = df[collisions_col] / total_packets * 100
-
-    energy_col = next((c for c in df.columns if c.lower().startswith("energy")), None)
-    nodes_col = next((c for c in df.columns if c.lower() == "nodes"), None)
-    if energy_col and nodes_col:
-        df["energy_per_node"] = df[energy_col] / df[nodes_col]
-
-    grouped = df.groupby(scenario_col).mean(numeric_only=True)
+    df = df.set_index("scenario")
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # PDR vs scenario
-    plt.figure()
-    grouped["pdr"].plot(kind="bar", color="C0")
-    plt.ylabel("PDR (%)")
-    plt.title("PDR by scenario")
-    plt.tight_layout()
-    plt.savefig(out_dir / "pdr_vs_scenario.png")
-    plt.close()
-
-    # Collision rate vs scenario
-    plt.figure()
-    grouped["collision_rate"].plot(kind="bar", color="C1")
-    plt.ylabel("Collision rate (%)")
-    plt.title("Collision rate by scenario")
-    plt.tight_layout()
-    plt.savefig(out_dir / "collision_rate_vs_scenario.png")
-    plt.close()
-
-    # Average energy per node if available
-    if "energy_per_node" in grouped:
+    # PDR with error bars
+    if "pdr_mean" in df:
         plt.figure()
-        grouped["energy_per_node"].plot(kind="bar", color="C2")
+        plt.bar(
+            df.index,
+            df["pdr_mean"] * 100,
+            yerr=df.get("pdr_std", 0) * 100,
+            color="C0",
+            capsize=4,
+        )
+        plt.ylabel("PDR (%)")
+        plt.title("PDR by scenario")
+        plt.tight_layout()
+        plt.savefig(out_dir / "pdr_vs_scenario.png")
+        plt.close()
+
+    # Collision rate with error bars
+    if "collision_rate_mean" in df:
+        plt.figure()
+        plt.bar(
+            df.index,
+            df["collision_rate_mean"] * 100,
+            yerr=df.get("collision_rate_std", 0) * 100,
+            color="C1",
+            capsize=4,
+        )
+        plt.ylabel("Collision rate (%)")
+        plt.title("Collision rate by scenario")
+        plt.tight_layout()
+        plt.savefig(out_dir / "collision_rate_vs_scenario.png")
+        plt.close()
+
+    # Average delay if available
+    if "avg_delay_s_mean" in df:
+        plt.figure()
+        plt.bar(
+            df.index,
+            df["avg_delay_s_mean"],
+            yerr=df.get("avg_delay_s_std", 0),
+            color="C2",
+            capsize=4,
+        )
+        plt.ylabel("Average delay (s)")
+        plt.title("Average delay by scenario")
+        plt.tight_layout()
+        plt.savefig(out_dir / "avg_delay_vs_scenario.png")
+        plt.close()
+
+    # Average energy per node
+    if "energy_per_node_mean" in df:
+        plt.figure()
+        plt.bar(
+            df.index,
+            df["energy_per_node_mean"],
+            yerr=df.get("energy_per_node_std", 0),
+            color="C3",
+            capsize=4,
+        )
         plt.ylabel("Average energy per node (J)")
         plt.title("Average energy per node by scenario")
         plt.tight_layout()
