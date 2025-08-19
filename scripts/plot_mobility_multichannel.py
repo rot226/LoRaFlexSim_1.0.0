@@ -55,18 +55,22 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
 
     # PDR vs scenario
     plt.figure()
-    grouped["pdr"].plot(kind="bar", color="C0")
-    plt.ylabel("PDR (%)")
-    plt.title("PDR by scenario")
+    ax = grouped["pdr"].plot(kind="bar", color="C0")
+    ax.set_xlabel("Scenario")
+    ax.set_ylabel("PDR (%)")
+    ax.set_title("PDR by scenario")
+    ax.bar_label(ax.containers[0], fmt="%.1f%%")
     plt.tight_layout()
     plt.savefig(out_dir / "pdr_vs_scenario.png")
     plt.close()
 
     # Collision rate vs scenario
     plt.figure()
-    grouped["collision_rate"].plot(kind="bar", color="C1")
-    plt.ylabel("Collision rate (%)")
-    plt.title("Collision rate by scenario")
+    ax = grouped["collision_rate"].plot(kind="bar", color="C1")
+    ax.set_xlabel("Scenario")
+    ax.set_ylabel("Collision rate (%)")
+    ax.set_title("Collision rate by scenario")
+    ax.bar_label(ax.containers[0], fmt="%.1f%%")
     plt.tight_layout()
     plt.savefig(out_dir / "collision_rate_vs_scenario.png")
     plt.close()
@@ -74,9 +78,11 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
     # Average energy per node if available
     if "energy_per_node" in grouped:
         plt.figure()
-        grouped["energy_per_node"].plot(kind="bar", color="C2")
-        plt.ylabel("Average energy per node (J)")
-        plt.title("Average energy per node by scenario")
+        ax = grouped["energy_per_node"].plot(kind="bar", color="C2")
+        ax.set_xlabel("Scenario")
+        ax.set_ylabel("Average energy per node (J)")
+        ax.set_title("Average energy per node by scenario")
+        ax.bar_label(ax.containers[0], fmt="%.2f J")
         plt.tight_layout()
         plt.savefig(out_dir / "avg_energy_per_node_vs_scenario.png")
         plt.close()
