@@ -41,7 +41,7 @@ def plot(
         std_col = f"{metric}_std"
         if mean_col not in df.columns:
             continue
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(10, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
             df["scenario"],
@@ -52,6 +52,8 @@ def plot(
             label=label,
         )
         ax.set_xlabel("Scenario")
+        ax.set_xticks(range(len(df["scenario"])))
+        ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
         if metric in {"pdr", "collision_rate"}:
@@ -71,7 +73,7 @@ def plot(
         ax.set_title(f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})")
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-        fig.tight_layout(rect=[0, 0, 0.85, 1])
+        fig.tight_layout(rect=[0, 0.15, 0.85, 1])
         fig.savefig(out_dir / f"{metric}_vs_scenario.png")
         plt.close(fig)
 
