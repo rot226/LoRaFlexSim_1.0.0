@@ -8,6 +8,8 @@ and single/three-channel configurations.  Each scenario may be repeated using
 Usage::
 
     python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
+    # or run a congested configuration
+    python scripts/run_mobility_multichannel.py --high-traffic --replicates 5
 """
 
 import os
@@ -91,10 +93,24 @@ def main() -> None:
     parser.add_argument(
         "--replicates",
         type=int,
-        default=1,
-        help="Number of simulation replicates",
+        default=5,
+        help="Number of simulation replicates (>=5)",
+    )
+    parser.add_argument(
+        "--high-traffic",
+        action="store_true",
+        help="Shortcut enabling congested conditions (nodes=200, interval=1s)",
     )
     args = parser.parse_args()
+
+    if args.high_traffic:
+        if args.nodes == parser.get_default("nodes"):
+            args.nodes = 200
+        if args.interval == parser.get_default("interval"):
+            args.interval = 1.0
+
+    if args.replicates < 5:
+        parser.error("--replicates must be at least 5")
 
     scenarios = {
         "static_single": {
@@ -140,7 +156,14 @@ def main() -> None:
         df["collision_rate"] = df["collisions"] / total_packets * 100
         df["energy_per_node"] = df["energy_nodes_J"] / args.nodes
 
-        stats = {"scenario": name}
+        stats = {
+            "scenario": name,
+            "nodes": args.nodes,
+            "packets": args.packets,
+            "interval": args.interval,
+            "adr_node": args.adr_node,
+            "adr_server": args.adr_server,
+        }
         for col in ["pdr", "collision_rate", "avg_delay_s", "energy_per_node"]:
             mean = df[col].mean()
             std = df[col].std(ddof=0)
