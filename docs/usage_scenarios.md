@@ -90,3 +90,48 @@ crée des graphiques dans le dossier `figures`.
 - **Taux de collision** : pourcentage de transmissions perdues pour collision
   (plafond à 100 %). Un taux élevé signale une saturation du canal.
 
+## Reproduction des figures
+
+Cette section récapitule les utilitaires nécessaires pour générer les figures
+fournies et les tests de mobilité associés.
+
+### Prérequis
+
+- Python ≥ 3.10
+- Bibliothèques : `pandas` et `matplotlib`
+
+### Scripts automatisés
+
+#### `generate_all_figures.py`
+- **Arguments** : `--config`, `--nodes`, `--packets`, `--seed`, `--area-size`.
+- **Fichiers produits** : agrégats CSV dans `results/` et figures dans
+  `figures/` (PDR, délai, énergie, collisions et suivi batterie).
+- **Prérequis** : accès aux scripts décrits ci‑dessous.
+
+### Exécution manuelle
+
+1. `run_mobility_multichannel.py` : génère
+   `results/mobility_multichannel.csv`.
+2. `plot_mobility_multichannel.py <csv>` : crée des PNG (PDR, collisions,
+   délai moyen, énergie par nœud).
+3. `run_mobility_latency_energy.py` : produit
+   `results/mobility_latency_energy.csv`.
+4. `plot_mobility_latency_energy.py <csv>` : génère des SVG (PDR, délai,
+   énergie, collisions).
+5. `run_battery_tracking.py` : enregistre `results/battery_tracking.csv`.
+6. `plot_battery_tracking.py` : sauvegarde `figures/battery_tracking.png`.
+7. `plot_node_positions.py` : exporte la carte des nœuds
+   (`figures/node_positions.png`).
+
+### Génération des tests de mobilité
+
+Les tests créent les CSV utilisés par les scripts de tracé :
+
+```bash
+pytest tests/test_mobility_latency.py
+pytest tests/test_mobility_energy_per_packet.py
+```
+
+Les fichiers `results/mobility_latency.csv` et `results/mobility_energy.csv`
+peuvent ensuite être tracés via les utilitaires `plot_*` correspondants.
+
