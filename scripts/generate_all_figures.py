@@ -115,6 +115,15 @@ def main() -> None:
     subprocess.run(
         [
             python,
+            str(SCRIPT_DIR / "plot_sf_vs_scenario.py"),
+            str(RESULTS_DIR / "mobility_latency_energy.csv"),
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            python,
             str(SCRIPT_DIR / "run_mobility_models.py"),
             "--nodes",
             str(params["nodes"]),
@@ -130,6 +139,16 @@ def main() -> None:
         [
             python,
             str(SCRIPT_DIR / "plot_mobility_models.py"),
+            str(RESULTS_DIR / "mobility_models.csv"),
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            python,
+            str(SCRIPT_DIR / "plot_sf_vs_scenario.py"),
+            "--by-model",
             str(RESULTS_DIR / "mobility_models.csv"),
         ],
         check=True,
