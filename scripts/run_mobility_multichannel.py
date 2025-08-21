@@ -1,11 +1,18 @@
 """Run mobility and multi-channel simulation scenarios.
 
-This utility executes four predefined scenarios combining mobile/static nodes
-and single/multi-channel configurations.  The number of channels may be chosen
-among 1, 3 or 6 via ``--channels`` and additional options expose node count,
-packet interval, mobility speed and area size.  Each scenario may be repeated
-using ``--replicates`` and the mean/standard deviation of key metrics are
-stored in ``results/mobility_multichannel.csv``.
+This utility executes several predefined scenarios combining mobile or static
+nodes and mono/multi-channel operation.  In addition to the original four
+scenarios (``static_single``, ``static_multi``, ``mobile_single`` and
+``mobile_multi``) the following are provided:
+
+* ``mobile_multi_fast`` – mobile nodes with increased speed
+* ``mobile_multi_many_channels`` – mobile nodes operating on six channels
+* ``static_multi_many_nodes`` – static nodes with 200 devices
+
+The number of nodes, packet interval, mobility speed and number of channels can
+be customised for each scenario via command-line options.  Every scenario may be
+repeated using ``--replicates`` (default 5) and the mean/standard deviation of
+key metrics are written to ``results/mobility_multichannel.csv``.
 
 Usage::
 
@@ -62,6 +69,11 @@ def run_scenario(
     )
     sim.run()
     metrics = sim.get_metrics()
+    sf_dist = metrics.get("sf_distribution", {})
+    total_sf = sum(sf * count for sf, count in sf_dist.items())
+    total_nodes = sum(sf_dist.values()) or 1
+    metrics["avg_sf"] = total_sf / total_nodes
+    metrics.pop("sf_distribution", None)
     metrics["scenario"] = name
     return metrics
 
@@ -140,41 +152,40 @@ def main() -> None:
         867500000.0,
     ]
     scenarios = {
-        "static_single": {
+        "static_single": {"mobility": False, "channels": 1},
+        "static_multi": {"mobility": False, "channels": args.channels},
+        "mobile_single": {"mobility": True, "channels": 1},
+        "mobile_multi": {"mobility": True, "channels": args.channels},
+        "mobile_multi_fast": {"mobility": True, "channels": args.channels, "speed": 20.0},
+        "mobile_multi_many_channels": {"mobility": True, "channels": 6},
+        "static_multi_many_nodes": {
             "mobility": False,
-            "channels": MultiChannel(freq_plan[:1]),
-        },
-        "static_multi": {
-            "mobility": False,
-            "channels": MultiChannel(freq_plan[: args.channels]),
-        },
-        "mobile_single": {
-            "mobility": True,
-            "channels": MultiChannel(freq_plan[:1]),
-        },
-        "mobile_multi": {
-            "mobility": True,
-            "channels": MultiChannel(freq_plan[: args.channels]),
+            "channels": args.channels,
+            "nodes": 200,
         },
     }
 
     rows: List[dict] = []
     for name, params in scenarios.items():
+        nodes = params.get("nodes", args.nodes)
+        interval = params.get("interval", args.interval)
+        speed = params.get("speed", args.speed)
+        ch_count = params.get("channels", args.channels)
         replicates = []
         for r in range(args.replicates):
             replicates.append(
                 run_scenario(
                     name,
                     params["mobility"],
-                    params["channels"],
-                    args.nodes,
+                    MultiChannel(freq_plan[:ch_count]),
+                    nodes,
                     args.packets,
                     args.seed + r,
                     args.adr_node,
                     args.adr_server,
                     args.area_size,
-                    args.interval,
-                    args.speed,
+                    interval,
+                    speed,
                 )
             )
 
@@ -182,20 +193,20 @@ def main() -> None:
         total_packets = df["delivered"] + df["collisions"]
         df["pdr"] = df["delivered"] / total_packets * 100
         df["collision_rate"] = df["collisions"] / total_packets * 100
-        df["energy_per_node"] = df["energy_nodes_J"] / args.nodes
+        df["energy_per_node"] = df["energy_nodes_J"] / nodes
 
         stats = {
             "scenario": name,
-            "nodes": args.nodes,
+            "nodes": nodes,
             "packets": args.packets,
-            "interval": args.interval,
+            "interval": interval,
             "area_size": args.area_size,
-            "speed": args.speed,
-            "channels": len(params["channels"].channels),
+            "speed": speed,
+            "channels": ch_count,
             "adr_node": args.adr_node,
             "adr_server": args.adr_server,
         }
-        for col in ["pdr", "collision_rate", "avg_delay_s", "energy_per_node"]:
+        for col in ["pdr", "collision_rate", "avg_delay_s", "energy_per_node", "avg_sf"]:
             mean = df[col].mean()
             std = df[col].std(ddof=0)
             stats[f"{col}_mean"] = mean
