@@ -54,7 +54,7 @@ def plot(
         std_col = f"{metric}_std"
         if mean_col not in df.columns:
             continue
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
             df["scenario"],
@@ -89,7 +89,7 @@ def plot(
         ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-        fig.tight_layout(rect=[0, 0.15, 0.85, 1])
+        fig.tight_layout(rect=[0, 0.2, 0.9, 1])
         fig.savefig(out_dir / f"{metric}_vs_scenario.png")
         plt.close(fig)
 
