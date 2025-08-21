@@ -47,12 +47,14 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
             yerr=df[std_col],
             capsize=4,
             color=color,
+            label=ylabel,
         )
         ax.set_xlabel("Scenario")
         ax.set_ylabel(ylabel)
         ax.set_title(f"{ylabel} by scenario")
-        ax.bar_label(bars, fmt=fmt)
-        fig.tight_layout()
+        ax.bar_label(bars, fmt=fmt, label_type="center")
+        ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+        fig.tight_layout(rect=[0, 0, 0.85, 1])
         fig.savefig(out_dir / f"{metric}_vs_scenario.png")
         plt.close(fig)
 
