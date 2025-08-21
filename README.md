@@ -649,8 +649,10 @@ tableau de bord :
 python examples/plot_sf_distribution.py metrics1.csv metrics2.csv
 python examples/plot_energy.py metrics.csv            # énergie totale
 python examples/plot_energy.py --per-node metrics.csv # par nœud
-python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
-python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
+    --max-delay 10 --max-energy 50
+python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv \
+    --max-delay 10 --max-energy 50
 ```
 
 `plot_sf_distribution.py` génère `sf_distribution.png` alors que

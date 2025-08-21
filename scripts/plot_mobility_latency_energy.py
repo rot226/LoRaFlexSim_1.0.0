@@ -15,7 +15,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def plot(csv_path: str, output_dir: str = "figures") -> None:
+def plot(
+    csv_path: str,
+    output_dir: str = "figures",
+    max_delay: float | None = None,
+    max_energy: float | None = None,
+) -> None:
     df = pd.read_csv(csv_path)
 
     out_dir = Path(output_dir)
@@ -50,8 +55,27 @@ def plot(csv_path: str, output_dir: str = "figures") -> None:
             df["scenario"], df[mean_col], yerr=df[std_col], capsize=4, color=color
         )
         ax.set_xlabel("Scenario")
+
+        name, unit = ylabel.split(" (")
+        unit = unit.rstrip(")")
+        if metric in {"pdr", "collision_rate"}:
+            ax.set_ylim(0, 100)
+            ax.axhline(100, linestyle="--", color="grey", label="100 %")
+            ax.legend()
+            upper = "100 %"
+        elif metric.startswith("avg_delay"):
+            upper_val = max_delay if max_delay is not None else df[mean_col].max() * 1.1
+            ax.set_ylim(0, upper_val)
+            upper = f"{upper_val:.2f} {unit}"
+        elif metric == "energy_per_node":
+            upper_val = max_energy if max_energy is not None else df[mean_col].max() * 1.1
+            ax.set_ylim(0, upper_val)
+            upper = f"{upper_val:.2f} {unit}"
+        else:
+            upper = ""
+
         ax.set_ylabel(ylabel)
-        ax.set_title(f"{ylabel} by scenario")
+        ax.set_title(f"{ylabel} by scenario\n0 \u2264 {name} \u2264 {upper}")
         ax.bar_label(bars, fmt=fmt)
         fig.tight_layout()
         fig.savefig(out_dir / filename)
@@ -67,8 +91,20 @@ def main(argv: list[str] | None = None) -> None:
         default="figures",
         help="Directory to save figures",
     )
+    parser.add_argument(
+        "--max-delay",
+        type=float,
+        default=None,
+        help="Maximum y value for average delay plot",
+    )
+    parser.add_argument(
+        "--max-energy",
+        type=float,
+        default=None,
+        help="Maximum y value for energy plot",
+    )
     args = parser.parse_args(argv)
-    plot(args.csv, args.output_dir)
+    plot(args.csv, args.output_dir, args.max_delay, args.max_energy)
 
 
 if __name__ == "__main__":
