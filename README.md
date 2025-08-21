@@ -142,6 +142,14 @@ Plusieurs schémas supplémentaires peuvent être utilisés :
 - `Trace3DMobility` lit une trace temporelle et suit le relief 3D en bloquant
   les passages au-dessus d'une hauteur maximale.
 
+Le script `scripts/run_mobility_models.py` peut comparer ces modèles. Pour
+utiliser `PathMobility`, fournissez la carte des chemins (fichier JSON ou CSV)
+avec `--path-map` :
+
+```bash
+python scripts/run_mobility_models.py --model path --path-map carte.json
+```
+
 ## Multi-canaux
 
 Le simulateur permet d'utiliser plusieurs canaux radio. Passez une instance

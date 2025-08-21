@@ -9,6 +9,7 @@ Usage::
 
     python scripts/run_mobility_models.py --nodes 50 --packets 100 --seed 1
     python scripts/run_mobility_models.py --model random_waypoint --model smooth
+    python scripts/run_mobility_models.py --model path --path-map map.json
 """
 
 from __future__ import annotations
@@ -28,17 +29,24 @@ from simulateur_lora_sfrd.launcher import (
     Simulator,
     RandomWaypoint,
     SmoothMobility,
+    PathMobility,
 )
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
 
-def create_models(area_size: float) -> Dict[str, Callable[[], object]]:
+def create_models(area_size: float, path_map_file: str | None) -> Dict[str, Callable[[], object]]:
     """Return factory functions for supported mobility models."""
-    return {
+    factories: Dict[str, Callable[[], object]] = {
         "random_waypoint": lambda: RandomWaypoint(area_size),
         "smooth": lambda: SmoothMobility(area_size),
     }
+    if path_map_file:
+        from simulateur_lora_sfrd.launcher.map_loader import load_map
+
+        path_map = load_map(path_map_file)
+        factories["path"] = lambda: PathMobility(area_size, path_map)
+    return factories
 
 
 def run_model(
@@ -92,15 +100,19 @@ def main() -> None:
     parser.add_argument("--area-size", type=float, default=1000.0, help="Square area size in metres")
     parser.add_argument("--interval", type=float, default=60.0, help="Mean packet interval (s)")
     parser.add_argument("--replicates", type=int, default=1, help="Number of simulation replicates")
+    parser.add_argument("--path-map", help="Path map file (JSON or CSV) for path mobility")
     parser.add_argument(
         "--model",
         action="append",
-        choices=["random_waypoint", "smooth"],
+        choices=["random_waypoint", "smooth", "path"],
         help="Mobility model to simulate (may be repeated). Defaults to all.",
     )
     args = parser.parse_args()
 
-    factories = create_models(args.area_size)
+    if args.model and "path" in args.model and not args.path_map:
+        parser.error("--path-map is required when using the 'path' model")
+
+    factories = create_models(args.area_size, args.path_map)
     models = args.model or list(factories.keys())
 
     rows: list[dict] = []
