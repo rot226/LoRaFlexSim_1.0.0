@@ -1,10 +1,11 @@
 """Plot battery evolution from ``results/battery_tracking.csv``.
 
-The CSV is expected to contain columns ``time``, ``node_id``, ``energy_j`` and
-``capacity_j`` as produced by ``run_battery_tracking.py``.  This utility draws
-the remaining energy of each node over time, expressed as a percentage of the
-initial battery capacity, and also plots the average across nodes.  The figure
-is saved to ``figures/battery_tracking.png``.
+The CSV is expected to contain columns ``time``, ``node_id``, ``energy_j``,
+``capacity_j`` and ``replicate`` as produced by ``run_battery_tracking.py``.
+This utility computes the mean residual energy over nodes for each replicate,
+then plots all replicate trajectories in light grey alongside the overall mean
+with a shaded area representing ±1 standard deviation.  The figure is saved to
+``figures/battery_tracking.png``.
 
 Usage::
 
@@ -44,36 +45,58 @@ def main() -> None:
         raise SystemExit("CSV must contain time, node_id and energy_j columns")
     if "capacity_j" not in df.columns:
         df["capacity_j"] = DEFAULT_BATTERY_J
+    if "replicate" not in df.columns:
+        df["replicate"] = 0
 
     df["energy_pct"] = df["energy_j"] / df["capacity_j"] * 100
 
-    plt.figure()
-    for node_id, group in df.groupby("node_id"):
-        plt.plot(
+    # Average energy across nodes for each replicate and time
+    rep_avg = (
+        df.groupby(["replicate", "time"])["energy_pct"]
+        .mean()
+        .reset_index()
+    )
+
+    # Statistics across replicates
+    stats = rep_avg.groupby("time")["energy_pct"].agg(["mean", "std"]).reset_index()
+
+    fig, ax = plt.subplots()
+
+    for i, (rep, group) in enumerate(rep_avg.groupby("replicate")):
+        ax.plot(
             group["time"],
             group["energy_pct"],
-            label=f"Residual energy of node {node_id}",
+            color="0.8",
+            label="Replicates" if i == 0 else None,
         )
 
-    avg = df.groupby("time")["energy_pct"].mean()
-    plt.plot(
-        avg.index,
-        avg.values,
-        color="k",
+    ax.plot(
+        stats["time"],
+        stats["mean"],
+        color="C0",
         linewidth=2,
         label="Mean residual energy",
     )
-    plt.axhline(0, color="r", linestyle="--", label="Battery depleted")
+    ax.fill_between(
+        stats["time"],
+        stats["mean"] - stats["std"],
+        stats["mean"] + stats["std"],
+        color="C0",
+        alpha=0.3,
+        label="±1 std",
+    )
+    ax.axhline(0, color="r", linestyle="--", label="Battery depleted")
 
-    plt.xlabel("Time (s)")
-    plt.ylabel("Remaining energy (%)")
-    plt.title("Temporal evolution of residual battery energy")
-    plt.grid(True)
-    plt.legend()
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Remaining energy (%)")
+    ax.set_title("Temporal evolution of residual battery energy")
+    ax.set_ylim(0, 100)
+    ax.grid(True)
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
     out_path = os.path.join(FIGURES_DIR, "battery_tracking.png")
-    plt.savefig(out_path)
+    fig.savefig(out_path)
     print(f"Saved {out_path}")
 
 
