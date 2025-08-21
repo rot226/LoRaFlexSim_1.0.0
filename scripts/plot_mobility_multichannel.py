@@ -44,9 +44,9 @@ def plot(
 
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
-        ("collision_rate", "Collision rate", "%", "%.1f%%", "C1"),
         ("avg_delay_s", "Average delay", "s", "%.2f s", "C2"),
         ("energy_per_node", "Average energy per node", "J", "%.2f J", "C3"),
+        ("avg_sf", "Average SF", "", "%.1f", "C4"),
     ]
 
     for metric, name, unit, fmt, color in metrics:
@@ -55,7 +55,7 @@ def plot(
         if mean_col not in df.columns:
             continue
         fig, ax = plt.subplots(figsize=(10, 6))
-        label = f"{name} ({unit})"
+        label = f"{name} ({unit})" if unit else name
         bars = ax.bar(
             df["scenario"],
             df[mean_col],
@@ -69,7 +69,7 @@ def plot(
         ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
-        if metric in {"pdr", "collision_rate"}:
+        if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
             ax.axhline(cap, linestyle="--", color="grey", label="100 %")
@@ -83,7 +83,8 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})"
+        unit_text = f" {unit}" if unit else ""
+        title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g}{unit_text})"
         if param_text:
             title += f"\n{param_text}"
         ax.set_title(title)

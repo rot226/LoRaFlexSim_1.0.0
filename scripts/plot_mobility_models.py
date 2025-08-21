@@ -27,9 +27,9 @@ def plot(
 
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
-        ("collision_rate", "Collision rate", "%", "%.1f%%", "C1"),
         ("avg_delay", "Average delay", "s", "%.2f s", "C2"),
         ("energy_per_node", "Average energy per node", "J", "%.2f J", "C3"),
+        ("avg_sf", "Average SF", "", "%.1f", "C4"),
     ]
 
     for metric, name, unit, fmt, color in metrics:
@@ -38,7 +38,7 @@ def plot(
         if mean_col not in df.columns:
             continue
         fig, ax = plt.subplots()
-        label = f"{name} ({unit})"
+        label = f"{name} ({unit})" if unit else name
         bars = ax.bar(
             df["model"],
             df[mean_col],
@@ -50,7 +50,7 @@ def plot(
         ax.set_xlabel("Mobility model")
         ax.set_ylabel(label)
 
-        if metric in {"pdr", "collision_rate"}:
+        if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
             ax.axhline(cap, linestyle="--", color="grey", label="100 %")
@@ -64,7 +64,8 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        ax.set_title(f"{name} by model (0 ≤ {name} ≤ {cap:g} {unit})")
+        unit_text = f" {unit}" if unit else ""
+        ax.set_title(f"{name} by model (0 ≤ {name} ≤ {cap:g}{unit_text})")
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fig.tight_layout(rect=[0, 0, 0.85, 1])
