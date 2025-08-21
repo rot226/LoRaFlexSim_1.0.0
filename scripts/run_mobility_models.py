@@ -28,17 +28,22 @@ from simulateur_lora_sfrd.launcher import (
     Simulator,
     RandomWaypoint,
     SmoothMobility,
+    PathMobility,
+    load_map,
 )
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
 
-def create_models(area_size: float) -> Dict[str, Callable[[], object]]:
+def create_models(area_size: float, path_map: str | None = None) -> Dict[str, Callable[[], object]]:
     """Return factory functions for supported mobility models."""
-    return {
+    models: Dict[str, Callable[[], object]] = {
         "random_waypoint": lambda: RandomWaypoint(area_size),
         "smooth": lambda: SmoothMobility(area_size),
     }
+    if path_map is not None:
+        models["path"] = lambda: PathMobility(area_size, load_map(path_map))
+    return models
 
 
 def run_model(
@@ -95,12 +100,18 @@ def main() -> None:
     parser.add_argument(
         "--model",
         action="append",
-        choices=["random_waypoint", "smooth"],
+        choices=["random_waypoint", "smooth", "path"],
         help="Mobility model to simulate (may be repeated). Defaults to all.",
     )
+    parser.add_argument(
+        "--path-map",
+        help="Map file for path mobility model",
+    )
     args = parser.parse_args()
+    if args.model and "path" in args.model and not args.path_map:
+        parser.error("--path-map is required when using model 'path'")
 
-    factories = create_models(args.area_size)
+    factories = create_models(args.area_size, args.path_map)
     models = args.model or list(factories.keys())
 
     rows: list[dict] = []
