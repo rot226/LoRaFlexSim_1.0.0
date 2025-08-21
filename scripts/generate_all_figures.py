@@ -115,6 +115,29 @@ def main() -> None:
     subprocess.run(
         [
             python,
+            str(SCRIPT_DIR / "run_mobility_models.py"),
+            "--nodes",
+            str(params["nodes"]),
+            "--packets",
+            str(params["packets"]),
+            "--seed",
+            str(params["seed"]),
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            python,
+            str(SCRIPT_DIR / "plot_mobility_models.py"),
+            str(RESULTS_DIR / "mobility_models.csv"),
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            python,
             str(SCRIPT_DIR / "run_battery_tracking.py"),
             "--nodes",
             str(params["nodes"]),
