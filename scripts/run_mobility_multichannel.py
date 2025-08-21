@@ -1,9 +1,11 @@
 """Run mobility and multi-channel simulation scenarios.
 
 This utility executes four predefined scenarios combining mobile/static nodes
-and single/three-channel configurations.  Each scenario may be repeated using
-``--replicates`` and the mean/standard deviation of key metrics are stored in
-``results/mobility_multichannel.csv``.
+and single/multi-channel configurations.  The number of channels may be chosen
+among 1, 3 or 6 via ``--channels`` and additional options expose node count,
+packet interval, mobility speed and area size.  Each scenario may be repeated
+using ``--replicates`` and the mean/standard deviation of key metrics are
+stored in ``results/mobility_multichannel.csv``.
 
 Usage::
 
@@ -42,6 +44,7 @@ def run_scenario(
     adr_server: bool,
     area_size: float,
     interval: float,
+    speed: float,
 ) -> dict:
     """Run a single scenario and return its metrics."""
     sim = Simulator(
@@ -55,6 +58,7 @@ def run_scenario(
         adr_server=adr_server,
         area_size=area_size,
         packet_interval=interval,
+        mobility_speed=(speed, speed),
     )
     sim.run()
     metrics = sim.get_metrics()
@@ -91,6 +95,19 @@ def main() -> None:
         "--interval", type=float, default=60.0, help="Mean packet interval (s)"
     )
     parser.add_argument(
+        "--speed",
+        type=float,
+        default=5.0,
+        help="Mobility speed for nodes (m/s)",
+    )
+    parser.add_argument(
+        "--channels",
+        type=int,
+        choices=[1, 3, 6],
+        default=3,
+        help="Number of channels for multi-channel scenarios",
+    )
+    parser.add_argument(
         "--replicates",
         type=int,
         default=5,
@@ -99,7 +116,7 @@ def main() -> None:
     parser.add_argument(
         "--high-traffic",
         action="store_true",
-        help="Shortcut enabling congested conditions (nodes=200, interval=1s)",
+        help="Shortcut enabling congested conditions (nodes=200, interval=1s, area=500m)",
     )
     args = parser.parse_args()
 
@@ -108,26 +125,36 @@ def main() -> None:
             args.nodes = 200
         if args.interval == parser.get_default("interval"):
             args.interval = 1.0
+        if args.area_size == parser.get_default("area_size"):
+            args.area_size = 500.0
 
     if args.replicates < 5:
         parser.error("--replicates must be at least 5")
 
+    freq_plan = [
+        868100000.0,
+        868300000.0,
+        868500000.0,
+        867100000.0,
+        867300000.0,
+        867500000.0,
+    ]
     scenarios = {
         "static_single": {
             "mobility": False,
-            "channels": MultiChannel([868100000.0]),
+            "channels": MultiChannel(freq_plan[:1]),
         },
-        "static_three": {
+        "static_multi": {
             "mobility": False,
-            "channels": MultiChannel([868100000.0, 868300000.0, 868500000.0]),
+            "channels": MultiChannel(freq_plan[: args.channels]),
         },
         "mobile_single": {
             "mobility": True,
-            "channels": MultiChannel([868100000.0]),
+            "channels": MultiChannel(freq_plan[:1]),
         },
-        "mobile_three": {
+        "mobile_multi": {
             "mobility": True,
-            "channels": MultiChannel([868100000.0, 868300000.0, 868500000.0]),
+            "channels": MultiChannel(freq_plan[: args.channels]),
         },
     }
 
@@ -147,6 +174,7 @@ def main() -> None:
                     args.adr_server,
                     args.area_size,
                     args.interval,
+                    args.speed,
                 )
             )
 
@@ -161,6 +189,9 @@ def main() -> None:
             "nodes": args.nodes,
             "packets": args.packets,
             "interval": args.interval,
+            "area_size": args.area_size,
+            "speed": args.speed,
+            "channels": len(params["channels"].channels),
             "adr_node": args.adr_node,
             "adr_server": args.adr_server,
         }

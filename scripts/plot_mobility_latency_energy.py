@@ -26,6 +26,19 @@ def plot(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    params = []
+    if "nodes" in df.columns:
+        params.append(f"nodes={int(df['nodes'].iloc[0])}")
+    if "interval" in df.columns:
+        params.append(f"interval={df['interval'].iloc[0]:g}s")
+    if "speed" in df.columns:
+        params.append(f"speed={df['speed'].iloc[0]:g}m/s")
+    if "area_size" in df.columns:
+        params.append(f"area={df['area_size'].iloc[0]:g}m²")
+    if "channels" in df.columns:
+        params.append(f"channels={int(df['channels'].iloc[0])}")
+    param_text = ", ".join(params)
+
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0", "pdr_vs_scenario.svg"),
         (
@@ -86,7 +99,10 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        ax.set_title(f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})")
+        title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})"
+        if param_text:
+            title += f"\n{param_text}"
+        ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fig.tight_layout(rect=[0, 0, 0.85, 1])
