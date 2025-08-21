@@ -28,7 +28,6 @@ from simulateur_lora_sfrd.launcher import (
     Simulator,
     RandomWaypoint,
     SmoothMobility,
-    PlannedRandomWaypoint,
 )
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
@@ -36,17 +35,9 @@ RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
 def create_models(area_size: float) -> Dict[str, Callable[[], object]]:
     """Return factory functions for supported mobility models."""
-    def planned_factory() -> PlannedRandomWaypoint:
-        model = PlannedRandomWaypoint(
-            area_size, terrain=[[1.0] * 10 for _ in range(10)]
-        )
-        model.step = 1.0
-        return model
-
     return {
         "random_waypoint": lambda: RandomWaypoint(area_size),
         "smooth": lambda: SmoothMobility(area_size),
-        "planned": planned_factory,
     }
 
 
@@ -78,6 +69,8 @@ def run_model(
     )
     sim.run()
     metrics = sim.get_metrics()
+    sf_dist = metrics["sf_distribution"]
+    avg_sf = sum(sf * count for sf, count in sf_dist.items()) / sum(sf_dist.values())
     total_packets = metrics["delivered"] + metrics["collisions"]
     return {
         "model": name,
@@ -85,6 +78,7 @@ def run_model(
         "avg_delay": metrics["avg_delay_s"],
         "energy_per_node": metrics["energy_nodes_J"] / num_nodes,
         "collision_rate": metrics["collisions"] / total_packets * 100 if total_packets else 0.0,
+        "avg_sf": avg_sf,
     }
 
 
@@ -101,7 +95,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         action="append",
-        choices=["random_waypoint", "smooth", "planned"],
+        choices=["random_waypoint", "smooth"],
         help="Mobility model to simulate (may be repeated). Defaults to all.",
     )
     args = parser.parse_args()
@@ -128,7 +122,7 @@ def main() -> None:
                 )
             )
         agg = {"model": model_name}
-        for key in ["pdr", "collision_rate", "avg_delay", "energy_per_node"]:
+        for key in ["pdr", "collision_rate", "avg_delay", "energy_per_node", "avg_sf"]:
             values = [row[key] for row in rep_rows]
             agg[f"{key}_mean"] = statistics.mean(values)
             agg[f"{key}_std"] = statistics.pstdev(values)
@@ -146,6 +140,8 @@ def main() -> None:
         "avg_delay_std",
         "energy_per_node_mean",
         "energy_per_node_std",
+        "avg_sf_mean",
+        "avg_sf_std",
     ]
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
