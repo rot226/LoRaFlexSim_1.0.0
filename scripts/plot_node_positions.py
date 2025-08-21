@@ -29,6 +29,12 @@ def main(argv: list[str] | None = None) -> None:
         default="figures/node_positions.png",
         help="Path to save the scatter plot",
     )
+    parser.add_argument(
+        "--marker-size",
+        type=float,
+        default=100.0,
+        help="Marker size for node positions",
+    )
     args = parser.parse_args(argv)
 
     sim = Simulator(
@@ -47,14 +53,35 @@ def main(argv: list[str] | None = None) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots()
-    ax.scatter(xs, ys)
-    if gateway_positions:
-        ax.scatter(gx, gy, marker="*", color="red")
-
+    ax.scatter(xs, ys, s=args.marker_size, edgecolors="black", facecolors="C0")
     for n in sim.nodes:
-        ax.text(n.x, n.y, str(n.id))
-    for g in sim.gateways:
-        ax.text(g.x, g.y, str(g.id))
+        ax.annotate(
+            str(n.id),
+            (n.x, n.y),
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="white",
+        )
+
+    if gateway_positions:
+        ax.scatter(
+            gx,
+            gy,
+            marker="*",
+            s=200,
+            edgecolors="black",
+            facecolors="red",
+        )
+        for g in sim.gateways:
+            ax.annotate(
+                str(g.id),
+                (g.x, g.y),
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="white",
+            )
 
     ax.set_xlabel("x")
     ax.set_ylabel("y")
