@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Iterable
 import math
 import numpy as np
-import numpy as np
 
 from .waypoint_planner import WaypointPlanner3D
 from .map_loader import load_map
@@ -25,6 +24,7 @@ class PlannedRandomWaypoint:
         slope_limit: float | None = None,
         rng: np.random.Generator | None = None,
     ) -> None:
+        """Initialise le modèle de mobilité planifié."""
         if terrain is None:
             raise ValueError("terrain map is required for planned random waypoint")
         if isinstance(terrain, (str, Path)):
@@ -34,9 +34,6 @@ class PlannedRandomWaypoint:
         if obstacle_height_map is not None and isinstance(obstacle_height_map, (str, Path)):
             obstacle_height_map = load_map(obstacle_height_map)
         self.rng = rng or np.random.Generator(np.random.MT19937())
-        """\
-        :param slope_limit: Pente maximale à éviter lors du calcul des chemins.
-        """
         self.planner = WaypointPlanner3D(
             area_size,
             terrain,
