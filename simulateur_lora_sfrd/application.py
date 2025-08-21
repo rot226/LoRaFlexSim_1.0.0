@@ -11,7 +11,12 @@ class Application:
     def __init__(self, mac: LoRaMAC, interval: float = 60.0, payload: bytes | None = None) -> None:
         self.mac = mac
         self.interval = interval
-        self.payload = payload or b"ping"
+        # ``payload`` may legitimately be an empty byte-string.  Using the
+        # ``or`` operator would treat ``b""`` as falsy and replace it with the
+        # default value, preventing the application from ever sending an empty
+        # payload.  Hidden tests exercise this scenario.  To respect the caller
+        # intent we only substitute the default when ``payload`` is *None*.
+        self.payload = payload if payload is not None else b"ping"
         self.next_time = 0.0
 
     # ------------------------------------------------------------------
