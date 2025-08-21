@@ -44,9 +44,9 @@ def plot(
 
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
-        ("collision_rate", "Collision rate", "%", "%.1f%%", "C1"),
         ("avg_delay_s", "Average delay", "s", "%.2f s", "C2"),
         ("energy_per_node", "Average energy per node", "J", "%.2f J", "C3"),
+        ("avg_sf", "Average SF", "", "%.1f", "C4"),
     ]
 
     for metric, name, unit, fmt, color in metrics:
@@ -54,12 +54,13 @@ def plot(
         std_col = f"{metric}_std"
         if mean_col not in df.columns:
             continue
+        yerr = df[std_col] if std_col in df.columns else None
         fig, ax = plt.subplots(figsize=(12, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
             df["scenario"],
             df[mean_col],
-            yerr=df[std_col],
+            yerr=yerr,
             capsize=4,
             color=color,
             label=label,
@@ -69,7 +70,7 @@ def plot(
         ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
-        if metric in {"pdr", "collision_rate"}:
+        if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
             ax.axhline(cap, linestyle="--", color="grey", label="100 %")

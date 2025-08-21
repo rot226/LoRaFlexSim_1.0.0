@@ -58,12 +58,12 @@ def plot(
             "avg_energy_per_node_vs_scenario.svg",
         ),
         (
-            "collision_rate",
-            "Collision rate",
-            "%",
-            "%.1f%%",
-            "C3",
-            "collision_rate_vs_scenario.svg",
+            "avg_sf",
+            "Average SF",
+            "",
+            "%.1f",
+            "C4",
+            "avg_sf_vs_scenario.svg",
         ),
     ]
 
@@ -72,12 +72,13 @@ def plot(
         std_col = f"{metric}_std"
         if mean_col not in df.columns:
             continue
+        yerr = df[std_col] if std_col in df.columns else None
         fig, ax = plt.subplots(figsize=(12, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
             df["scenario"],
             df[mean_col],
-            yerr=df[std_col],
+            yerr=yerr,
             capsize=4,
             color=color,
             label=label,
@@ -87,7 +88,7 @@ def plot(
         ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
-        if metric in {"pdr", "collision_rate"}:
+        if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
             ax.axhline(cap, linestyle="--", color="grey", label="100 %")
