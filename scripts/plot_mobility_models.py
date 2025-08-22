@@ -40,8 +40,9 @@ def plot(
         yerr = df[std_col] if std_col in df.columns else None
         fig, ax = plt.subplots(figsize=(12, 6))
         label = f"{name} ({unit})"
+        x = range(len(df["model"]))
         bars = ax.bar(
-            df["model"],
+            x,
             df[mean_col],
             yerr=yerr,
             capsize=4,
@@ -49,6 +50,7 @@ def plot(
             label=label,
         )
         ax.set_xlabel("Mobility model")
+        ax.set_xticks(x)
         ax.set_xticklabels(df["model"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
