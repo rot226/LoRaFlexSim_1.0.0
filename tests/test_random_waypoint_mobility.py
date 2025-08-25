@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.random_waypoint import RandomWaypoint
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.random_waypoint import RandomWaypoint
+from loraflexsim.launcher.node import Node
 
 
 def test_random_waypoint_move_within_bounds_and_updates_time():

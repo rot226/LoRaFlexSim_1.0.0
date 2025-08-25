@@ -1,5 +1,5 @@
 import pytest
-from simulateur_lora_sfrd.run import simulate, PAYLOAD_SIZE
+from loraflexsim.run import simulate, PAYLOAD_SIZE
 from traffic.rng_manager import RngManager
 from traffic.exponential import sample_interval
 

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 
 
 def main(argv: list[str] | None = None) -> None:

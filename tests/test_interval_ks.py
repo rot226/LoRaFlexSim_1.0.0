@@ -3,7 +3,7 @@ import pytest
 scipy = pytest.importorskip("scipy")
 from scipy.stats import kstest, expon
 
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 
 
 def test_poisson_interval_kstest():

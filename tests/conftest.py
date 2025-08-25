@@ -4,7 +4,7 @@ import sys
 import pytest
 
 # Ensure the project root is on the module search path when the package is not
-# installed. This allows ``import simulateur_lora_sfrd`` to succeed during
+# installed. This allows ``import loraflexsim`` to succeed during
 # test collection without requiring an editable installation. A local stub of
 # :mod:`numpy` called ``numpy_stub`` lives under ``tests/stubs`` and must appear
 # *before* the project root so that unit tests can run without the real

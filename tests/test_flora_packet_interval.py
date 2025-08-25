@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.config_loader import parse_flora_interval
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.config_loader import parse_flora_interval
 
 
 def test_flora_packet_interval():

@@ -7,13 +7,13 @@ try:
 except Exception:
     pytest.skip("pandas import failed", allow_module_level=True)
 
-from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as adr1
-from simulateur_lora_sfrd.launcher.compare_flora import (
+from loraflexsim.launcher.adr_standard_1 import apply as adr1
+from loraflexsim.launcher.compare_flora import (
     compare_with_sim,
     load_flora_metrics,
     load_flora_rx_stats,
 )
-from simulateur_lora_sfrd.launcher import Simulator
+from loraflexsim.launcher import Simulator
 
 CONFIG = "flora-master/simulations/examples/n100-gw1.ini"
 

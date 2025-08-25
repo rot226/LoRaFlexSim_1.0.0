@@ -2,8 +2,8 @@ import pytest
 
 import math
 
-from simulateur_lora_sfrd.launcher.channel import Channel
-from simulateur_lora_sfrd.launcher.obstacle_loss import ObstacleLoss
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.obstacle_loss import ObstacleLoss
 
 
 def test_obstacle_loss_reduces_rssi():

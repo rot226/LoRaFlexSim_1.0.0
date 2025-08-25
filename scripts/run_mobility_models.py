@@ -24,7 +24,7 @@ from typing import Callable, Dict
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from simulateur_lora_sfrd.launcher import (
+from loraflexsim.launcher import (
     MultiChannel,
     Simulator,
     RandomWaypoint,
@@ -42,7 +42,7 @@ def create_models(area_size: float, path_map_file: str | None) -> Dict[str, Call
         "smooth": lambda: SmoothMobility(area_size),
     }
     if path_map_file:
-        from simulateur_lora_sfrd.launcher.map_loader import load_map
+        from loraflexsim.launcher.map_loader import load_map
 
         path_map = load_map(path_map_file)
         factories["path"] = lambda: PathMobility(area_size, path_map)

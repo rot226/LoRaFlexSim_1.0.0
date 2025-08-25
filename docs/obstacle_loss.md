@@ -7,7 +7,7 @@ des bâtiments ou obstacles présents entre deux nœuds. Une carte d'obstacles p
 ## Chargement depuis un GeoJSON
 
 ```python
-from simulateur_lora_sfrd.launcher import Channel, ObstacleLoss
+from loraflexsim.launcher import Channel, ObstacleLoss
 
 loss = ObstacleLoss.from_geojson("examples/urban_buildings.geojson")
 ch = Channel(obstacle_loss=loss)

@@ -1,4 +1,4 @@
-from simulateur_lora_sfrd.launcher.config_loader import (
+from loraflexsim.launcher.config_loader import (
     write_flora_ini,
     parse_flora_interval,
     parse_flora_first_interval,

@@ -1,6 +1,6 @@
 import math
-from simulateur_lora_sfrd.launcher.propagation_models import LogDistanceShadowing
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.propagation_models import LogDistanceShadowing
+from loraflexsim.launcher.channel import Channel
 
 
 def test_logdistance_urban_preset():

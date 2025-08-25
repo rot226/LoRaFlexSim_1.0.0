@@ -6,9 +6,9 @@ try:
 except Exception:
     pytest.skip('pandas import failed', allow_module_level=True)
 
-from simulateur_lora_sfrd.launcher.channel import Channel
-from simulateur_lora_sfrd.launcher.omnet_phy import OmnetPHY
-from simulateur_lora_sfrd.launcher.compare_flora import load_flora_metrics
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.omnet_phy import OmnetPHY
+from loraflexsim.launcher.compare_flora import load_flora_metrics
 
 
 def test_omnet_phy_flora_capture_matches_sca():

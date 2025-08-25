@@ -21,7 +21,7 @@ def run_noise_level(noise_std: float) -> list[dict[str, str]]:
     cmd = [
         sys.executable,
         "-m",
-        "simulateur_lora_sfrd.run",
+        "loraflexsim.run",
         "--nodes",
         "30",
         "--gateways",

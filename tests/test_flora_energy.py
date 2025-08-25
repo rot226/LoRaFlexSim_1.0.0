@@ -1,8 +1,8 @@
 import pytest
 
-from simulateur_lora_sfrd.launcher.energy_profiles import EnergyProfile
-from simulateur_lora_sfrd.launcher.node import Node
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.energy_profiles import EnergyProfile
+from loraflexsim.launcher.node import Node
+from loraflexsim.launcher.channel import Channel
 
 
 def test_cumulative_energy_matches_flora_model():

@@ -7,7 +7,7 @@ try:
 except Exception:
     pytest.skip("panel or pandas import failed", allow_module_level=True)
 
-from simulateur_lora_sfrd.launcher import dashboard  # noqa: E402
+from loraflexsim.launcher import dashboard  # noqa: E402
 
 
 def test_export_to_tmp_dir(tmp_path, monkeypatch):

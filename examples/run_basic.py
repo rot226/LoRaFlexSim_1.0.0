@@ -7,7 +7,7 @@ import argparse
 # Ajoute le répertoire parent pour pouvoir importer le package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from simulateur_lora_sfrd.launcher import Simulator
+from loraflexsim.launcher import Simulator
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Exemple basique de simulation LoRa")

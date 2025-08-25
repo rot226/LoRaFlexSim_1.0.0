@@ -1,6 +1,6 @@
 import math
 
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 
 
 def test_per_matches_croce_curve():

@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 
 
 def parse_flora_sensitivity():

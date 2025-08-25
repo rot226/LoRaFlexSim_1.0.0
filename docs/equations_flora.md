@@ -10,7 +10,7 @@ Le module `flora_phy.py` reproduit la perte de parcours de FLoRa :
 loss = PATH_LOSS_D0 + 10 * n * math.log10(distance / REFERENCE_DISTANCE)
 ```
 
-avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `n` vaut `2.7` pour le profil `flora`【F:README.md†L424-L433】【F:simulateur_lora_sfrd/launcher/flora_phy.py†L29-L61】.
+avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `n` vaut `2.7` pour le profil `flora`【F:README.md†L424-L433】【F:loraflexsim/launcher/flora_phy.py†L29-L61】.
 
 ## Taux d'erreur paquet (PER)
 
@@ -23,7 +23,7 @@ permettant de basculer entre deux approximations :
   PER = 1 / (1 + math.exp(2 * (snr - (th + 2))))
   ```
 
-  où `th` est le seuil SNR du spreading factor courant【F:simulateur_lora_sfrd/launcher/flora_phy.py†L149-L152】.
+  où `th` est le seuil SNR du spreading factor courant【F:loraflexsim/launcher/flora_phy.py†L149-L152】.
 
 - ``"croce"`` — modèle analytique issu des expressions BER/SER :
 
@@ -39,7 +39,7 @@ permettant de basculer entre deux approximations :
   ```
 
   Cette formule suit l'approximation de Croce *et al.* pour un paquet de
-  ``payload_bytes`` octets【F:simulateur_lora_sfrd/launcher/flora_phy.py†L154-L161】.
+  ``payload_bytes`` octets【F:loraflexsim/launcher/flora_phy.py†L154-L161】.
 
 ## Calcul de l'airtime
 
@@ -68,7 +68,7 @@ t_preamble = (preamble_symbols + 4.25) * ts
 t_payload = n_payload * ts
 return t_preamble + t_payload
 ```
-【F:README.md†L642-L661】【F:simulateur_lora_sfrd/launcher/channel.py†L558-L570】
+【F:README.md†L642-L661】【F:loraflexsim/launcher/channel.py†L558-L570】
 
 ## Modèle OMNeT++
 
@@ -84,7 +84,7 @@ ser = 1 - (1 - ber) ** sf
 
 Cette expression donne directement la BER en fonction du rapport
 signal/bruit linéaire ``snir`` et du spreading factor ``sf``
-【F:simulateur_lora_sfrd/launcher/omnet_modulation.py†L7-L25】.
+【F:loraflexsim/launcher/omnet_modulation.py†L7-L25】.
 
 ## Seuil de détection (sensibilité)
 
@@ -99,4 +99,4 @@ threshold = Channel.FLORA_SENSITIVITY[sf][int(bandwidth)]
 Une méthode utilitaire expose ce calcul via
 ``Channel.flora_detection_threshold`` qui fournit ``-110`` dBm par défaut
 lorsque la paire ``(SF, BW)`` n'est pas présente dans la table
-【F:simulateur_lora_sfrd/launcher/channel.py†L52-L63】.
+【F:loraflexsim/launcher/channel.py†L52-L63】.

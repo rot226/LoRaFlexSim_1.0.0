@@ -1,7 +1,7 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as apply_adr
-from simulateur_lora_sfrd.launcher.channel import Channel
-from simulateur_lora_sfrd.launcher.lorawan import TX_POWER_INDEX_TO_DBM
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.adr_standard_1 import apply as apply_adr
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.lorawan import TX_POWER_INDEX_TO_DBM
 
 
 def _run(distance: float, initial_sf: int = 12, packets: int = 30):

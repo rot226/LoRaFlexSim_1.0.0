@@ -1,6 +1,6 @@
 import random
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.lorawan import TX_POWER_INDEX_TO_DBM
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.lorawan import TX_POWER_INDEX_TO_DBM
 
 
 def test_adr_ack_delay_adjustment():

@@ -29,7 +29,7 @@ from typing import List
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from simulateur_lora_sfrd.launcher import Simulator, MultiChannel  # noqa: E402
+from loraflexsim.launcher import Simulator, MultiChannel  # noqa: E402
 
 try:  # pandas is optional but required for CSV export
     import pandas as pd

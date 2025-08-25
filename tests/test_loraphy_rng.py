@@ -1,6 +1,6 @@
-from simulateur_lora_sfrd.phy import LoRaPHY
-from simulateur_lora_sfrd.loranode import Node
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.phy import LoRaPHY
+from loraflexsim.loranode import Node
+from loraflexsim.launcher.channel import Channel
 from traffic.rng_manager import RngManager
 
 

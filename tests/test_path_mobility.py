@@ -1,6 +1,6 @@
 import json
-from simulateur_lora_sfrd.launcher.path_mobility import PathMobility
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.path_mobility import PathMobility
+from loraflexsim.launcher.node import Node
 
 def test_dynamic_obstacle_blocks_move(tmp_path):
     path_map = [[0, 0], [0, 0]]

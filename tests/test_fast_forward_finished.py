@@ -1,9 +1,9 @@
 import pytest
 
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 try:
     pn = pytest.importorskip("panel")
-    import simulateur_lora_sfrd.launcher.dashboard as dashboard  # noqa: E402
+    import loraflexsim.launcher.dashboard as dashboard  # noqa: E402
 except Exception:
     pytest.skip("panel import failed", allow_module_level=True)
 

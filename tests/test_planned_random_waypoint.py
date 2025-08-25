@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.planned_random_waypoint import PlannedRandomWaypoint
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.planned_random_waypoint import PlannedRandomWaypoint
+from loraflexsim.launcher.node import Node
 
 
 def test_planner_avoids_high_obstacle():

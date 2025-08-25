@@ -1,4 +1,4 @@
-from simulateur_lora_sfrd.launcher import Simulator, MultiChannel
+from loraflexsim.launcher import Simulator, MultiChannel
 
 
 def test_mobility_multichannel_metrics() -> None:

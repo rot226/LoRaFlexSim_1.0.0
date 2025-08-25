@@ -1,8 +1,8 @@
 import types
 import pytest
 
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-import simulateur_lora_sfrd.run as run
+from loraflexsim.launcher.simulator import Simulator
+import loraflexsim.run as run
 import pytest
 import types
 
@@ -45,7 +45,7 @@ def test_cli_first_interval_overrides(monkeypatch):
 def test_dashboard_first_interval_sync(monkeypatch):
     try:
         pn = pytest.importorskip('panel')
-        dashboard = pytest.importorskip('simulateur_lora_sfrd.launcher.dashboard')
+        dashboard = pytest.importorskip('loraflexsim.launcher.dashboard')
     except Exception:
         pytest.skip('panel import failed', allow_module_level=True)
 

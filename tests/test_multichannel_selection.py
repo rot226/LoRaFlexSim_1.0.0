@@ -1,7 +1,7 @@
 import random
 from collections import Counter
 
-from simulateur_lora_sfrd.launcher.multichannel import MultiChannel
+from loraflexsim.launcher.multichannel import MultiChannel
 
 
 def test_round_robin_selection_cycle() -> None:

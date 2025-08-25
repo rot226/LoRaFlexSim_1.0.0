@@ -1,6 +1,6 @@
 import math
 
-from simulateur_lora_sfrd.launcher.omnet_modulation import calculate_ber, calculate_ser
+from loraflexsim.launcher.omnet_modulation import calculate_ber, calculate_ser
 
 
 def test_calculate_ser_matches_ber_conversion():

@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.gateway import Gateway
-from simulateur_lora_sfrd.launcher.server import NetworkServer
+from loraflexsim.launcher.gateway import Gateway
+from loraflexsim.launcher.server import NetworkServer
 
 
 def _setup():

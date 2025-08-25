@@ -1,6 +1,6 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.advanced_channel import AdvancedChannel
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.advanced_channel import AdvancedChannel
+from loraflexsim.launcher.channel import Channel
 import math
 import pytest
 
