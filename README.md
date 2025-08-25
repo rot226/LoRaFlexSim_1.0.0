@@ -721,7 +721,7 @@ Vous pouvez aussi comparer les métriques générées avec les formules théoriq
 
 ### Distribution des intervalles
 
-`timeToFirstPacket` et les inter-arrivals suivent la loi `Exp(1/µ_SFRD)`. Les tests `tests/test_interval_distribution.py` vérifient que la moyenne reste dans une tolérance de ±2 %, que le coefficient de variation est proche de 1 et que la p‑value du test de Kolmogorov–Smirnov dépasse 0,05. Le duty cycle et la gestion des collisions ne modifient pas cette distribution : seules les transmissions effectives sont retardées, comme le montrent `tests/test_poisson_independence.py`.
+`timeToFirstPacket` et les inter-arrivals suivent la loi `Exp(1/µ_LoRaFlexSim)`. Les tests `tests/test_interval_distribution.py` vérifient que la moyenne reste dans une tolérance de ±2 %, que le coefficient de variation est proche de 1 et que la p‑value du test de Kolmogorov–Smirnov dépasse 0,05. Le duty cycle et la gestion des collisions ne modifient pas cette distribution : seules les transmissions effectives sont retardées, comme le montrent `tests/test_poisson_independence.py`.
 
 Pour suivre les évolutions du projet, consultez le fichier `CHANGELOG.md`.
 
