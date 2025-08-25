@@ -6,8 +6,8 @@ try:
 except Exception:
     pytest.skip('pandas import failed', allow_module_level=True)
 
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.compare_flora import (
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.compare_flora import (
     compare_with_sim,
     load_flora_metrics,
     load_flora_rx_stats,

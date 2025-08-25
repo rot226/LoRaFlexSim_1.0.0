@@ -1,7 +1,7 @@
 import math
 import pytest
 
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 
 
 def test_rssi_snr_match_python_impl():

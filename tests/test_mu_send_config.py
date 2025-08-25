@@ -1,6 +1,6 @@
 import tempfile
 import configparser
-import simulateur_lora_sfrd.run as run
+import loraflexsim.run as run
 
 
 def test_mu_send_from_config(monkeypatch):

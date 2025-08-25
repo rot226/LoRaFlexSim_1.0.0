@@ -1,5 +1,5 @@
 import pytest
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 
 
 def test_tx_energy_accounted_once():

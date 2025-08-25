@@ -1,7 +1,7 @@
 import math
-from simulateur_lora_sfrd.launcher.downlink_scheduler import DownlinkScheduler
-from simulateur_lora_sfrd.launcher.gateway import Gateway
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.downlink_scheduler import DownlinkScheduler
+from loraflexsim.launcher.gateway import Gateway
+from loraflexsim.launcher.node import Node
 
 
 def test_schedule_beacon_time():

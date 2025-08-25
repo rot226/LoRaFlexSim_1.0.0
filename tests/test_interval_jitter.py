@@ -1,6 +1,6 @@
 import numpy_stub as np
 from traffic.exponential import sample_interval
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.node import Node
 
 
 def test_jitter_multiplier():

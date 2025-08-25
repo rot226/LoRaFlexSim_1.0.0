@@ -1,6 +1,6 @@
-from simulateur_lora_sfrd.launcher import adr_standard_1
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher import adr_standard_1
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.channel import Channel
 
 
 def test_apply_sets_flora_detection_threshold():

@@ -1,6 +1,6 @@
 """Run LoRa simulations sweeping the number of channels.
 
-This helper executes ``simulateur_lora_sfrd.run`` for multiple channel
+This helper executes ``loraflexsim.run`` for multiple channel
 counts and stores the resulting metrics in individual CSV files under
 ``results``.  The per-channel CSVs are then concatenated into
 ``results/channels_summary.csv``.
@@ -35,7 +35,7 @@ def main() -> None:
         cmd = [
             sys.executable,
             "-m",
-            "simulateur_lora_sfrd.run",
+            "loraflexsim.run",
             "--nodes",
             "30",
             "--gateways",

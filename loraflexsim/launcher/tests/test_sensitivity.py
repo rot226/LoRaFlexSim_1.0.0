@@ -1,5 +1,5 @@
 import math
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 
 
 def test_channel_sensitivity_values():

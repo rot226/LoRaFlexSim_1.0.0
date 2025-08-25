@@ -1,8 +1,8 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as apply_adr
-from simulateur_lora_sfrd.launcher.channel import Channel
-from simulateur_lora_sfrd.launcher.multichannel import MultiChannel
-from simulateur_lora_sfrd.launcher.advanced_channel import AdvancedChannel
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.adr_standard_1 import apply as apply_adr
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.multichannel import MultiChannel
+from loraflexsim.launcher.advanced_channel import AdvancedChannel
 
 
 def test_interval_with_degraded_channel():

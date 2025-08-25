@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.launcher.node import Node
 import numpy_stub as np
 
 

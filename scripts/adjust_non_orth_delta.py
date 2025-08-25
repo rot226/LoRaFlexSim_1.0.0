@@ -19,7 +19,7 @@ import json
 import statistics
 from pathlib import Path
 
-from simulateur_lora_sfrd.launcher.non_orth_delta import DEFAULT_NON_ORTH_DELTA
+from loraflexsim.launcher.non_orth_delta import DEFAULT_NON_ORTH_DELTA
 
 
 def main(argv: list[str] | None = None) -> None:

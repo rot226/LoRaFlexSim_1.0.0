@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
-from simulateur_lora_sfrd.launcher.server import NetworkServer
+from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
+from loraflexsim.launcher.server import NetworkServer
 
 
 def test_orthogonal_sf_no_collision():

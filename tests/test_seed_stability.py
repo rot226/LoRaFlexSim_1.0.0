@@ -2,7 +2,7 @@ import hashlib
 import struct
 
 from traffic.rng_manager import RngManager
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.node import Node
 
 
 def _intervals_hash(seed: int, mean_interval: float = 1.0, count: int = 10000) -> str:

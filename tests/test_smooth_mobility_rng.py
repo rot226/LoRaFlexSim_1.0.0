@@ -1,5 +1,5 @@
-from simulateur_lora_sfrd.launcher.smooth_mobility import SmoothMobility
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.smooth_mobility import SmoothMobility
+from loraflexsim.launcher.node import Node
 from traffic.rng_manager import RngManager
 
 

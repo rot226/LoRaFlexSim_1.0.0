@@ -2,7 +2,7 @@ import numpy_stub as np
 import pytest
 
 from traffic.exponential import sample_interval
-from simulateur_lora_sfrd.launcher.node import Node
+from loraflexsim.launcher.node import Node
 
 
 def test_sample_interval_asserts():

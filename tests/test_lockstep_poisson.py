@@ -1,4 +1,4 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 
 
 def test_lockstep_poisson_sequences():

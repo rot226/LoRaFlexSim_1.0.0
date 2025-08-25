@@ -1,6 +1,6 @@
 import math
-from simulateur_lora_sfrd.launcher.channel import Channel
-from simulateur_lora_sfrd.launcher.flora_phy import FloraPHY
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.flora_phy import FloraPHY
 
 
 def flora_equations(tx_power: float, distance: float, sf: int, ch: Channel):

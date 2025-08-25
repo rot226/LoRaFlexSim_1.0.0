@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from simulateur_lora_sfrd.launcher import MultiChannel, Simulator
+from loraflexsim.launcher import MultiChannel, Simulator
 
 PARAMS = dict(
     num_nodes=20,

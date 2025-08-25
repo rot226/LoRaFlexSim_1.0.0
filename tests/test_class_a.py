@@ -1,11 +1,11 @@
 import math
 from types import SimpleNamespace
 
-from simulateur_lora_sfrd.launcher.downlink_scheduler import DownlinkScheduler
-from simulateur_lora_sfrd.launcher.gateway import Gateway
-from simulateur_lora_sfrd.launcher.node import Node
-from simulateur_lora_sfrd.launcher.server import NetworkServer
-from simulateur_lora_sfrd.launcher.lorawan import compute_rx2
+from loraflexsim.launcher.downlink_scheduler import DownlinkScheduler
+from loraflexsim.launcher.gateway import Gateway
+from loraflexsim.launcher.node import Node
+from loraflexsim.launcher.server import NetworkServer
+from loraflexsim.launcher.lorawan import compute_rx2
 
 
 def test_schedule_class_a():

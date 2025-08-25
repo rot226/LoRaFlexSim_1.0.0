@@ -10,7 +10,7 @@ class LoRaMAC:
 
     This helper exposes minimal methods used by the examples and tests
     to build uplink frames and process downlink commands.  It delegates
-    most of the work to :class:`~simulateur_lora_sfrd.launcher.node.Node`.
+    most of the work to :class:`~loraflexsim.launcher.node.Node`.
     """
 
     def __init__(self, node: Node) -> None:

@@ -1,4 +1,4 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator, EventType
+from loraflexsim.launcher.simulator import Simulator, EventType
 
 
 def test_first_packet_respects_delay():

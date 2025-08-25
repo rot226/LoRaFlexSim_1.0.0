@@ -1,7 +1,7 @@
 """Run a sweep over different traffic intervals.
 
 This utility executes the base simulator for a set of packet interval values
-and collects the per-run metrics produced by ``simulateur_lora_sfrd/run.py``.
+and collects the per-run metrics produced by ``loraflexsim/run.py``.
 Results for each interval are stored in ``results/interval_<IV>.csv`` and all
 rows are aggregated into ``results/interval_summary.csv``.
 """
@@ -27,7 +27,7 @@ def main() -> None:
         cmd = [
             "python",
             "-m",
-            "simulateur_lora_sfrd.run",
+            "loraflexsim.run",
             "--nodes",
             "30",
             "--gateways",

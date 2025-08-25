@@ -23,7 +23,7 @@ Vous pouvez remplacer les classes du simulateur pour tester d'autres
 comportements :
 
 ```python
-from simulateur_lora_sfrd.launcher import Simulator, PathMobility
+from loraflexsim.launcher import Simulator, PathMobility
 
 class MyMobility(PathMobility):
     def step(self, node, dt):

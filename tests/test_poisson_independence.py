@@ -1,4 +1,4 @@
-from simulateur_lora_sfrd.launcher.simulator import Simulator
+from loraflexsim.launcher.simulator import Simulator
 import pytest
 import statistics
 from scipy.stats import pearsonr
