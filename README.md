@@ -24,7 +24,7 @@ sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
    > véritable bibliothèque NumPy est installée dans votre environnement.
 3. **Lancez le tableau de bord :**
 ```bash
-panel serve simulateur_lora_sfrd/launcher/dashboard.py --show
+panel serve loraflexsim/launcher/dashboard.py --show
 ```
 Définissez la valeur du champ **Graine** pour réutiliser le même placement de
 nœuds et la même suite d'intervalles pseudo‑aléatoires d'une simulation à
@@ -73,7 +73,7 @@ python run.py --lorawan-demo --steps 100 --output lorawan.csv
 Utilisez l'API Python pour tester les modes B et C :
 
 ```python
-from simulateur_lora_sfrd.launcher import Simulator
+from loraflexsim.launcher import Simulator
 
 # Nœuds en classe B avec slots réguliers
 sim_b = Simulator(num_nodes=10, node_class="B", beacon_interval=128,
@@ -91,7 +91,7 @@ sim_c.run(500)
 Les déplacements peuvent être rendus plus doux en ajustant la plage de vitesses :
 
 ```python
-from simulateur_lora_sfrd.launcher import Simulator
+from loraflexsim.launcher import Simulator
 
 sim = Simulator(num_nodes=20, num_gateways=3, area_size=2000.0, mobility=True,
                 mobility_speed=(1.0, 5.0))
@@ -295,7 +295,7 @@ réception :
   puissance reçue et le taux d'erreur.
 
 ```python
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 canal = Channel(environment="urban")
 ```
 
@@ -308,7 +308,7 @@ qui combine ces effets avec un bruit thermique calibré.
 Il reprend les paramètres des fichiers INI de FLoRa, par exemple `sigma=3.57` pour le preset *flora*.
 
 ```python
-from simulateur_lora_sfrd.launcher.propagation_models import CompletePropagation
+from loraflexsim.launcher.propagation_models import CompletePropagation
 
 model = CompletePropagation(environment="flora", multipath_taps=3, fast_fading_std=1.0)
 loss = model.path_loss(1000)
@@ -354,7 +354,7 @@ de l'humidité peut également être activé grâce aux paramètres
 `humidity_percent` et `humidity_noise_coeff_dB`.
 
 ```python
-from simulateur_lora_sfrd.launcher.advanced_channel import AdvancedChannel
+from loraflexsim.launcher.advanced_channel import AdvancedChannel
 ch = AdvancedChannel(
     propagation_model="cost231_3d",
     terrain="suburban",
@@ -556,7 +556,7 @@ Pour reproduire un scénario FLoRa :
    (`multipath_taps=3`), un seuil de détection fixé à `-110 dBm` et une fenêtre
    d'interférence minimale de `5 s`. Le délai réseau est également de 10 ms avec
    un traitement serveur de 1,2 s comme dans OMNeT++.
-2. Appliquez l'algorithme ADR1 via `from simulateur_lora_sfrd.launcher.adr_standard_1 import apply as adr1` puis `adr1(sim, degrade_channel=True, profile="flora")`.
+2. Appliquez l'algorithme ADR1 via `from loraflexsim.launcher.adr_standard_1 import apply as adr1` puis `adr1(sim, degrade_channel=True, profile="flora")`.
    Cette fonction reprend la logique du serveur FLoRa original tout en
    remplaçant les canaux idéaux par des `AdvancedChannel` plus réalistes.
 3. Spécifiez `adr_method="avg"` lors de la création du `Simulator` (ou sur
@@ -687,7 +687,7 @@ Chaque entrée de `events_log` comporte `start_time` et `end_time` ; leur
 différence représente l'airtime réel du paquet.
 
 ```python
-from simulateur_lora_sfrd.launcher.channel import Channel
+from loraflexsim.launcher.channel import Channel
 ch = Channel()
 temps = ch.airtime(sf=7, payload_size=20)
 ```
@@ -721,7 +721,7 @@ Vous pouvez aussi comparer les métriques générées avec les formules théoriq
 
 ### Distribution des intervalles
 
-`timeToFirstPacket` et les inter-arrivals suivent la loi `Exp(1/µ_SFRD)`. Les tests `tests/test_interval_distribution.py` vérifient que la moyenne reste dans une tolérance de ±2 %, que le coefficient de variation est proche de 1 et que la p‑value du test de Kolmogorov–Smirnov dépasse 0,05. Le duty cycle et la gestion des collisions ne modifient pas cette distribution : seules les transmissions effectives sont retardées, comme le montrent `tests/test_poisson_independence.py`.
+`timeToFirstPacket` et les inter-arrivals suivent la loi `Exp(1/µ_LoRaFlexSim)`. Les tests `tests/test_interval_distribution.py` vérifient que la moyenne reste dans une tolérance de ±2 %, que le coefficient de variation est proche de 1 et que la p‑value du test de Kolmogorov–Smirnov dépasse 0,05. Le duty cycle et la gestion des collisions ne modifient pas cette distribution : seules les transmissions effectives sont retardées, comme le montrent `tests/test_poisson_independence.py`.
 
 Pour suivre les évolutions du projet, consultez le fichier `CHANGELOG.md`.
 
