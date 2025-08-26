@@ -44,7 +44,7 @@ def simulate(
     rng_manager: RngManager | None = None,
     non_orth_delta: list[list[float]] | None = None,
 ):
-    """Exécute une simulation LoRa simplifiée et retourne les métriques.
+    """Exécute une simulation LoRaFlexSim simplifiée et retourne les métriques.
 
     Les transmissions peuvent se faire sur plusieurs canaux et plusieurs
     passerelles. Les nœuds sont répartis de façon uniforme sur les ``channels``
