@@ -1,6 +1,6 @@
 # Équations principales du simulateur
 
-Ce document rassemble les formules de référence employées par le simulateur FLoRa.
+Ce document rassemble les formules de référence employées par LoRaFlexSim, dérivées de FLoRa.
 
 ## Perte de parcours
 
