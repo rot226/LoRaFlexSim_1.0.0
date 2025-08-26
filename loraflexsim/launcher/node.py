@@ -97,7 +97,7 @@ class Node:
         self.sf = sf
         self.initial_tx_power = tx_power
         self.tx_power = tx_power
-        # Canal radio attribué (peut être modifié par le simulateur)
+        # Canal radio attribué (peut être modifié par le simulateur LoRaFlexSim)
         # Utiliser un canal par défaut si aucun n'est fourni pour éviter
         # des erreurs lors des calculs d'airtime ou de RSSI.
         self.channel = channel or Channel()

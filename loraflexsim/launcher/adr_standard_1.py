@@ -109,7 +109,7 @@ def apply(
     sim.network_server.adr_method = "avg"
     for node in sim.nodes:
         # Démarre au SF12 pour une sensibilité maximale sauf si un SF fixe est
-        # déjà défini par le simulateur
+        # déjà défini par le simulateur LoRaFlexSim
         if getattr(sim, "fixed_sf", None) is None:
             node.sf = 12
             node.initial_sf = 12
