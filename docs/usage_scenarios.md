@@ -1,5 +1,7 @@
 # Scénarios d'utilisation
 
+Ces scripts illustrent différentes utilisations de LoRaFlexSim et servent de point de départ pour l'exploration du simulateur.
+
 Ce document décrit les scripts fournis pour lancer et visualiser des simulations
 LoRa. Chaque utilitaire indique ses paramètres, leurs valeurs par défaut et la
 sortie attendue.
