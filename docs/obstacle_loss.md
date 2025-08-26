@@ -1,6 +1,6 @@
 # Modèle d'atténuation par obstacles
 
-Le module `obstacle_loss` permet d'ajouter des pertes supplémentaires en fonction
+Le module `obstacle_loss` de LoRaFlexSim permet d'ajouter des pertes supplémentaires en fonction
 des bâtiments ou obstacles présents entre deux nœuds. Une carte d'obstacles peut
 être fournie sous forme de fichier GeoJSON ou de raster (matrice de hauteurs).
 
