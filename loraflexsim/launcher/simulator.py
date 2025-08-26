@@ -1,4 +1,4 @@
-"""Event-driven LoRa simulator."""
+"""Event-driven simulator for LoRaFlexSim."""
 
 import heapq
 import logging
