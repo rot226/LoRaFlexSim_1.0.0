@@ -20,4 +20,4 @@ Expected output:
 136 passed, 13 skipped in 33.47s
 ```
 
-In the current environment Docker is unavailable, so the image could not be built. Running `pytest -q` directly produced the above results.
+In the current environment Docker is unavailable, so the LoRaFlexSim image could not be built. Running `pytest -q` directly produced the above results.
