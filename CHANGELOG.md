@@ -18,3 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - LoRaWAN implementation with ADR logic, classes B and C, and AES-128 security.
 - CSV export and detailed metrics.
 - Unit tests with pytest and analysis scripts.
+
+## [1.0.0] - 2025-08-26
+### Added
+- Initial public release of LoRaFlexSim, offering a flexible LoRa network simulator.
+- Command-line interface with example scenarios.
+- Documentation and basic unit tests.
