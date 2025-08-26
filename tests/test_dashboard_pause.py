@@ -1,7 +1,5 @@
 import pytest
 
-import pytest
-
 try:
     dashboard = pytest.importorskip('loraflexsim.launcher.dashboard')
 except Exception:
