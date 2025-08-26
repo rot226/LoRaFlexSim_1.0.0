@@ -1,4 +1,4 @@
-# Init du package simulateur LoRa
+# Initialisation du package LoRaFlexSim
 from .node import Node
 from .gateway import Gateway
 from .channel import Channel
