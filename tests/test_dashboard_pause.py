@@ -1,9 +1,7 @@
 import pytest
 
-import pytest
-
 try:
-    dashboard = pytest.importorskip('simulateur_lora_sfrd.launcher.dashboard')
+    dashboard = pytest.importorskip('loraflexsim.launcher.dashboard')
 except Exception:
     pytest.skip('dashboard import failed', allow_module_level=True)
 
