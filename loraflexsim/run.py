@@ -275,7 +275,7 @@ def simulate(
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Simulateur LoRa – Mode CLI")
+    parser = argparse.ArgumentParser(description="LoRaFlexSim – Mode CLI")
     parser.add_argument(
         "--config",
         type=str,
