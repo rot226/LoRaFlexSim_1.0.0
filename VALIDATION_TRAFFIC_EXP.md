@@ -1,7 +1,7 @@
 # Validation Traffic Exponentiel
 
 Ce document rassemble les valeurs obtenues en testant la fonction
-`traffic.exponential.sample_interval`.
+`traffic.exponential.sample_interval` du simulateur LoRaFlexSim.
 
 Paramètres utilisés :
 - `mean_interval` = 10 secondes
