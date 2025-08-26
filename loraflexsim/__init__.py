@@ -1,4 +1,4 @@
-"""Top-level package for the LoRa simulator."""
+"""Top-level package for LoRaFlexSim."""
 
 from .mac import LoRaMAC
 from .phy import LoRaPHY
