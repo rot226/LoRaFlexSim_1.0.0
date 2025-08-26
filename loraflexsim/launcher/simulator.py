@@ -120,7 +120,7 @@ class Simulator:
         tick_ns: int | None = None,
     ):
         """
-        Initialise la simulation LoRa avec les entités et paramètres donnés.
+        Initialise la simulation LoRaFlexSim avec les entités et paramètres donnés.
         :param num_nodes: Nombre de nœuds à simuler.
         :param num_gateways: Nombre de passerelles à simuler.
         :param area_size: Taille de l'aire carrée (mètres) dans laquelle sont déployés nœuds et passerelles.
