@@ -1,7 +1,7 @@
 import pytest
 
 panel = pytest.importorskip("panel")
-dashboard = pytest.importorskip("simulateur_lora_sfrd.launcher.dashboard")
+dashboard = pytest.importorskip("loraflexsim.launcher.dashboard")
 
 
 def reset_inputs():
