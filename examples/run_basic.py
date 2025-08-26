@@ -1,4 +1,4 @@
-"""Exemple basique de simulation LoRa."""
+"""Exemple basique de simulation LoRaFlexSim"""
 
 import os
 import sys
@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from loraflexsim.launcher import Simulator
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Exemple basique de simulation LoRa")
+    parser = argparse.ArgumentParser(description="Exemple basique de simulation LoRaFlexSim")
     parser.add_argument("--nodes", type=int, default=20, help="Nombre de nœuds")
     parser.add_argument("--steps", type=int, default=500, help="Durée de la simulation")
     parser.add_argument(
