@@ -1,6 +1,6 @@
-# Simulateur Réseau LoRa (Python 3.10+)
+# LoRaFlexSim : simulateur réseau LoRa (Python 3.10+)
 
-Bienvenue ! Ce projet est un **simulateur complet de réseau LoRa**, inspiré du fonctionnement de FLoRa sous OMNeT++, codé entièrement en Python.
+Bienvenue ! **LoRaFlexSim** est un **simulateur complet de réseau LoRa**, inspiré du fonctionnement de FLoRa sous OMNeT++, codé entièrement en Python.
 Pour un aperçu des différences avec FLoRa, consultez docs/lorawan_features.md.
 Les principales équations sont décrites dans docs/equations_flora.md.
 
@@ -20,7 +20,7 @@ sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
 
    > **Remarque :** les tests automatisés utilisent un stub minimal
    > ``numpy_stub`` situé dans ``tests/stubs`` uniquement pour les tests. Pour
-   > exécuter les scripts ou les exemples du simulateur, assurez‑vous que la
+   > exécuter les scripts ou les exemples de LoRaFlexSim, assurez‑vous que la
    > véritable bibliothèque NumPy est installée dans votre environnement.
 3. **Lancez le tableau de bord :**
 ```bash
@@ -100,7 +100,7 @@ sim.run(1000)
 
 ## Duty cycle
 
-Le simulateur applique par défaut un duty cycle de 1 % pour se rapprocher des
+LoRaFlexSim applique par défaut un duty cycle de 1 % pour se rapprocher des
 contraintes LoRa réelles. Le gestionnaire de duty cycle situé dans
 `duty_cycle.py` peut être configuré en passant un autre paramètre `duty_cycle`
 à `Simulator` (par exemple `0.02` pour 2 %). Transmettre `None` désactive ce
@@ -152,7 +152,7 @@ python scripts/run_mobility_models.py --model path --path-map carte.json
 
 ## Multi-canaux
 
-Le simulateur permet d'utiliser plusieurs canaux radio. Passez une instance
+LoRaFlexSim permet d'utiliser plusieurs canaux radio. Passez une instance
 `MultiChannel` ou une liste de fréquences à `Simulator` via les paramètres
 `channels` et `channel_distribution`. Dans le `dashboard`, réglez **Nb
 sous-canaux** et **Répartition canaux** pour tester un partage Round‑robin ou
@@ -162,16 +162,16 @@ aléatoire des fréquences entre les nœuds.
 
 Le tableau de bord permet maintenant de fixer une **durée réelle maximale** en secondes. Par défaut cette limite vaut `86400` s (24 h). Lorsque cette limite est atteinte, la simulation s'arrête automatiquement. Un bouton « Accélérer jusqu'à la fin » lance l'exécution rapide pour obtenir aussitôt les métriques finales.
 **Attention :** cette accélération ne fonctionne que si un nombre fini de paquets est défini. Si le champ *Nombre de paquets* vaut 0 (infini), la simulation ne se termine jamais et l'export reste impossible.
-Depuis la version 4.0.1, une fois toutes les transmissions envoyées, l'accélération désactive la mobilité des nœuds restants afin d'éviter un blocage du simulateur.
+Depuis la version 4.0.1, une fois toutes les transmissions envoyées, l'accélération désactive la mobilité des nœuds restants afin d'éviter un blocage de LoRaFlexSim.
 
 ## Suivi de batterie
 
 Chaque nœud peut être doté d'une capacité d'énergie (en joules) grâce au paramètre `battery_capacity_j` du `Simulator`. La consommation est calculée selon le profil d'énergie FLoRa (courants typiques en veille, réception, etc.) puis retranchée de cette réserve. Le champ `battery_remaining_j` indique l'autonomie restante.
 Un champ **Capacité batterie (J)** est disponible dans le tableau de bord pour
 saisir facilement cette valeur. Indiquez `0` pour une capacité illimitée : ce
-nombre est automatiquement converti en `None`, valeur attendue par le simulateur.
+nombre est automatiquement converti en `None`, valeur attendue par LoRaFlexSim.
 
-## Paramètres du simulateur
+## Paramètres de LoRaFlexSim
 
 Le constructeur `Simulator` accepte de nombreux arguments afin de reproduire les
 scénarios FLoRa. Voici la liste complète des options :
@@ -533,7 +533,7 @@ mais simplifie volontairement certains aspects.
   bruit de fond théorique et du facteur de bruit, ce qui se rapproche des
   valeurs des modems Semtech
 
-Le simulateur gère désormais l'ensemble des commandes MAC de LoRaWAN : réglage
+LoRaFlexSim gère désormais l'ensemble des commandes MAC de LoRaWAN : réglage
 des paramètres ADR, réinitialisation de clés, rejoins et changement de classe.
 
 Pour des résultats plus proches du terrain, activez `fast_fading_std` et
@@ -586,7 +586,7 @@ make makefiles
 make -j$(nproc)
 ```
 
-Pour interfacer le simulateur Python avec la couche physique C++, construisez
+Pour interfacer LoRaFlexSim avec la couche physique C++, construisez
 la bibliothèque partagée `libflora_phy.so` :
 
 ```bash
@@ -597,8 +597,8 @@ make libflora_phy.so
 Vous pouvez également exécuter directement `./scripts/build_flora_cpp.sh` depuis
 la racine du dépôt pour automatiser cette compilation.
 
-Placez ce fichier à la racine du projet ou dans `flora-master` puis lancez le
-simulateur avec `phy_model="flora_cpp"` pour utiliser ces routines natives.
+Placez ce fichier à la racine du projet ou dans `flora-master` puis lancez
+LoRaFlexSim avec `phy_model="flora_cpp"` pour utiliser ces routines natives.
 
 Exécutez enfin le scénario d'exemple pour générer un fichier `.sca` dans
 `flora-master/results` :
@@ -710,7 +710,7 @@ L'exécution de `pytest` permet de vérifier la cohérence des calculs de RSSI e
 pytest -q
 ```
 
-Un test dédié compare également les résultats du simulateur Python avec ceux du
+Un test dédié compare également les résultats de LoRaFlexSim avec ceux du
 FLoRa original lorsqu'un fichier `.sca` est disponible :
 
 ```bash
@@ -730,7 +730,7 @@ Ce projet est distribué sous licence [MIT](LICENSE).
 ## Exemples complets
 
 Plusieurs scripts sont fournis dans le dossier `examples` pour illustrer
-l'utilisation du simulateur :
+l'utilisation de LoRaFlexSim :
 
 ```bash
 python examples/run_basic.py          # simulation rapide avec 20 nœuds
@@ -759,10 +759,10 @@ vise à faciliter les contributions extérieures.
 
 ## Améliorations possibles
 
-Les points suivants ont été intégrés au simulateur :
+Les points suivants ont été intégrés à LoRaFlexSim :
 
 - **PDR par nœud et par type de trafic.** Chaque nœud maintient l'historique de ses vingt dernières transmissions afin de calculer un taux de livraison global et récent. Ces valeurs sont visibles dans le tableau de bord et exportées dans un fichier `metrics_*.csv`.
-- **Historique glissant et indicateurs QoS.** Le simulateur calcule désormais le délai moyen de livraison ainsi que le nombre de retransmissions sur la période récente.
+- **Historique glissant et indicateurs QoS.** LoRaFlexSim calcule désormais le délai moyen de livraison ainsi que le nombre de retransmissions sur la période récente.
 - **Indicateurs supplémentaires.** La méthode `get_metrics()` retourne le PDR par SF, passerelle, classe et nœud. Le tableau de bord affiche un récapitulatif et l'export produit deux fichiers CSV : un pour les événements détaillés et un pour les métriques agrégées.
  - **Moteur d'événements précis.** La file de priorité gère désormais un délai réseau de 10 ms et un traitement serveur de 1,2 s, reproduisant ainsi fidèlement l'ordonnancement d'OMNeT++.
 - **Suivi détaillé des ACK.** Chaque nœud mémorise les confirmations reçues pour appliquer fidèlement la logique ADR de FLoRa.
@@ -793,7 +793,7 @@ seed = 1
 
 ## Limites actuelles
 
-Le simulateur reste volontairement léger et certaines fonctionnalités manquent
+LoRaFlexSim reste volontairement léger et certaines fonctionnalités manquent
 encore de maturité :
 
 - La couche physique est simplifiée et n'imite pas parfaitement les comportements
