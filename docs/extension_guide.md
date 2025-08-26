@@ -1,7 +1,7 @@
-# Guide d'extension du tableau de bord
+# Guide d'extension du tableau de bord de LoRaFlexSim
 
-Ce document explique comment personnaliser `launcher/dashboard.py` et ajouter de
-nouvelles fonctionnalités au simulateur.
+Ce document explique comment personnaliser `launcher/dashboard.py` du tableau de
+bord de LoRaFlexSim et ajouter de nouvelles fonctionnalités au simulateur.
 
 ## Principe général
 
