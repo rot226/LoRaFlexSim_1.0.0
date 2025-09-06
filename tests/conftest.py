@@ -1,6 +1,7 @@
 import random
 import os
 import sys
+import shutil
 import pytest
 
 # Ensure the project root is on the module search path when the package is not
@@ -18,10 +19,24 @@ if STUBS_DIR not in sys.path:
     sys.path.insert(0, STUBS_DIR)
 
 import numpy_stub
+import scipy
 
 sys.modules.setdefault("numpy", numpy_stub)
 sys.modules.setdefault("numpy.random", numpy_stub.random)
+sys.modules.setdefault("scipy", scipy)
+sys.modules.setdefault("scipy.stats", scipy.stats)
 
 @pytest.fixture(autouse=True)
 def _set_seed():
     random.seed(1)
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_tmp_path(tmp_path):
+    """Remove temporary files created during tests."""
+    yield
+    for path in tmp_path.iterdir():
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink()
