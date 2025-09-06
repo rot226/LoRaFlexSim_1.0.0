@@ -34,7 +34,8 @@ def plot(
     if "speed" in df.columns:
         params.append(f"speed={df['speed'].iloc[0]:g}m/s")
     if "area_size" in df.columns:
-        params.append(f"area={df['area_size'].iloc[0]:g}m²")
+        side = df["area_size"].iloc[0]
+        params.append(f"side={side:g}m")
     if "channels" in df.columns:
         params.append(f"channels={int(df['channels'].iloc[0])}")
     param_text = ", ".join(params)
