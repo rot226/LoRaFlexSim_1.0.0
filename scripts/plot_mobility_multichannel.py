@@ -59,7 +59,8 @@ def plot(
         if mean_col not in df.columns:
             continue
         yerr = df[std_col] if std_col in df.columns else None
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig_width = max(12, 0.6 * len(df))
+        fig, ax = plt.subplots(figsize=(fig_width, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
             range(len(df)),
