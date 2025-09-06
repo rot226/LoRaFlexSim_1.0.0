@@ -73,10 +73,13 @@ def plot(
         if mean_col not in df.columns:
             continue
         yerr = df[std_col] if std_col in df.columns else None
-        fig, ax = plt.subplots(figsize=(12, 6))
+        labels = df["scenario_label"]
+        width = max(12, 0.5 * len(labels))
+        fig, ax = plt.subplots(figsize=(width, 6))
         label = f"{name} ({unit})"
+        x = range(len(labels))
         bars = ax.bar(
-            df["scenario"],
+            x,
             df[mean_col],
             yerr=yerr,
             capsize=4,
@@ -84,8 +87,8 @@ def plot(
             label=label,
         )
         ax.set_xlabel("Scenario")
-        ax.set_xticks(range(len(df["scenario"])))
-        ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
         ax.set_ylabel(label)
 
         if metric == "pdr":

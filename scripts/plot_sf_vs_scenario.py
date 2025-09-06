@@ -32,8 +32,11 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     """
     df = pd.read_csv(csv_path)
 
-    x_col = "model" if by_model else "scenario"
-    required = {x_col, "avg_sf_mean", "avg_sf_std"}
+    required = (
+        {"model", "avg_sf_mean", "avg_sf_std"}
+        if by_model
+        else {"scenario_label", "avg_sf_mean", "avg_sf_std"}
+    )
     if not required <= set(df.columns):
         missing = ", ".join(sorted(required - set(df.columns)))
         raise SystemExit(f"CSV must contain columns: {missing}")
@@ -41,11 +44,13 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    x = range(len(df[x_col]))
+    labels = df["model"] if by_model else df["scenario_label"]
+    width = max(12, 0.5 * len(labels))
+    fig, ax = plt.subplots(figsize=(width, 6))
+    x = range(len(labels))
     bars = ax.bar(x, df["avg_sf_mean"], yerr=df["avg_sf_std"], capsize=4, color="C0")
     ax.set_xticks(x)
-    ax.set_xticklabels(df[x_col], rotation=45, ha="right")
+    ax.set_xticklabels(labels, rotation=45, ha="right")
     ax.set_xlabel("Mobility model" if by_model else "Scenario")
     ax.set_ylabel("Average SF")
     ax.set_title("Average SF by " + ("model" if by_model else "scenario"))
