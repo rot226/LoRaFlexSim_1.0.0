@@ -46,10 +46,10 @@ def test_battery_tracking_script(tmp_path, monkeypatch):
     monkeypatch.setattr(plot_battery_tracking, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(plot_battery_tracking, "FIGURES_DIR", figures_dir)
     plot_battery_tracking.main()
-    png_path = figures_dir / "battery_tracking.png"
-    assert png_path.is_file()
-
-    png_path.unlink()
+    for ext in ("png", "jpg", "eps"):
+        path = figures_dir / f"battery_tracking.{ext}"
+        assert path.is_file()
+        path.unlink()
     figures_dir.rmdir()
     csv_path.unlink()
 

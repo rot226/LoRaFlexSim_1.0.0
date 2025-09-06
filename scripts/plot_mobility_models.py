@@ -72,7 +72,9 @@ def plot(
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fig.tight_layout(rect=[0, 0.2, 0.9, 1])
-        fig.savefig(out_dir / f"{metric}_vs_model.png")
+        for ext in ("png", "jpg", "eps"):
+            dpi = 300 if ext in ("png", "jpg") else None
+            fig.savefig(out_dir / f"{metric}_vs_model.{ext}", dpi=dpi)
         plt.close(fig)
 
 

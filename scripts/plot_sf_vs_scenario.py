@@ -52,8 +52,10 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     ax.bar_label(bars, fmt="%.2f", label_type="center")
     fig.tight_layout()
 
-    filename = "avg_sf_vs_model.png" if by_model else "avg_sf_vs_scenario.png"
-    fig.savefig(out_dir / filename)
+    stem = "avg_sf_vs_model" if by_model else "avg_sf_vs_scenario"
+    for ext in ("png", "jpg", "eps"):
+        dpi = 300 if ext in ("png", "jpg") else None
+        fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
     plt.close(fig)
 
 

@@ -41,9 +41,12 @@ def main() -> None:
     axes[1].set_title("Collisions vs Interval")
 
     fig.tight_layout()
-    out_path = FIGURES_DIR / "pdr_collisions_vs_interval.png"
-    fig.savefig(out_path)
-    print(f"Saved {out_path}")
+    base = FIGURES_DIR / "pdr_collisions_vs_interval"
+    for ext in ("png", "jpg", "eps"):
+        dpi = 300 if ext in ("png", "jpg") else None
+        path = base.with_suffix(f".{ext}")
+        fig.savefig(path, dpi=dpi)
+        print(f"Saved {path}")
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point

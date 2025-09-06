@@ -95,9 +95,12 @@ def main() -> None:
     ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
-    out_path = os.path.join(FIGURES_DIR, "battery_tracking.png")
-    fig.savefig(out_path)
-    print(f"Saved {out_path}")
+    base = os.path.join(FIGURES_DIR, "battery_tracking")
+    for ext in ("png", "jpg", "eps"):
+        dpi = 300 if ext in ("png", "jpg") else None
+        path = f"{base}.{ext}"
+        fig.savefig(path, dpi=dpi)
+        print(f"Saved {path}")
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
