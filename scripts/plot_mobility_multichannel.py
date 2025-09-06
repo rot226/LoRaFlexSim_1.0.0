@@ -29,18 +29,20 @@ def plot(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    params = []
-    if "nodes" in df.columns:
-        params.append(f"nodes={int(df['nodes'].iloc[0])}")
-    if "interval" in df.columns:
-        params.append(f"interval={df['interval'].iloc[0]:g}s")
-    if "speed" in df.columns:
-        params.append(f"speed={df['speed'].iloc[0]:g}m/s")
-    if "area_size" in df.columns:
-        params.append(f"area={df['area_size'].iloc[0]:g}m²")
-    if "channels" in df.columns:
-        params.append(f"channels={int(df['channels'].iloc[0])}")
-    param_text = ", ".join(params)
+    df["scenario_label"] = (
+        "N="
+        + df["nodes"].astype(int).astype(str)
+        + ", C="
+        + df["channels"].astype(int).astype(str)
+    )
+    optional_params = [
+        ("interval", "interval={:g}s"),
+        ("speed", "speed={:g}m/s"),
+        ("area_size", "area={:g}m²"),
+    ]
+    for col, fmt in optional_params:
+        if col in df.columns and df[col].nunique() > 1:
+            df["scenario_label"] += ", " + df[col].map(lambda x: fmt.format(x))
 
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
@@ -58,7 +60,7 @@ def plot(
         fig, ax = plt.subplots(figsize=(12, 6))
         label = f"{name} ({unit})"
         bars = ax.bar(
-            df["scenario"],
+            range(len(df)),
             df[mean_col],
             yerr=yerr,
             capsize=4,
@@ -66,8 +68,8 @@ def plot(
             label=label,
         )
         ax.set_xlabel("Scenario")
-        ax.set_xticks(range(len(df["scenario"])))
-        ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
+        ax.set_xticks(range(len(df)))
+        ax.set_xticklabels(df["scenario_label"], rotation=45, ha="right")
         ax.set_ylabel(label)
 
         if metric == "pdr":
@@ -85,8 +87,6 @@ def plot(
             ax.set_ylim(0, cap)
 
         title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})"
-        if param_text:
-            title += f"\n{param_text}"
         ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
