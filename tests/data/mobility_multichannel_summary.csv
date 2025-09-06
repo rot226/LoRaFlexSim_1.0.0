@@ -1,0 +1,3 @@
+scenario,nodes,channels,pdr_mean,pdr_std
+static_single,10,1,75.0,2.5
+static_multi,10,3,88.0,1.0
