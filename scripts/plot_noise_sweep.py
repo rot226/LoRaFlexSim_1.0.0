@@ -36,10 +36,13 @@ def main() -> None:
     ax.set_xlabel("noise_std")
     ax.set_ylabel("PDR(%)")
     ax.set_title("PDR vs Noise")
-    output_path = FIGURES_DIR / "pdr_vs_noise.png"
-    fig.savefig(output_path)
+    output_base = FIGURES_DIR / "pdr_vs_noise"
+    for ext in ("png", "jpg", "eps"):
+        dpi = 300 if ext in ("png", "jpg") else None
+        path = output_base.with_suffix(f".{ext}")
+        fig.savefig(path, dpi=dpi)
+        print(f"Saved {path}")
     plt.close(fig)
-    print(f"Saved {output_path}")
 
 
 if __name__ == "__main__":
