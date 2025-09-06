@@ -35,10 +35,12 @@ def plot(
         + ", C="
         + df["channels"].astype(int).astype(str)
     )
+    if "area_size" in df.columns:
+        df["area"] = df["area_size"] ** 2
     optional_params = [
         ("interval", "interval={:g}s"),
         ("speed", "speed={:g}m/s"),
-        ("area_size", "area={:g}m²"),
+        ("area", "area={:g}m²"),
     ]
     for col, fmt in optional_params:
         if col in df.columns and df[col].nunique() > 1:
