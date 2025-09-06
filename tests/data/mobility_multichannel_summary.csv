@@ -1,0 +1,4 @@
+scenario,nodes,packets,interval,area_size,speed,channels,adr_node,adr_server,pdr_mean,pdr_std,collision_rate_mean,collision_rate_std,avg_delay_s_mean,avg_delay_s_std,energy_per_node_mean,energy_per_node_std,avg_sf_mean,avg_sf_std
+static_single N=2 C=1,2,1,60.0,1000.0,5.0,1,False,False,100.0,0.0,0.0,0.0,0.3366911999999967,0.2752970914124646,0.0605252816341453,0.0328609114979243,8.9,1.0677078252031311
+static_multi N=2 C=3,2,1,60.0,1000.0,5.0,3,False,False,100.0,0.0,0.0,0.0,0.3366911999999967,0.2752970914124646,0.0605252816341453,0.0328609114979243,8.9,1.0677078252031311
+mobile_multi N=2 C=3,2,1,60.0,1000.0,5.0,3,False,False,100.0,0.0,0.0,0.0,0.3366911999999967,0.2752970914124646,0.0605252816341454,0.0328609114979244,8.9,1.0677078252031311

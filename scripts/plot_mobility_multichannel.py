@@ -91,7 +91,9 @@ def plot(
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fig.tight_layout(rect=[0, 0.2, 0.9, 1])
-        fig.savefig(out_dir / f"{metric}_vs_scenario.png")
+        # Save in multiple common formats for convenience
+        for ext in ("png", "jpg", "eps"):
+            fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}")
         plt.close(fig)
 
 

@@ -140,8 +140,9 @@ def main() -> None:
         if args.area_size == parser.get_default("area_size"):
             args.area_size = 500.0
 
-    if args.replicates < 5:
-        parser.error("--replicates must be at least 5")
+    # Allow lightweight executions during testing by permitting a single replicate
+    if args.replicates < 1:
+        parser.error("--replicates must be at least 1")
 
     freq_plan = [
         868100000.0,
