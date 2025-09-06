@@ -63,14 +63,17 @@ class OmnetPHY:
         tx_current_a: float = 0.0,
         rx_current_a: float = 0.0,
         idle_current_a: float = 0.0,
-        tx_start_current_a: float = 0.0,
-        rx_start_current_a: float = 0.0,
+        tx_start_current_a: float | None = None,
+        rx_start_current_a: float | None = None,
         voltage_v: float = 3.3,
     ) -> None:
         """Initialise helper with optional hardware impairments.
 
         The ``tx_start_current_a`` and ``rx_start_current_a`` parameters model
         additional current draw during ``start_tx`` and ``start_rx`` delays.
+        If left as ``None`` they default to the steady-state transmission and
+        reception currents, allowing explicit values of ``0`` to disable any
+        extra draw.
         """
         self.channel = channel
         self.model = OmnetModel(
@@ -128,8 +131,12 @@ class OmnetPHY:
         self.tx_current_a = float(tx_current_a)
         self.rx_current_a = float(rx_current_a)
         self.idle_current_a = float(idle_current_a)
-        self.tx_start_current_a = float(tx_start_current_a)
-        self.rx_start_current_a = float(rx_start_current_a)
+        self.tx_start_current_a = (
+            None if tx_start_current_a is None else float(tx_start_current_a)
+        )
+        self.rx_start_current_a = (
+            None if rx_start_current_a is None else float(rx_start_current_a)
+        )
         self.voltage_v = float(voltage_v)
         self.flora_capture = bool(flora_capture)
         self.capture_window_symbols = int(capture_window_symbols)
@@ -180,14 +187,22 @@ class OmnetPHY:
     def update(self, dt: float) -> None:
         # Accumulate energy consumption based on current state
         if self.tx_state == "starting":
-            current = self.tx_start_current_a or self.tx_current_a
+            current = (
+                self.tx_start_current_a
+                if self.tx_start_current_a is not None
+                else self.tx_current_a
+            )
             self.energy_tx += self.voltage_v * current * dt
         elif self.tx_state != "off":
             self.energy_tx += (
                 self.voltage_v * self.tx_current_a * self._tx_level * dt
             )
         elif self.rx_state == "starting":
-            current = self.rx_start_current_a or self.rx_current_a
+            current = (
+                self.rx_start_current_a
+                if self.rx_start_current_a is not None
+                else self.rx_current_a
+            )
             self.energy_rx += self.voltage_v * current * dt
         elif self.rx_state == "on":
             self.energy_rx += self.voltage_v * self.rx_current_a * dt
