@@ -71,7 +71,9 @@ def plot(
         )
         ax.set_xlabel("Scenario")
         ax.set_xticks(range(len(df)))
-        ax.set_xticklabels(df["scenario_label"], rotation=45, ha="right")
+        ax.set_xticklabels(
+            df["scenario_label"], rotation=45, ha="right"
+        )
         ax.set_ylabel(label)
 
         if metric == "pdr":
@@ -92,7 +94,7 @@ def plot(
         ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-       fig.tight_layout(rect=[0, 0.2, 0.9, 1])
+        fig.tight_layout(rect=[0, 0.2, 0.9, 1])
         for ext in ("png", "jpg", "eps"):
             dpi = 300 if ext in ("png", "jpg") else None
             fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}", dpi=dpi)
