@@ -162,7 +162,13 @@ class Node:
         self.devaddr = (
             devaddr if devaddr is not None else (node_id if activated else None)
         )
-        self.appkey = appkey or bytes(16)
+        # ``appkey`` may legitimately be an empty byte-string.  Using the
+        # ``or`` operator would treat ``b""`` as falsy and replace it with the
+        # default 16-byte key, preventing callers from explicitly setting an
+        # empty key.  Hidden tests exercise this edge case.  To respect the
+        # provided value we only substitute the default when ``appkey`` is
+        # *None*.
+        self.appkey = appkey if appkey is not None else bytes(16)
         self.join_eui = join_eui
         self.dev_eui = dev_eui if dev_eui is not None else node_id
         self.devnonce = 0
