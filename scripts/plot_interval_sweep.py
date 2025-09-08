@@ -9,16 +9,21 @@ This script reads ``results/interval_summary.csv`` produced by
 from __future__ import annotations
 
 from pathlib import Path
+import argparse
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 FIGURES_DIR = ROOT / "figures"
-
-
-def main() -> None:
+def main(style: str | None = None) -> None:
+    configure_style(style)
     summary_path = RESULTS_DIR / "interval_summary.csv"
     df = pd.read_csv(summary_path)
     agg = (
@@ -50,4 +55,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.style)

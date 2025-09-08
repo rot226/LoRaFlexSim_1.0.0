@@ -8,8 +8,14 @@ import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+import argparse
 
 import matplotlib.pyplot as plt
+
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,7 +24,8 @@ RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 FIGURES_DIR = Path(__file__).resolve().parent.parent / "figures"
 
 
-def main() -> None:
+def main(style: str | None = None) -> None:
+    configure_style(style)
     summary_file = RESULTS_DIR / "noise_summary.csv"
     pdr_map: dict[float, list[float]] = defaultdict(list)
     with summary_file.open() as f:
@@ -46,4 +53,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.style)

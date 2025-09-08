@@ -1,9 +1,15 @@
-import sys
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from loraflexsim.utils.plotting import configure_style
 
-def main(files):
+
+configure_style()
+
+
+def main(files: list[str], style: str | None = None) -> None:
+    configure_style(style)
     data = [pd.read_csv(f) for f in files]
     df = pd.concat(data, ignore_index=True)
     by_nodes = df.groupby("nodes")["PDR(%)"].mean()
@@ -17,7 +23,10 @@ def main(files):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python analyse_resultats.py resultats1.csv [...]")
-    else:
-        main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="+", help="Fichiers CSV de résultats")
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.files, args.style)

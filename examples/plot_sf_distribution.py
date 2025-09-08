@@ -1,10 +1,14 @@
 """Trace la distribution des Spreading Factors depuis des fichiers CSV."""
-import sys
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from loraflexsim.utils.plotting import configure_style
 
-def main(files: list[str]) -> None:
+
+configure_style()
+def main(files: list[str], style: str | None = None) -> None:
+    configure_style(style)
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     sf_cols = [c for c in df.columns if c.startswith("sf_distribution.")]
     if sf_cols:
@@ -28,7 +32,10 @@ def main(files: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python plot_sf_distribution.py metrics1.csv [...]")
-    else:
-        main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="+", help="Fichiers CSV de métriques")
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.files, args.style)

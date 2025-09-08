@@ -8,6 +8,15 @@ Par défaut, le module `Channel` charge la table de bruit de FLoRa en analysant
 `flora-master/src/LoRaPhy/LoRaAnalogModel.cc` si le fichier est présent. Cette
 table est injectée dans la fonction `_flora_noise_dBm` pour les calculs de
 sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
+
+## Style des graphiques
+
+Les scripts de traçage utilisent une configuration Matplotlib commune via
+`loraflexsim.utils.plotting.configure_style`. Celle-ci applique une police
+``serif``, un DPI par défaut de 300 et des polices vectorielles pour les sorties
+PDF/PS. Le style peut être personnalisé en définissant la variable
+d'environnement ``MPLSTYLE`` ou en passant ``--style <nom>`` aux scripts de
+tracé pour utiliser un style Matplotlib spécifique.
 ## 🛠️ Installation
 
 1. **Clonez ou téléchargez** le projet.

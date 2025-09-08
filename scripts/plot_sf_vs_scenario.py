@@ -15,6 +15,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 
 def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> None:
     """Plot average spreading factor with error bars.
@@ -73,7 +78,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Plot average SF versus mobility model",
     )
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
     args = parser.parse_args(argv)
+    configure_style(args.style)
     plot(args.csv, args.output_dir, args.by_model)
 
 

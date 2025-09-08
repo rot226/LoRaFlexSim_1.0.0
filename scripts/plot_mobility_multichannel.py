@@ -14,6 +14,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 
 def plot(
     csv_path: str,
@@ -123,7 +128,12 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Y-axis maximum for energy plots",
     )
+    parser.add_argument(
+        "--style",
+        help="Matplotlib style to apply (overrides MPLSTYLE)",
+    )
     args = parser.parse_args(argv)
+    configure_style(args.style)
     plot(args.csv, args.output_dir, args.max_delay, args.max_energy)
 
 

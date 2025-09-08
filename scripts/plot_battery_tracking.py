@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import argparse
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -26,6 +27,11 @@ try:  # pandas and matplotlib are optional but required for plotting
 except Exception as exc:  # pragma: no cover - handled at runtime
     raise SystemExit(f"Required plotting libraries missing: {exc}")
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 try:  # Import default battery capacity constant
     from .run_battery_tracking import DEFAULT_BATTERY_J
 except Exception:  # pragma: no cover - fallback when running as a script
@@ -33,9 +39,8 @@ except Exception:  # pragma: no cover - fallback when running as a script
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 FIGURES_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
-
-
-def main() -> None:
+def main(style: str | None = None) -> None:
+    configure_style(style)
     in_path = os.path.join(RESULTS_DIR, "battery_tracking.csv")
     if not os.path.exists(in_path):
         raise SystemExit(f"Input file not found: {in_path}")
@@ -101,7 +106,10 @@ def main() -> None:
         path = f"{base}.{ext}"
         fig.savefig(path, dpi=dpi)
         print(f"Saved {path}")
-
-
 if __name__ == "__main__":  # pragma: no cover - script entry point
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.style)

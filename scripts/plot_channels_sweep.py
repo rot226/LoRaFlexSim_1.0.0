@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import sys
+import argparse
 
 try:  # pandas and matplotlib are optional but required for plotting
     import pandas as pd
@@ -21,11 +22,15 @@ try:  # pandas and matplotlib are optional but required for plotting
 except Exception as exc:  # pragma: no cover - handled at runtime
     raise SystemExit(f"Required plotting libraries missing: {exc}")
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 FIGURES_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
-
-
-def main() -> None:
+def main(style: str | None = None) -> None:
+    configure_style(style)
     in_path = os.path.join(RESULTS_DIR, "channels_summary.csv")
     if not os.path.exists(in_path):
         raise SystemExit(f"Input file not found: {in_path}")
@@ -60,4 +65,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    main(args.style)

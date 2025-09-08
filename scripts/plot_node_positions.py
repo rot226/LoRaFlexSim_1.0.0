@@ -13,6 +13,10 @@ import matplotlib.pyplot as plt
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from loraflexsim.launcher.simulator import Simulator
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -35,7 +39,11 @@ def main(argv: list[str] | None = None) -> None:
         default=100.0,
         help="Marker size for node positions",
     )
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
     args = parser.parse_args(argv)
+    configure_style(args.style)
 
     sim = Simulator(
         num_nodes=args.num_nodes,

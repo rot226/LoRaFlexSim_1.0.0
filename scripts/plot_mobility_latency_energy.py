@@ -14,6 +14,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from loraflexsim.utils.plotting import configure_style
+
+
+configure_style()
+
 
 def plot(
     csv_path: str,
@@ -114,32 +119,21 @@ def plot(
             dpi = 300 if ext in ("png", "jpg") else None
             fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
         plt.close(fig)
-
-
-def main(argv: list[str] | None = None) -> None:
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("csv", help="Path to mobility_latency_energy.csv")
     parser.add_argument(
-        "-o",
-        "--output-dir",
-        default="figures",
-        help="Directory to save figures",
+        "--output-dir", default="figures", help="Directory for output figures"
     )
     parser.add_argument(
-        "--max-delay",
-        type=float,
-        default=None,
-        help="Y-axis maximum for average delay plots",
+        "--max-delay", type=float, default=None, help="Y-axis maximum for delay"
     )
     parser.add_argument(
-        "--max-energy",
-        type=float,
-        default=None,
-        help="Y-axis maximum for energy plots",
+        "--max-energy", type=float, default=None, help="Y-axis maximum for energy"
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--style", help="Matplotlib style to apply (overrides MPLSTYLE)"
+    )
+    args = parser.parse_args()
+    configure_style(args.style)
     plot(args.csv, args.output_dir, args.max_delay, args.max_energy)
-
-
-if __name__ == "__main__":
-    main()
