@@ -639,8 +639,8 @@ du nombre de nœuds :
 python examples/analyse_resultats.py resultats1.csv resultats2.csv
 ```
 
-Le script affiche le PDR moyen puis sauvegarde un graphique dans
-`pdr_par_nodes.png`.
+Le script affiche le PDR moyen puis sauvegarde un graphique `pdr_par_nodes`
+en PNG, JPG et EPS.
 
 Si le même fichier CSV contient plusieurs runs produits avec le dashboard ou
 `run.py --runs`, le script `analyse_runs.py` permet d'obtenir les moyennes par
@@ -661,8 +661,9 @@ python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 ```
 
-`plot_sf_distribution.py` génère `sf_distribution.png` alors que
-`plot_energy.py` crée `energy_total.png` ou `energy_per_node.png`.
+`plot_sf_distribution.py` génère `sf_distribution` en PNG, JPG et EPS alors
+que `plot_energy.py` crée `energy_total` ou `energy_per_node` dans ces
+formats.
 `plot_mobility_multichannel.py` enregistre `pdr_vs_scenario.png`,
 `collision_rate_vs_scenario.png` et `avg_energy_per_node_vs_scenario.png`
 dans le dossier `figures/`.
