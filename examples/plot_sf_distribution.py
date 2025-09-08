@@ -1,10 +1,13 @@
 """Trace la distribution des Spreading Factors depuis des fichiers CSV."""
-import sys
+
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
-def main(files: list[str]) -> None:
+
+def main(files: list[str], formats: list[str]) -> None:
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     sf_cols = [c for c in df.columns if c.startswith("sf_distribution.")]
     if sf_cols:
@@ -23,12 +26,21 @@ def main(files: list[str]) -> None:
     plt.xlabel("Spreading Factor")
     plt.ylabel("Paquets")
     plt.grid(True)
-    plt.savefig("sf_distribution.png")
-    print("Graphique sauvegard\u00e9 dans sf_distribution.png")
+    save_multi_format(plt.gcf(), "sf_distribution", formats)
+    print("Graphique sauvegard\u00e9 dans sf_distribution.*")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="+", help="Fichiers CSV de m\u00e9triques")
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Liste de formats s\u00e9par\u00e9s par des virgules",
+    )
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python plot_sf_distribution.py metrics1.csv [...]")
-    else:
-        main(sys.argv[1:])
+    args = parse_args()
+    main(args.files, parse_formats(args.formats))

@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Iterable
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
 
 def plot(
@@ -20,6 +23,7 @@ def plot(
     output_dir: str = "figures",
     max_delay: float | None = None,
     max_energy: float | None = None,
+    formats: Iterable[str] = ("png", "jpg", "eps"),
 ) -> None:
     df = pd.read_csv(csv_path)
 
@@ -96,9 +100,7 @@ def plot(
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fig.tight_layout(rect=[0, 0.2, 0.9, 1])
-        for ext in ("png", "jpg", "eps"):
-            dpi = 300 if ext in ("png", "jpg") else None
-            fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}", dpi=dpi)
+        save_multi_format(fig, out_dir / f"{metric}_vs_scenario", formats)
         plt.close(fig)
 
 
@@ -123,8 +125,19 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Y-axis maximum for energy plots",
     )
-    args = parser.parse_args(argv)
-    plot(args.csv, args.output_dir, args.max_delay, args.max_energy)
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Comma-separated list of output formats",
+    )
+    args = parser.parse_args(argv or [])
+    plot(
+        args.csv,
+        args.output_dir,
+        args.max_delay,
+        args.max_energy,
+        parse_formats(args.formats),
+    )
 
 
 if __name__ == "__main__":

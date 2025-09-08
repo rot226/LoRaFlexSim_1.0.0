@@ -8,8 +8,11 @@ import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+import argparse
 
 import matplotlib.pyplot as plt
+
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,7 +21,15 @@ RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 FIGURES_DIR = Path(__file__).resolve().parent.parent / "figures"
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Comma-separated list of output formats",
+    )
+    args = parser.parse_args(argv or [])
+
     summary_file = RESULTS_DIR / "noise_summary.csv"
     pdr_map: dict[float, list[float]] = defaultdict(list)
     with summary_file.open() as f:
@@ -37,11 +48,7 @@ def main() -> None:
     ax.set_ylabel("PDR(%)")
     ax.set_title("PDR vs Noise")
     output_base = FIGURES_DIR / "pdr_vs_noise"
-    for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
-        path = output_base.with_suffix(f".{ext}")
-        fig.savefig(path, dpi=dpi)
-        print(f"Saved {path}")
+    save_multi_format(fig, output_base, parse_formats(args.formats))
     plt.close(fig)
 
 

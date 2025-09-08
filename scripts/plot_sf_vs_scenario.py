@@ -11,12 +11,20 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Iterable
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
-def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> None:
+
+def plot(
+    csv_path: str,
+    output_dir: str = "figures",
+    by_model: bool = False,
+    formats: Iterable[str] = ("png", "jpg", "eps"),
+) -> None:
     """Plot average spreading factor with error bars.
 
     Parameters
@@ -53,9 +61,7 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     fig.tight_layout()
 
     stem = "avg_sf_vs_model" if by_model else "avg_sf_vs_scenario"
-    for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
-        fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
+    save_multi_format(fig, out_dir / stem, formats)
     plt.close(fig)
 
 
@@ -73,8 +79,13 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Plot average SF versus mobility model",
     )
-    args = parser.parse_args(argv)
-    plot(args.csv, args.output_dir, args.by_model)
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Comma-separated list of output formats",
+    )
+    args = parser.parse_args(argv or [])
+    plot(args.csv, args.output_dir, args.by_model, parse_formats(args.formats))
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point

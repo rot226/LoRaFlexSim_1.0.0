@@ -10,6 +10,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
+
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from loraflexsim.launcher.simulator import Simulator
@@ -35,7 +37,12 @@ def main(argv: list[str] | None = None) -> None:
         default=100.0,
         help="Marker size for node positions",
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Comma-separated list of output formats",
+    )
+    args = parser.parse_args(argv or [])
 
     sim = Simulator(
         num_nodes=args.num_nodes,
@@ -86,9 +93,8 @@ def main(argv: list[str] | None = None) -> None:
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_title("Node positions")
-    for ext in (".png", ".jpg", ".eps"):
-        dpi = 300 if ext in (".png", ".jpg") else None
-        fig.savefig(output_path.with_suffix(ext), dpi=dpi)
+    base = output_path.with_suffix("")
+    save_multi_format(fig, base, parse_formats(args.formats))
     plt.close(fig)
 
 

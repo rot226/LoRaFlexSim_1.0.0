@@ -4,8 +4,10 @@ import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
-def main(files: list[str], per_node: bool) -> None:
+
+def main(files: list[str], per_node: bool, formats: list[str]) -> None:
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     if per_node:
         cols = [c for c in df.columns if c.startswith("energy_by_node.")]
@@ -19,8 +21,8 @@ def main(files: list[str], per_node: bool) -> None:
         plt.xlabel("N\u0153ud")
         plt.ylabel("\u00c9nergie consomm\u00e9e (J)")
         plt.grid(True)
-        plt.savefig("energy_per_node.png")
-        print("Graphique sauvegard\u00e9 dans energy_per_node.png")
+        save_multi_format(plt.gcf(), "energy_per_node", formats)
+        print("Graphique sauvegard\u00e9 dans energy_per_node.*")
     else:
         col = "energy_J" if "energy_J" in df.columns else "energy"
         if col not in df.columns:
@@ -36,8 +38,8 @@ def main(files: list[str], per_node: bool) -> None:
             plt.xlabel("Ex\u00e9cution")
         plt.ylabel("\u00c9nergie consomm\u00e9e (J)")
         plt.grid(True)
-        plt.savefig("energy_total.png")
-        print("Graphique sauvegard\u00e9 dans energy_total.png")
+        save_multi_format(plt.gcf(), "energy_total", formats)
+        print("Graphique sauvegard\u00e9 dans energy_total.*")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -48,9 +50,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Trace la consommation pour chaque n\u0153ud",
     )
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Liste de formats s\u00e9par\u00e9s par des virgules",
+    )
     return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    main(args.files, args.per_node)
+    main(args.files, args.per_node, parse_formats(args.formats))

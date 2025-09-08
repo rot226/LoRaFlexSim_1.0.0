@@ -9,16 +9,27 @@ This script reads ``results/interval_summary.csv`` produced by
 from __future__ import annotations
 
 from pathlib import Path
+import argparse
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+from loraflexsim.utils.plotting import parse_formats, save_multi_format
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 FIGURES_DIR = ROOT / "figures"
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--formats",
+        default="png,jpg,eps",
+        help="Comma-separated list of output formats",
+    )
+    args = parser.parse_args(argv or [])
+
     summary_path = RESULTS_DIR / "interval_summary.csv"
     df = pd.read_csv(summary_path)
     agg = (
@@ -42,11 +53,7 @@ def main() -> None:
 
     fig.tight_layout()
     base = FIGURES_DIR / "pdr_collisions_vs_interval"
-    for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
-        path = base.with_suffix(f".{ext}")
-        fig.savefig(path, dpi=dpi)
-        print(f"Saved {path}")
+    save_multi_format(fig, base, parse_formats(args.formats))
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
