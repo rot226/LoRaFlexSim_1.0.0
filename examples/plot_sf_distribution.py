@@ -1,10 +1,12 @@
 """Trace la distribution des Spreading Factors depuis des fichiers CSV."""
 import sys
+import argparse
+from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-def main(files: list[str]) -> None:
+def main(files: list[str], output_dir: Path, basename: str) -> None:
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     sf_cols = [c for c in df.columns if c.startswith("sf_distribution.")]
     if sf_cols:
@@ -13,7 +15,7 @@ def main(files: list[str]) -> None:
         sf_cols = [c for c in df.columns if c.startswith("sf")]
         sf_counts = {int(c[2:]): int(df[c].sum()) for c in sf_cols}
     if not sf_counts:
-        print("Aucune colonne SF trouv\u00e9e dans les fichiers fournis.")
+        print("Aucune colonne SF trouvée dans les fichiers fournis.")
         return
     sfs = sorted(sf_counts)
     counts = [sf_counts[sf] for sf in sfs]
@@ -23,12 +25,34 @@ def main(files: list[str]) -> None:
     plt.xlabel("Spreading Factor")
     plt.ylabel("Paquets")
     plt.grid(True)
-    plt.savefig("sf_distribution.png")
-    print("Graphique sauvegard\u00e9 dans sf_distribution.png")
+    plt.tight_layout()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for ext, params in {"png": {"dpi": 300}, "jpg": {"dpi": 300}, "eps": {}}.items():
+        path = output_dir / f"{basename}.{ext}"
+        plt.savefig(path, **params)
+        print(f"Graphique sauvegardé dans {path}")
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Trace la distribution des SF et sauvegarde en PNG, JPG et EPS"
+    )
+    parser.add_argument("files", nargs="+", help="Fichiers metrics CSV")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("."),
+        help="Répertoire de sortie (défaut : dossier courant)",
+    )
+    parser.add_argument(
+        "--basename",
+        default="sf_distribution",
+        help="Nom de base du fichier sans extension",
+    )
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python plot_sf_distribution.py metrics1.csv [...]")
-    else:
-        main(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
+    main(args.files, args.output_dir, args.basename)
+
