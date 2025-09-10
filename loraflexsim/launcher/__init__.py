@@ -33,6 +33,18 @@ from . import (
     radr,
 )
 
+# Mapping of ADR strategy names to their implementation modules
+ADR_MODULES = {
+    "ADR 1": adr_standard_1,
+    "ADR 2": adr_2,
+    "ADR_ML": adr_ml,
+    "EXPLoRa-SF": explora_sf,
+    "EXPLoRa-AT": explora_at,
+    "ADR-Lite": adr_lite,
+    "ADR-Max": adr_max,
+    "RADR": radr,
+}
+
 __all__ = [
     "Node",
     "Gateway",
@@ -68,6 +80,7 @@ __all__ = [
     "explora_at",
     "adr_max",
     "radr",
+    "ADR_MODULES",
 ]
 
 for name in __all__:
