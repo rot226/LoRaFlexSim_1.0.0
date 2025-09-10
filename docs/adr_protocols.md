@@ -5,7 +5,7 @@ Cette page résume plusieurs stratégies d'Adaptive Data Rate (ADR) pour LoRaWAN
 | Protocole | Principe général | Machine learning | Avantages | Limites |
 |-----------|-----------------|-----------------|-----------|---------|
 | ADR standard | Algorithme LoRaWAN basé sur l'historique SNR pour ajuster SF et puissance. | Non | Simple, conforme à la spécification, faible surcharge réseau. | Réagit lentement, peu adapté aux nœuds mobiles ou aux environnements très variables. |
-| EXPLoRa-SF | Allocation équitable du spreading factor pour maximiser le débit global. | Non | Améliore l'équité entre nœuds, réduit les collisions. | Nécessite une coordination centrale, peut augmenter la latence pour certains nœuds. |
+| EXPLoRa-SF | Répartition équitable des spreading factors pour maximiser le débit global. | Non | Améliore l'équité entre nœuds, réduit les collisions. | Nécessite une coordination centrale, peut augmenter la latence pour certains nœuds. |
 | EXPLoRa-AT | Extension d'EXPLoRa optimisant SF et temps d'accès pour équilibrer l'occupation du canal. | Non | Meilleure utilisation du temps d'antenne, réduit la congestion. | Complexité accrue, besoin de synchronisation précise. |
 | ADR-Lite | Version simplifiée avec seuils SNR fixes pour un ajustement rapide. | Non | Faible calcul côté serveur, adaptation rapide. | Moins précise, risque d'augmentation de la consommation ou des collisions. |
 | ADR-Max | Algorithme agressif visant à maximiser la capacité en explorant les débits élevés. | Non | Maximisation du débit lorsque le lien est bon. | Sensible aux dégradations soudaines, instabilité possible pour les liens faibles. |
