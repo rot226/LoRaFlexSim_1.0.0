@@ -22,7 +22,7 @@ from .omnet_model import OmnetModel
 from .omnet_phy import OmnetPHY
 from .flora_cpp import FloraCppPHY
 from .obstacle_loss import ObstacleLoss
-from . import adr_standard_1, adr_2, adr_3, explora_sf
+from . import adr_standard_1, adr_2, adr_3, explora_sf, explora_at
 
 __all__ = [
     "Node",
@@ -55,6 +55,7 @@ __all__ = [
     "adr_2",
     "adr_3",
     "explora_sf",
+    "explora_at",
 ]
 
 for name in __all__:
