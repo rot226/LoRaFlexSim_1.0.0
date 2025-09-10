@@ -27,7 +27,7 @@ from launcher.channel import Channel  # noqa: E402
 from launcher import (
     adr_standard_1,
     adr_2,
-    adr_3,
+    adr_ml,
     explora_sf,
     explora_at,
     adr_lite,
@@ -141,7 +141,7 @@ adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 # --- Boutons de sélection du profil ADR ---
 adr1_button = pn.widgets.Button(name="adr_1", button_type="primary")
 adr2_button = pn.widgets.Button(name="adr_2")
-adr3_button = pn.widgets.Button(name="adr_3")
+adr_ml_button = pn.widgets.Button(name="ADR_ML")
 explora_sf_button = pn.widgets.Button(name="EXPLoRa-SF")
 explora_at_button = pn.widgets.Button(name="EXPLoRa-AT")
 adr_lite_button = pn.widgets.Button(name="ADR-Lite")
@@ -554,7 +554,7 @@ def select_adr(module, name: str) -> None:
     for btn in (
         adr1_button,
         adr2_button,
-        adr3_button,
+        adr_ml_button,
         explora_sf_button,
         explora_at_button,
         adr_lite_button,
@@ -566,8 +566,8 @@ def select_adr(module, name: str) -> None:
         adr1_button.button_type = "primary"
     elif name == "ADR 2":
         adr2_button.button_type = "primary"
-    elif name == "ADR 3":
-        adr3_button.button_type = "primary"
+    elif name == "ADR_ML":
+        adr_ml_button.button_type = "primary"
     elif name == "EXPLoRa-SF":
         explora_sf_button.button_type = "primary"
     elif name == "EXPLoRa-AT":
@@ -1260,7 +1260,7 @@ show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 # --- Boutons ADR ---
 adr1_button.on_click(lambda event: select_adr(adr_standard_1, "ADR 1"))
 adr2_button.on_click(lambda event: select_adr(adr_2, "ADR 2"))
-adr3_button.on_click(lambda event: select_adr(adr_3, "ADR 3"))
+adr_ml_button.on_click(lambda event: select_adr(adr_ml, "ADR_ML"))
 explora_sf_button.on_click(lambda event: select_adr(explora_sf, "EXPLoRa-SF"))
 explora_at_button.on_click(lambda event: select_adr(explora_at, "EXPLoRa-AT"))
 adr_lite_button.on_click(lambda event: select_adr(adr_lite, "ADR-Lite"))
@@ -1288,7 +1288,7 @@ controls = pn.WidgetBox(
     pn.Row(
         adr1_button,
         adr2_button,
-        adr3_button,
+        adr_ml_button,
         explora_sf_button,
         explora_at_button,
         adr_lite_button,
