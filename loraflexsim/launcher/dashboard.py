@@ -24,7 +24,17 @@ for path in (ROOT_DIR, REPO_ROOT):
 
 from launcher.simulator import Simulator  # noqa: E402
 from launcher.channel import Channel  # noqa: E402
-from launcher import adr_standard_1, adr_2, adr_3  # noqa: E402
+from launcher import (
+    adr_standard_1,
+    adr_2,
+    adr_3,
+    explora_sf,
+    explora_at,
+    adr_lite,
+    adr_max,
+    radr,
+    adr_ml,
+)  # noqa: E402
 
 # --- Initialisation Panel ---
 pn.extension("plotly", raw_css=[
@@ -132,7 +142,25 @@ adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 adr1_button = pn.widgets.Button(name="adr_1", button_type="primary")
 adr2_button = pn.widgets.Button(name="adr_2")
 adr3_button = pn.widgets.Button(name="adr_3")
-adr_active_badge = pn.pane.HTML("", width=80)
+explora_sf_button = pn.widgets.Button(name="explora_sf")
+explora_at_button = pn.widgets.Button(name="explora_at")
+adr_lite_button = pn.widgets.Button(name="adr_lite")
+adr_max_button = pn.widgets.Button(name="adr_max")
+radr_button = pn.widgets.Button(name="radr")
+adr_ml_button = pn.widgets.Button(name="adr_ml")
+adr_active_badge = pn.pane.HTML("", width=150)
+
+ADR_BUTTON_MAP = {
+    adr_standard_1: adr1_button,
+    adr_2: adr2_button,
+    adr_3: adr3_button,
+    explora_sf: explora_sf_button,
+    explora_at: explora_at_button,
+    adr_lite: adr_lite_button,
+    adr_max: adr_max_button,
+    radr: radr_button,
+    adr_ml: adr_ml_button,
+}
 
 # --- Choix SF et puissance initiaux identiques ---
 fixed_sf_checkbox = pn.widgets.Checkbox(name="Choisir SF unique", value=False)
@@ -530,20 +558,17 @@ def _update_adr_badge(name: str) -> None:
     )
 
 
-def select_adr(module, name: str) -> None:
+def select_adr(module, name: str, *, adr_node: bool = True, adr_server: bool = True) -> None:
     global selected_adr_module
     selected_adr_module = module
-    adr_node_checkbox.value = True
-    adr_server_checkbox.value = True
+    adr_node_checkbox.value = adr_node
+    adr_server_checkbox.value = adr_server
     _update_adr_badge(name)
-    for btn in (adr1_button, adr2_button, adr3_button):
+    for btn in ADR_BUTTON_MAP.values():
         btn.button_type = "default"
-    if name == "ADR 1":
-        adr1_button.button_type = "primary"
-    elif name == "ADR 2":
-        adr2_button.button_type = "primary"
-    else:
-        adr3_button.button_type = "primary"
+    btn = ADR_BUTTON_MAP.get(module)
+    if btn is not None:
+        btn.button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1227,6 +1252,24 @@ show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 adr1_button.on_click(lambda event: select_adr(adr_standard_1, "ADR 1"))
 adr2_button.on_click(lambda event: select_adr(adr_2, "ADR 2"))
 adr3_button.on_click(lambda event: select_adr(adr_3, "ADR 3"))
+explora_sf_button.on_click(
+    lambda event: select_adr(explora_sf, "Explora-SF", adr_node=False, adr_server=True)
+)
+explora_at_button.on_click(
+    lambda event: select_adr(explora_at, "Explora-AT", adr_node=False, adr_server=True)
+)
+adr_lite_button.on_click(
+    lambda event: select_adr(adr_lite, "ADR-Lite", adr_node=False, adr_server=True)
+)
+adr_max_button.on_click(
+    lambda event: select_adr(adr_max, "ADR-Max", adr_node=False, adr_server=True)
+)
+radr_button.on_click(
+    lambda event: select_adr(radr, "R-ADR", adr_node=False, adr_server=True)
+)
+adr_ml_button.on_click(
+    lambda event: select_adr(adr_ml, "ML-ADR", adr_node=False, adr_server=True)
+)
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1246,7 +1289,18 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    pn.Row(adr1_button, adr2_button, adr3_button, adr_active_badge),
+    pn.Row(
+        adr1_button,
+        adr2_button,
+        adr3_button,
+        explora_sf_button,
+        explora_at_button,
+        adr_lite_button,
+        adr_max_button,
+        radr_button,
+        adr_ml_button,
+        adr_active_badge,
+    ),
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
