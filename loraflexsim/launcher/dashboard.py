@@ -24,7 +24,15 @@ for path in (ROOT_DIR, REPO_ROOT):
 
 from launcher.simulator import Simulator  # noqa: E402
 from launcher.channel import Channel  # noqa: E402
-from launcher import adr_standard_1, adr_2, adr_3, explora_sf, explora_at, adr_lite  # noqa: E402
+from launcher import (
+    adr_standard_1,
+    adr_2,
+    adr_3,
+    explora_sf,
+    explora_at,
+    adr_lite,
+    adr_max,
+)  # noqa: E402
 
 # --- Initialisation Panel ---
 pn.extension("plotly", raw_css=[
@@ -136,6 +144,7 @@ adr3_button = pn.widgets.Button(name="adr_3")
 explora_sf_button = pn.widgets.Button(name="EXPLoRa-SF")
 explora_at_button = pn.widgets.Button(name="EXPLoRa-AT")
 adr_lite_button = pn.widgets.Button(name="ADR-Lite")
+adr_max_button = pn.widgets.Button(name="ADR-Max")
 adr_active_badge = pn.pane.HTML("", width=80)
 
 # --- Choix SF et puissance initiaux identiques ---
@@ -547,6 +556,7 @@ def select_adr(module, name: str) -> None:
         explora_sf_button,
         explora_at_button,
         adr_lite_button,
+        adr_max_button,
     ):
         btn.button_type = "default"
     if name == "ADR 1":
@@ -561,6 +571,8 @@ def select_adr(module, name: str) -> None:
         explora_at_button.button_type = "primary"
     elif name == "ADR-Lite":
         adr_lite_button.button_type = "primary"
+    elif name == "ADR-Max":
+        adr_max_button.button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1247,6 +1259,7 @@ adr3_button.on_click(lambda event: select_adr(adr_3, "ADR 3"))
 explora_sf_button.on_click(lambda event: select_adr(explora_sf, "EXPLoRa-SF"))
 explora_at_button.on_click(lambda event: select_adr(explora_at, "EXPLoRa-AT"))
 adr_lite_button.on_click(lambda event: select_adr(adr_lite, "ADR-Lite"))
+adr_max_button.on_click(lambda event: select_adr(adr_max, "ADR-Max"))
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1273,6 +1286,7 @@ controls = pn.WidgetBox(
         explora_sf_button,
         explora_at_button,
         adr_lite_button,
+        adr_max_button,
         adr_active_badge,
     ),
     fixed_sf_checkbox,
