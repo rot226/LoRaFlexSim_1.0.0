@@ -140,18 +140,12 @@ num_runs_input = pn.widgets.IntInput(name="Nombre de runs", value=1, start=1)
 adr_node_checkbox = pn.widgets.Checkbox(name="ADR nœud", value=True)
 adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 
-# --- Boutons de sélection du profil ADR ---
-adr_buttons = {
-    name: pn.widgets.Button(
-        name=name, button_type="primary" if name == _DEFAULT_ADR_NAME else "default"
-    )
-    for name in ADR_MODULES
-}
-adr_active_badge = pn.pane.HTML("", width=80)
+# --- Sélecteur du protocole ADR ---
 adr_select = pn.widgets.Select(
-    name="Variante ADR", options=list(ADR_MODULES.keys()), value=_DEFAULT_ADR_NAME
+    name="Protocole ADR",
+    options=list(ADR_MODULES.keys()),
+    value=_DEFAULT_ADR_NAME,
 )
-adr_select_row = pn.Row(*adr_buttons.values(), adr_active_badge, adr_select)
 
 # --- Choix SF et puissance initiaux identiques ---
 fixed_sf_checkbox = pn.widgets.Checkbox(name="Choisir SF unique", value=False)
@@ -543,22 +537,11 @@ first_packet_input.param.watch(on_first_packet_change, "value")
 
 
 # --- Sélection du profil ADR ---
-def _update_adr_badge(name: str) -> None:
-    adr_active_badge.object = (
-        f"<span style='background-color: #28a745; color:white; padding:2px 6px; border-radius:4px'>{name}</span>"
-    )
-
-
 def select_adr(module, name: str) -> None:
     global selected_adr_module
     selected_adr_module = module
     adr_node_checkbox.value = True
     adr_server_checkbox.value = True
-    _update_adr_badge(name)
-    for btn in adr_buttons.values():
-        btn.button_type = "default"
-    if name in adr_buttons:
-        adr_buttons[name].button_type = "primary"
     if adr_select.value != name:
         adr_select.value = name
     if sim is not None:
@@ -566,8 +549,6 @@ def select_adr(module, name: str) -> None:
             module.apply(sim, degrade_channel=True, profile="flora")
         else:
             module.apply(sim)
-
-_update_adr_badge(_DEFAULT_ADR_NAME)
 
 # --- Callback chrono ---
 def periodic_chrono_update():
@@ -1239,12 +1220,6 @@ heatmap_res_slider.param.watch(update_heatmap, "value")
 hist_metric_select.param.watch(lambda event: update_histogram(), "value")
 show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 
-# --- Boutons ADR ---
-for name, module in ADR_MODULES.items():
-    adr_buttons[name].on_click(
-        lambda event, module=module, name=name: select_adr(module, name)
-    )
-
 
 def _on_adr_select(event):
     module = ADR_MODULES[event.new]
@@ -1272,7 +1247,7 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    adr_select_row,
+    adr_select,
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
