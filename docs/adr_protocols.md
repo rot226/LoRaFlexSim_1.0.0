@@ -1,6 +1,7 @@
 # Protocoles ADR LoRa
 
 Cette page résume plusieurs stratégies d'Adaptive Data Rate (ADR) pour LoRaWAN.
+Le protocole `ADR_ML` propose une approche fondée sur le machine learning.
 
 | Protocole | Principe général | Machine learning | Avantages | Limites |
 |-----------|-----------------|-----------------|-----------|---------|
