@@ -25,7 +25,7 @@ from .obstacle_loss import ObstacleLoss
 from . import (
     adr_standard_1,
     adr_2,
-    adr_3,
+    adr_ml,
     explora_sf,
     explora_at,
     adr_lite,
@@ -62,7 +62,7 @@ __all__ = [
     "FloraCppPHY",
     "adr_standard_1",
     "adr_2",
-    "adr_3",
+    "adr_ml",
     "adr_lite",
     "explora_sf",
     "explora_at",
