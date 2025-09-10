@@ -139,15 +139,22 @@ adr_node_checkbox = pn.widgets.Checkbox(name="ADR nœud", value=True)
 adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 
 # --- Boutons de sélection du profil ADR ---
-adr1_button = pn.widgets.Button(name="adr_1", button_type="primary")
-adr2_button = pn.widgets.Button(name="adr_2")
-adr_ml_button = pn.widgets.Button(name="ADR_ML")
-explora_sf_button = pn.widgets.Button(name="EXPLoRa-SF")
-explora_at_button = pn.widgets.Button(name="EXPLoRa-AT")
-adr_lite_button = pn.widgets.Button(name="ADR-Lite")
-adr_max_button = pn.widgets.Button(name="ADR-Max")
-radr_button = pn.widgets.Button(name="RADR")
+ADR_MODULES = {
+    "ADR 1": adr_standard_1,
+    "ADR 2": adr_2,
+    "ADR_ML": adr_ml,
+    "EXPLoRa-SF": explora_sf,
+    "EXPLoRa-AT": explora_at,
+    "ADR-Lite": adr_lite,
+    "ADR-Max": adr_max,
+    "RADR": radr,
+}
+adr_buttons = {
+    name: pn.widgets.Button(name=name, button_type="primary" if name == "ADR 1" else "default")
+    for name in ADR_MODULES
+}
 adr_active_badge = pn.pane.HTML("", width=80)
+adr_select_row = pn.Row(*adr_buttons.values(), adr_active_badge)
 
 # --- Choix SF et puissance initiaux identiques ---
 fixed_sf_checkbox = pn.widgets.Checkbox(name="Choisir SF unique", value=False)
@@ -551,33 +558,10 @@ def select_adr(module, name: str) -> None:
     adr_node_checkbox.value = True
     adr_server_checkbox.value = True
     _update_adr_badge(name)
-    for btn in (
-        adr1_button,
-        adr2_button,
-        adr_ml_button,
-        explora_sf_button,
-        explora_at_button,
-        adr_lite_button,
-        adr_max_button,
-        radr_button,
-    ):
+    for btn in adr_buttons.values():
         btn.button_type = "default"
-    if name == "ADR 1":
-        adr1_button.button_type = "primary"
-    elif name == "ADR 2":
-        adr2_button.button_type = "primary"
-    elif name == "ADR_ML":
-        adr_ml_button.button_type = "primary"
-    elif name == "EXPLoRa-SF":
-        explora_sf_button.button_type = "primary"
-    elif name == "EXPLoRa-AT":
-        explora_at_button.button_type = "primary"
-    elif name == "ADR-Lite":
-        adr_lite_button.button_type = "primary"
-    elif name == "ADR-Max":
-        adr_max_button.button_type = "primary"
-    elif name == "RADR":
-        radr_button.button_type = "primary"
+    if name in adr_buttons:
+        adr_buttons[name].button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1258,14 +1242,10 @@ hist_metric_select.param.watch(lambda event: update_histogram(), "value")
 show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 
 # --- Boutons ADR ---
-adr1_button.on_click(lambda event: select_adr(adr_standard_1, "ADR 1"))
-adr2_button.on_click(lambda event: select_adr(adr_2, "ADR 2"))
-adr_ml_button.on_click(lambda event: select_adr(adr_ml, "ADR_ML"))
-explora_sf_button.on_click(lambda event: select_adr(explora_sf, "EXPLoRa-SF"))
-explora_at_button.on_click(lambda event: select_adr(explora_at, "EXPLoRa-AT"))
-adr_lite_button.on_click(lambda event: select_adr(adr_lite, "ADR-Lite"))
-adr_max_button.on_click(lambda event: select_adr(adr_max, "ADR-Max"))
-radr_button.on_click(lambda event: select_adr(radr, "RADR"))
+for name, module in ADR_MODULES.items():
+    adr_buttons[name].on_click(
+        lambda event, module=module, name=name: select_adr(module, name)
+    )
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1285,17 +1265,7 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    pn.Row(
-        adr1_button,
-        adr2_button,
-        adr_ml_button,
-        explora_sf_button,
-        explora_at_button,
-        adr_lite_button,
-        adr_max_button,
-        radr_button,
-        adr_active_badge,
-    ),
+    adr_select_row,
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
