@@ -5,7 +5,7 @@ from .channel import Channel
 
 
 def apply(sim: Simulator) -> None:
-    """Configure ADR variant adr_3."""
+    """Configure ADR variant adr_ml."""
     Simulator.MARGIN_DB = 25.0
     sim.adr_node = True
     sim.adr_server = True

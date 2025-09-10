@@ -36,3 +36,9 @@ def test_invalid_area_prevents_start():
     dashboard.on_start(None)
     assert dashboard.sim is None
     assert "⚠️" in dashboard.export_message.object
+
+
+def test_adr_ml_button_present():
+    """Ensure the dashboard exposes the ADR ML button."""
+    assert hasattr(dashboard, "adr_ml_button")
+    assert dashboard.adr_ml_button.name == "adr_ml"

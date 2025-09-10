@@ -24,7 +24,7 @@ for path in (ROOT_DIR, REPO_ROOT):
 
 from launcher.simulator import Simulator  # noqa: E402
 from launcher.channel import Channel  # noqa: E402
-from launcher import adr_standard_1, adr_2, adr_3  # noqa: E402
+from launcher import adr_standard_1, adr_2, adr_ml  # noqa: E402
 
 # --- Initialisation Panel ---
 pn.extension("plotly", raw_css=[
@@ -131,7 +131,7 @@ adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 # --- Boutons de sélection du profil ADR ---
 adr1_button = pn.widgets.Button(name="adr_1", button_type="primary")
 adr2_button = pn.widgets.Button(name="adr_2")
-adr3_button = pn.widgets.Button(name="adr_3")
+adr_ml_button = pn.widgets.Button(name="adr_ml")
 adr_active_badge = pn.pane.HTML("", width=80)
 
 # --- Choix SF et puissance initiaux identiques ---
@@ -536,14 +536,14 @@ def select_adr(module, name: str) -> None:
     adr_node_checkbox.value = True
     adr_server_checkbox.value = True
     _update_adr_badge(name)
-    for btn in (adr1_button, adr2_button, adr3_button):
+    for btn in (adr1_button, adr2_button, adr_ml_button):
         btn.button_type = "default"
     if name == "ADR 1":
         adr1_button.button_type = "primary"
     elif name == "ADR 2":
         adr2_button.button_type = "primary"
     else:
-        adr3_button.button_type = "primary"
+        adr_ml_button.button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1226,7 +1226,7 @@ show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 # --- Boutons ADR ---
 adr1_button.on_click(lambda event: select_adr(adr_standard_1, "ADR 1"))
 adr2_button.on_click(lambda event: select_adr(adr_2, "ADR 2"))
-adr3_button.on_click(lambda event: select_adr(adr_3, "ADR 3"))
+adr_ml_button.on_click(lambda event: select_adr(adr_ml, "ADR ML"))
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1246,7 +1246,7 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    pn.Row(adr1_button, adr2_button, adr3_button, adr_active_badge),
+    pn.Row(adr1_button, adr2_button, adr_ml_button, adr_active_badge),
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
