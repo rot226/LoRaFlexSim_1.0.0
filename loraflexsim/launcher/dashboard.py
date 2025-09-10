@@ -51,7 +51,6 @@ auto_fast_forward = False
 timeline_fig = go.Figure()
 last_event_index = 0
 pause_prev_disabled = False
-flora_metrics = None
 node_paths: dict[int, list[tuple[float, float]]] = {}
 
 
@@ -248,13 +247,6 @@ fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width
 pdr_table = pn.pane.DataFrame(
     pd.DataFrame(columns=["Node", "PDR", "Recent PDR"]),
     height=200,
-    width=220,
-)
-
-# Tableau de comparaison avec FLoRa
-flora_compare_table = pn.pane.DataFrame(
-    pd.DataFrame(columns=["Metric", "FLoRa", "SFRD", "Diff"]),
-    height=180,
     width=220,
 )
 
@@ -601,19 +593,6 @@ def step_simulation():
     pdr_table.object = table_df
     # Les PDR détaillés par SF, passerelle et classe sont calculés mais non
     # affichés. Ils seront exportés dans le fichier de résultats.
-    if flora_metrics:
-        metrics_keys = ["PDR", "collisions", "throughput_bps", "energy_J"]
-        rows = []
-        for key in metrics_keys:
-            flora_val = flora_metrics.get(key, 0)
-            sim_val = metrics.get(key, 0)
-            rows.append({
-                "Metric": key,
-                "FLoRa": flora_val,
-                "SFRD": sim_val,
-                "Diff": sim_val - flora_val,
-            })
-        flora_compare_table.object = pd.DataFrame(rows)
     update_histogram(metrics)
     update_map()
     update_timeline()
@@ -661,8 +640,6 @@ def setup_simulation(seed_offset: int = 0):
     path_map = None
     terrain_map = None
     dyn_map = None
-    global flora_metrics
-    flora_metrics = None
 
     # Choisir le modèle de mobilité
     mobility_instance = None
@@ -1304,7 +1281,6 @@ metrics_col = pn.Column(
     throughput_indicator,
     retrans_indicator,
     pdr_table,
-    flora_compare_table,
 )
 metrics_col.width = 220
 
