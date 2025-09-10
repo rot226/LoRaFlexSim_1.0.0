@@ -32,6 +32,7 @@ def sample_interval(mean: float, rng: np.random.Generator) -> float:
         isinstance(mean, numbers.Real)
         and not isinstance(mean, numbers.Integral)
         and mean > 0
+        and math.isfinite(mean)
     ):
         raise ValueError("mean_interval must be positive float")
     mean = float(mean)
@@ -56,6 +57,7 @@ def sample_exp(mu_send: float, rng: np.random.Generator) -> float:
         isinstance(mu_send, numbers.Real)
         and not isinstance(mu_send, numbers.Integral)
         and mu_send > 0
+        and math.isfinite(mu_send)
     ):
         raise ValueError("mu_send must be positive float")
     mu_send = float(mu_send)
