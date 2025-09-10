@@ -24,8 +24,9 @@ def apply(sim: Simulator) -> None:
     sim.network_server.adr_method = "adr-max"
 
     for node in sim.nodes:
-        node.sf = 12
-        node.initial_sf = 12
+        if getattr(sim, "fixed_sf", None) is None:
+            node.sf = 12
+        node.initial_sf = node.sf
         node.channel.detection_threshold_dBm = (
             Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
             + node.channel.sensitivity_margin_dB

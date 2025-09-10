@@ -1,6 +1,7 @@
 from loraflexsim.launcher.simulator import Simulator
 from loraflexsim.launcher.channel import Channel
-from loraflexsim.launcher import adr_max
+from loraflexsim.launcher import adr_max, ADR_MODULES
+import loraflexsim.launcher.server as server
 
 
 def test_adr_max_apply_configures_simulator():
@@ -17,6 +18,7 @@ def test_adr_max_apply_configures_simulator():
     )
     adr_max.apply(sim)
     node = sim.nodes[0]
+    assert "ADR-Max" in ADR_MODULES
     assert sim.adr_node is True
     assert sim.adr_server is True
     assert sim.network_server.adr_enabled is True
@@ -27,3 +29,29 @@ def test_adr_max_apply_configures_simulator():
     assert node.tx_power == 14.0
     assert node.adr_ack_limit == 64
     assert node.adr_ack_delay == 32
+
+
+def test_adr_max_server_selects_highest_sf():
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        transmission_mode="Periodic",
+        packet_interval=1.0,
+        duty_cycle=None,
+        mobility=False,
+        adr_node=False,
+        adr_server=False,
+        seed=1,
+    )
+    adr_max.apply(sim)
+    node = sim.nodes[0]
+    ns = sim.network_server
+    node.sf = 7
+    node.channel.detection_threshold_dBm = (
+        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+        + node.channel.sensitivity_margin_dB
+    )
+    noise = ns.channel.noise_floor_dBm()
+    rssi = noise + server.REQUIRED_SNR[7] + server.MARGIN_DB + 5.0
+    ns.receive(1, node.id, sim.gateways[0].id, rssi)
+    assert node.sf == 12
