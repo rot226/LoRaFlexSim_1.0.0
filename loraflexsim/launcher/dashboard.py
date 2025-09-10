@@ -143,7 +143,7 @@ ADR_MODULES = {
     "ADR 1": adr_standard_1,
     "ADR 2": adr_2,
     "ADR_ML": adr_ml,
-    "EXPLoRa-SF": explora_sf,
+    "EXPLoRa-SF": explora_sf,  # Spreading-factor fairness
     "EXPLoRa-AT": explora_at,
     "ADR-Lite": adr_lite,
     "ADR-Max": adr_max,
