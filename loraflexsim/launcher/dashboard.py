@@ -332,7 +332,7 @@ def update_map():
         for path in node_paths.values():
             if len(path) > 1:
                 xs_p, ys_p = zip(*path)
-                fig.add_scatter(x=xs_p, y=ys_p, mode="lines", line=dict(color="lightblue", width=1), showlegend=False)
+                fig.add_scatter(x=xs_p, y=ys_p, mode="lines", line=dict(color="black", width=1), showlegend=False)
 
     # Dessiner les transmissions récentes
     for ev in sim.events_log[-20:]:
