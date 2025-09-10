@@ -53,7 +53,8 @@ start_time = None
 elapsed_time = 0
 max_real_time = None
 paused = False
-selected_adr_module = adr_standard_1
+_DEFAULT_ADR_NAME = next(iter(ADR_MODULES))
+selected_adr_module = ADR_MODULES[_DEFAULT_ADR_NAME]
 total_runs = 1
 current_run = 0
 runs_events: list[pd.DataFrame] = []
@@ -141,11 +142,16 @@ adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 
 # --- Boutons de sélection du profil ADR ---
 adr_buttons = {
-    name: pn.widgets.Button(name=name, button_type="primary" if name == "ADR 1" else "default")
+    name: pn.widgets.Button(
+        name=name, button_type="primary" if name == _DEFAULT_ADR_NAME else "default"
+    )
     for name in ADR_MODULES
 }
 adr_active_badge = pn.pane.HTML("", width=80)
-adr_select_row = pn.Row(*adr_buttons.values(), adr_active_badge)
+adr_select = pn.widgets.Select(
+    name="Variante ADR", options=list(ADR_MODULES.keys()), value=_DEFAULT_ADR_NAME
+)
+adr_select_row = pn.Row(*adr_buttons.values(), adr_active_badge, adr_select)
 
 # --- Choix SF et puissance initiaux identiques ---
 fixed_sf_checkbox = pn.widgets.Checkbox(name="Choisir SF unique", value=False)
@@ -553,14 +559,15 @@ def select_adr(module, name: str) -> None:
         btn.button_type = "default"
     if name in adr_buttons:
         adr_buttons[name].button_type = "primary"
+    if adr_select.value != name:
+        adr_select.value = name
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
         else:
             module.apply(sim)
 
-
-_update_adr_badge("ADR 1")
+_update_adr_badge(_DEFAULT_ADR_NAME)
 
 # --- Callback chrono ---
 def periodic_chrono_update():
@@ -1237,6 +1244,15 @@ for name, module in ADR_MODULES.items():
     adr_buttons[name].on_click(
         lambda event, module=module, name=name: select_adr(module, name)
     )
+
+
+def _on_adr_select(event):
+    module = ADR_MODULES[event.new]
+    if module is not selected_adr_module:
+        select_adr(module, event.new)
+
+
+adr_select.param.watch(_on_adr_select, "value")
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
