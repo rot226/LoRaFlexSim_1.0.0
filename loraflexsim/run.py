@@ -2,6 +2,7 @@ import argparse
 import configparser
 import csv
 import numbers
+import math
 
 from traffic.exponential import sample_interval
 from traffic.rng_manager import RngManager
@@ -65,12 +66,14 @@ def simulate(
         isinstance(interval, numbers.Real)
         and not isinstance(interval, numbers.Integral)
         and interval > 0
+        and math.isfinite(interval)
     ):
         raise ValueError("interval must be a positive float")
     if first_interval is not None and not (
         isinstance(first_interval, numbers.Real)
         and not isinstance(first_interval, numbers.Integral)
         and first_interval > 0
+        and math.isfinite(first_interval)
     ):
         raise ValueError("first_interval must be positive float")
     if steps <= 0:
