@@ -10,9 +10,9 @@ from .simulator import Simulator
 class RADRModel:
     """Minimal reinforcement learning model for RADR.
 
-    The model maintains a simple table of cumulative rewards for
-    state-action pairs.  It is intentionally lightweight and serves as a
-    placeholder for a more advanced learning algorithm.
+    The model maintains a table of cumulative rewards for state-action
+    pairs.  It is intentionally lightweight and serves as a placeholder
+    for a more advanced learning algorithm.
     """
 
     q_table: Dict[Tuple[Tuple, str], float] = field(default_factory=dict)
@@ -23,31 +23,53 @@ class RADRModel:
         self.q_table[key] = self.q_table.get(key, 0.0) + reward
 
     def best_action(self, state: Tuple) -> str:
-        """Return the best known action for *state* (placeholder)."""
+        """Return the best known action for *state*.
+
+        If no data is available for *state*, ``"keep"`` is returned.
+        """
         candidates = {a: r for (s, a), r in self.q_table.items() if s == state}
         if not candidates:
-            return "default"
+            return "keep"
         return max(candidates, key=candidates.get)
 
 
 def apply(sim: Simulator) -> None:
-    """Configure the RADR ADR method using reinforcement learning."""
+    """Configure the RADR ADR method using reinforcement learning.
+
+    The network server exposes two callbacks:
+
+    ``adr_action(snr, sf)``
+        Choose the action (``"sf_up"``, ``"sf_down"`` or ``"keep"``)
+        based on the observed SNR and current spreading factor ``sf``.
+
+    ``adr_reward(snr, sf, action)``
+        Update the model with the reward computed from the difference
+        between the measured SNR and the required SNR for ``sf``.
+    """
+
     sim.network_server.adr_method = "radr"
-    sim.network_server.adr_model = RADRModel()
+    model = RADRModel()
+    sim.network_server.adr_model = model
 
-    def reward_callback(state: Tuple, action: str, success: bool) -> None:
-        """Simple reward handler updating the RADR model.
+    def action_callback(snr: float, sf: int) -> str:
+        state = (round(snr), sf)
+        action = model.best_action(state)
+        # If no learned action exists, fall back to simple heuristics.
+        if (state, action) not in model.q_table:
+            required = Simulator.REQUIRED_SNR.get(sf, -20.0)
+            if snr < required:
+                action = "sf_up"
+            elif snr > required + Simulator.MARGIN_DB:
+                action = "sf_down"
+            else:
+                action = "keep"
+        return action
 
-        Parameters
-        ----------
-        state: Tuple
-            Representation of the current environment state.
-        action: str
-            Action chosen by the ADR algorithm.
-        success: bool
-            Whether the transmission was successful.
-        """
-        reward = 1.0 if success else -1.0
-        sim.network_server.adr_model.update(state, action, reward)
+    def reward_callback(snr: float, sf: int, action: str) -> None:
+        state = (round(snr), sf)
+        required = Simulator.REQUIRED_SNR.get(sf, -20.0)
+        reward = snr - required
+        model.update(state, action, reward)
 
+    sim.network_server.adr_action = action_callback
     sim.network_server.adr_reward = reward_callback
