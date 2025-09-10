@@ -30,6 +30,7 @@ from . import (
     explora_at,
     adr_lite,
     adr_max,
+    radr,
 )
 
 __all__ = [
@@ -66,6 +67,7 @@ __all__ = [
     "explora_sf",
     "explora_at",
     "adr_max",
+    "radr",
 ]
 
 for name in __all__:

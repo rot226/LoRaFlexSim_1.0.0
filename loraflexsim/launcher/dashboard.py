@@ -32,6 +32,7 @@ from launcher import (
     explora_at,
     adr_lite,
     adr_max,
+    radr,
 )  # noqa: E402
 
 # --- Initialisation Panel ---
@@ -145,6 +146,7 @@ explora_sf_button = pn.widgets.Button(name="EXPLoRa-SF")
 explora_at_button = pn.widgets.Button(name="EXPLoRa-AT")
 adr_lite_button = pn.widgets.Button(name="ADR-Lite")
 adr_max_button = pn.widgets.Button(name="ADR-Max")
+radr_button = pn.widgets.Button(name="RADR")
 adr_active_badge = pn.pane.HTML("", width=80)
 
 # --- Choix SF et puissance initiaux identiques ---
@@ -557,6 +559,7 @@ def select_adr(module, name: str) -> None:
         explora_at_button,
         adr_lite_button,
         adr_max_button,
+        radr_button,
     ):
         btn.button_type = "default"
     if name == "ADR 1":
@@ -573,6 +576,8 @@ def select_adr(module, name: str) -> None:
         adr_lite_button.button_type = "primary"
     elif name == "ADR-Max":
         adr_max_button.button_type = "primary"
+    elif name == "RADR":
+        radr_button.button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1260,6 +1265,7 @@ explora_sf_button.on_click(lambda event: select_adr(explora_sf, "EXPLoRa-SF"))
 explora_at_button.on_click(lambda event: select_adr(explora_at, "EXPLoRa-AT"))
 adr_lite_button.on_click(lambda event: select_adr(adr_lite, "ADR-Lite"))
 adr_max_button.on_click(lambda event: select_adr(adr_max, "ADR-Max"))
+radr_button.on_click(lambda event: select_adr(radr, "RADR"))
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1287,6 +1293,7 @@ controls = pn.WidgetBox(
         explora_at_button,
         adr_lite_button,
         adr_max_button,
+        radr_button,
         adr_active_badge,
     ),
     fixed_sf_checkbox,
