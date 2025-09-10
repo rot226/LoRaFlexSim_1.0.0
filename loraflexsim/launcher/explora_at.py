@@ -13,8 +13,8 @@ def apply(sim: Simulator) -> None:
     network server can later optimise these values based on the measured SNR
     of the first uplinks.
     """
-    # Typical installation margin for EXPLoRa-AT. Both the simulator and
-    # the network server rely on this constant when evaluating SNR margins.
+    # Typical installation margin for EXPLoRa-AT. Both the simulator and the
+    # network server rely on this constant when evaluating SNR margins.
     Simulator.MARGIN_DB = 10.0
     from . import server as ns
 
@@ -29,14 +29,12 @@ def apply(sim: Simulator) -> None:
         # Start with the most robust SF so that connectivity is guaranteed
         # before the server sends optimised parameters based on the first
         # measurements.
-        node.sf = 12
-        node.initial_sf = 12
+        node.sf = node.initial_sf = 12
         node.channel.detection_threshold_dBm = (
             Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
             + node.channel.sensitivity_margin_dB
         )
-        node.tx_power = 14.0
-        node.initial_tx_power = 14.0
+        node.tx_power = node.initial_tx_power = 14.0
         node.adr_ack_cnt = 0
         node.adr_ack_limit = 64
         node.adr_ack_delay = 32
