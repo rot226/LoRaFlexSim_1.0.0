@@ -67,7 +67,17 @@ class NetworkServer(_NetworkServer):
     """Serveur réseau LoRa."""
 
     def add_gateway(self, gw: _Gateway) -> None:
-        self.gateways.append(gw)
+        """Register ``gw`` if not already present.
+
+        The lightweight wrapper originally added gateways blindly which could
+        result in duplicates when ``add_gateway`` was called multiple times with
+        the same instance.  The internal :attr:`gateways` list is now checked to
+        ensure each gateway is stored only once, mirroring the behaviour of
+        :meth:`register_node` for nodes.
+        """
+
+        if gw not in self.gateways:
+            self.gateways.append(gw)
 
     def register_node(self, node: _Node) -> None:
         if node not in self.nodes:

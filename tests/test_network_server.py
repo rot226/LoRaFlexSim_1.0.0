@@ -1,6 +1,8 @@
 from loraflexsim.launcher.server import NetworkServer
 from loraflexsim.launcher.gateway import Gateway
 from loraflexsim.launcher.node import Node
+from loraflexsim.architecture import NetworkServer as SimpleServer
+
 
 
 def test_deduplicate_packets():
@@ -17,3 +19,11 @@ def test_deduplicate_packets():
     assert server.packets_received == 1
     assert server.duplicate_packets == 1
     assert server.event_gateway[1] == gw1.id
+
+
+def test_add_gateway_deduplicates():
+    server = SimpleServer()
+    gw = Gateway(0, 0, 0)
+    server.add_gateway(gw)
+    server.add_gateway(gw)
+    assert server.gateways == [gw]
