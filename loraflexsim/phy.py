@@ -54,7 +54,7 @@ class LoRaPHY:
         )
         per = self.channel.packet_error_rate(snr, self.node.sf, payload_bytes=payload_size)
         rand = rng.random() if rng is not None else random.random()
-        success = rand > per
+        success = per < 1.0 and rand >= per
         return rssi, snr, self.airtime(payload_size), success
 
 
