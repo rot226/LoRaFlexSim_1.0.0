@@ -458,3 +458,46 @@ class NetworkServer:
                             node, adr_command=(sf, power, node.chmask, node.nb_trans)
                         )
                         node.snr_history.clear()
+
+    def compute_explora_at(self, node, rssi: float) -> tuple[int, float, float]:
+        """Return ``(sf, power, interval)`` for the Explora-AT algorithm.
+
+        The computation uses a simple SNR margin approach similar to ADR.  The
+        spreading factor is chosen as the smallest value whose required SNR is
+        met, the power is nudged in 3 dB steps and the suggested interval grows
+        exponentially with the SF.
+        """
+
+        snr = rssi - self.channel.noise_floor_dBm()
+        sf = 12
+        for cand in range(7, 13):
+            if snr >= REQUIRED_SNR.get(cand, -20.0):
+                sf = cand
+                break
+        required = REQUIRED_SNR.get(sf, -20.0)
+        margin = snr - required
+        power = node.tx_power
+        if margin > MARGIN_DB:
+            power = max(2.0, power - 3.0)
+        elif margin < 0:
+            power = min(14.0, power + 3.0)
+        interval = float(2 ** (sf - 7))
+        return sf, power, interval
+
+    def explora_at(self, node_id: int, rssi: float) -> tuple[int, float, float]:
+        """Compute and apply Explora-AT parameters for ``node_id``."""
+
+        node = next((n for n in self.nodes if n.id == node_id), None)
+        if node is None:
+            raise ValueError("Unknown node")
+        sf, power, interval = self.compute_explora_at(node, rssi)
+        node.sf = sf
+        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
+            node.sf, node.channel.bandwidth
+        ) + node.channel.sensitivity_margin_dB
+        from .lorawan import LoRaWANFrame
+
+        frame = LoRaWANFrame(mhdr=0x60, fctrl=0, fcnt=node.fcnt_down, payload=bytes([0xF1, int(power)]))
+        node.handle_downlink(frame)
+        node.fcnt_down += 1
+        return sf, power, interval

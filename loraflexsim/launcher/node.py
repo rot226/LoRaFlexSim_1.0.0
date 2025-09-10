@@ -934,6 +934,14 @@ class Node:
                     self.pending_mac_cmd = ResetInd(conf.minor).to_bytes()
                 except Exception:
                     pass
+            elif len(payload) >= 2 and payload[0] == 0xF1:
+                # Custom command used by the Explora-AT algorithm to update the
+                # transmission power.  The second byte carries the new power in
+                # dBm and no acknowledgement is returned.
+                try:
+                    self.tx_power = float(payload[1])
+                except Exception:
+                    pass
             elif payload.startswith(b"ADR:"):
                 try:
                     _, sf_str, pwr_str = payload.decode().split(":")
