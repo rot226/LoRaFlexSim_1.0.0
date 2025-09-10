@@ -5,6 +5,8 @@ Pour un aperçu des différences avec FLoRa, consultez docs/lorawan_features.md.
 Les principales équations sont décrites dans docs/equations_flora.md.
 Une synthèse des protocoles ADR est disponible dans docs/adr_protocols.md.
 
+Le protocole `ADR_ML` fournit une stratégie ADR basée sur le machine learning.
+
 Par défaut, le module `Channel` charge la table de bruit de FLoRa en analysant
 `flora-master/src/LoRaPhy/LoRaAnalogModel.cc` si le fichier est présent. Cette
 table est injectée dans la fonction `_flora_noise_dBm` pour les calculs de

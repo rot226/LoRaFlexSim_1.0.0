@@ -27,7 +27,7 @@ from launcher.channel import Channel  # noqa: E402
 from launcher import (
     adr_standard_1,
     adr_2,
-    adr_ml,
+    adr_ml,  # stratégie ADR basée sur le ML
     explora_sf,
     explora_at,
     adr_lite,
