@@ -24,7 +24,7 @@ for path in (ROOT_DIR, REPO_ROOT):
 
 from launcher.simulator import Simulator  # noqa: E402
 from launcher.channel import Channel  # noqa: E402
-from launcher import adr_standard_1, adr_2, adr_3, explora_sf, explora_at  # noqa: E402
+from launcher import adr_standard_1, adr_2, adr_3, explora_sf, explora_at, adr_lite  # noqa: E402
 
 # --- Initialisation Panel ---
 pn.extension("plotly", raw_css=[
@@ -135,6 +135,7 @@ adr2_button = pn.widgets.Button(name="adr_2")
 adr3_button = pn.widgets.Button(name="adr_3")
 explora_sf_button = pn.widgets.Button(name="EXPLoRa-SF")
 explora_at_button = pn.widgets.Button(name="EXPLoRa-AT")
+adr_lite_button = pn.widgets.Button(name="ADR-Lite")
 adr_active_badge = pn.pane.HTML("", width=80)
 
 # --- Choix SF et puissance initiaux identiques ---
@@ -539,7 +540,14 @@ def select_adr(module, name: str) -> None:
     adr_node_checkbox.value = True
     adr_server_checkbox.value = True
     _update_adr_badge(name)
-    for btn in (adr1_button, adr2_button, adr3_button, explora_sf_button, explora_at_button):
+    for btn in (
+        adr1_button,
+        adr2_button,
+        adr3_button,
+        explora_sf_button,
+        explora_at_button,
+        adr_lite_button,
+    ):
         btn.button_type = "default"
     if name == "ADR 1":
         adr1_button.button_type = "primary"
@@ -549,8 +557,10 @@ def select_adr(module, name: str) -> None:
         adr3_button.button_type = "primary"
     elif name == "EXPLoRa-SF":
         explora_sf_button.button_type = "primary"
-    else:
+    elif name == "EXPLoRa-AT":
         explora_at_button.button_type = "primary"
+    elif name == "ADR-Lite":
+        adr_lite_button.button_type = "primary"
     if sim is not None:
         if module is adr_standard_1:
             module.apply(sim, degrade_channel=True, profile="flora")
@@ -1236,6 +1246,7 @@ adr2_button.on_click(lambda event: select_adr(adr_2, "ADR 2"))
 adr3_button.on_click(lambda event: select_adr(adr_3, "ADR 3"))
 explora_sf_button.on_click(lambda event: select_adr(explora_sf, "EXPLoRa-SF"))
 explora_at_button.on_click(lambda event: select_adr(explora_at, "EXPLoRa-AT"))
+adr_lite_button.on_click(lambda event: select_adr(adr_lite, "ADR-Lite"))
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1255,7 +1266,15 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    pn.Row(adr1_button, adr2_button, adr3_button, explora_sf_button, explora_at_button, adr_active_badge),
+    pn.Row(
+        adr1_button,
+        adr2_button,
+        adr3_button,
+        explora_sf_button,
+        explora_at_button,
+        adr_lite_button,
+        adr_active_badge,
+    ),
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
