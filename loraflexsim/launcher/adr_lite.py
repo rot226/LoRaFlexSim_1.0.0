@@ -3,11 +3,17 @@ from __future__ import annotations
 from .simulator import Simulator
 from .channel import Channel
 from .lorawan import TX_POWER_INDEX_TO_DBM
+from . import server
 
 
 def apply(sim: Simulator) -> None:
     """Configure simplified ADR-Lite parameters."""
     Simulator.MARGIN_DB = 15.0
+    # Use fixed SNR thresholds to emulate the lightweight ADR behaviour
+    snr_thresholds = {7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0}
+    Simulator.REQUIRED_SNR = snr_thresholds
+    server.REQUIRED_SNR = snr_thresholds
+
     sim.adr_node = True
     sim.adr_server = True
     sim.adr_method = "max"

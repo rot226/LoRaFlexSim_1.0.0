@@ -33,6 +33,7 @@ from launcher import (
     adr_lite,
     adr_max,
     radr,
+    ADR_MODULES,
 )  # noqa: E402
 
 # --- Initialisation Panel ---
@@ -139,16 +140,6 @@ adr_node_checkbox = pn.widgets.Checkbox(name="ADR nœud", value=True)
 adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 
 # --- Boutons de sélection du profil ADR ---
-ADR_MODULES = {
-    "ADR 1": adr_standard_1,
-    "ADR 2": adr_2,
-    "ADR_ML": adr_ml,
-    "EXPLoRa-SF": explora_sf,  # Spreading-factor fairness
-    "EXPLoRa-AT": explora_at,
-    "ADR-Lite": adr_lite,
-    "ADR-Max": adr_max,
-    "RADR": radr,
-}
 adr_buttons = {
     name: pn.widgets.Button(name=name, button_type="primary" if name == "ADR 1" else "default")
     for name in ADR_MODULES

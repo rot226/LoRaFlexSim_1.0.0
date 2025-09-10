@@ -464,6 +464,31 @@ class NetworkServer:
                                 node.nb_trans,
                             ),
                         )
+                elif self.adr_method == "adr-lite":
+                    # ADR-Lite: quick adjustment using fixed SNR thresholds
+                    optimal_sf = 12
+                    for sf in range(7, 13):
+                        required = REQUIRED_SNR.get(sf, -20.0) + MARGIN_DB
+                        if snr >= required:
+                            optimal_sf = sf
+                            break
+                    if optimal_sf != node.sf:
+                        node.sf = optimal_sf
+                        node.channel.detection_threshold_dBm = (
+                            Channel.flora_detection_threshold(
+                                node.sf, node.channel.bandwidth
+                            )
+                            + node.channel.sensitivity_margin_dB
+                        )
+                        self.send_downlink(
+                            node,
+                            adr_command=(
+                                optimal_sf,
+                                node.tx_power,
+                                node.chmask,
+                                node.nb_trans,
+                            ),
+                        )
                 else:
                     from .lorawan import (
                         DBM_TO_TX_POWER_INDEX,
