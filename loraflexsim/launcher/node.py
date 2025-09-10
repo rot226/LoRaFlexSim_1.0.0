@@ -522,18 +522,17 @@ class Node:
         """
         if rng is None:
             rng = self.rng
-        assert isinstance(rng, np.random.Generator) and isinstance(
-            rng.bit_generator, np.random.MT19937
-        ), "rng must be numpy.random.Generator using MT19937"
-        assert isinstance(mean_interval, float) and mean_interval > 0, (
-            "mean_interval must be positive float"
-        )
-        assert isinstance(min_interval, float) and min_interval >= 0.0, (
-            "min_interval must be non-negative float"
-        )
-        assert isinstance(variation, float) and variation >= 0.0, (
-            "variation must be non-negative float"
-        )
+        if not (
+            isinstance(rng, np.random.Generator)
+            and isinstance(rng.bit_generator, np.random.MT19937)
+        ):
+            raise TypeError("rng must be numpy.random.Generator using MT19937")
+        if not (isinstance(mean_interval, float) and mean_interval > 0):
+            raise ValueError("mean_interval must be positive float")
+        if not (isinstance(min_interval, float) and min_interval >= 0.0):
+            raise ValueError("min_interval must be non-negative float")
+        if not (isinstance(variation, float) and variation >= 0.0):
+            raise ValueError("variation must be non-negative float")
         last = self.arrival_queue[-1] if self.arrival_queue else self._last_arrival_time
         while (not self.arrival_queue or last <= up_to) and (
             limit is None or self.arrival_interval_count < limit
