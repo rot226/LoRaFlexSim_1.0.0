@@ -440,30 +440,60 @@ class NetworkServer:
                             ),
                         )
                 elif self.adr_method == "adr-max":
-                    # ADR-Max : choisir le SF le plus élevé supportant le lien
-                    optimal_sf = 7
-                    for sf in range(12, 6, -1):
-                        required = REQUIRED_SNR.get(sf, -20.0) + MARGIN_DB
-                        if snr >= required:
-                            optimal_sf = sf
-                            break
-                    if optimal_sf != node.sf:
-                        node.sf = optimal_sf
-                        node.channel.detection_threshold_dBm = (
-                            Channel.flora_detection_threshold(
-                                node.sf, node.channel.bandwidth
+                    from .lorawan import (
+                        DBM_TO_TX_POWER_INDEX,
+                        TX_POWER_INDEX_TO_DBM,
+                    )
+
+                    node.snr_history.append(snr)
+                    if len(node.snr_history) > 20:
+                        node.snr_history.pop(0)
+                    if len(node.snr_history) >= 20:
+                        snr_max = max(node.snr_history)
+                        required = REQUIRED_SNR.get(node.sf, -20.0)
+                        margin = snr_max - required - MARGIN_DB
+                        nstep = round(margin / 3.0)
+
+                        sf = node.sf
+                        p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
+                        max_power_index = max(TX_POWER_INDEX_TO_DBM.keys())
+
+                        if nstep > 0:
+                            while nstep > 0 and sf > 7:
+                                sf -= 1
+                                nstep -= 1
+                            while nstep > 0 and p_idx < max_power_index:
+                                p_idx += 1
+                                nstep -= 1
+                        elif nstep < 0:
+                            while nstep < 0 and p_idx > 0:
+                                p_idx -= 1
+                                nstep += 1
+                            while nstep < 0 and sf < 12:
+                                sf += 1
+                                nstep += 1
+
+                        power = TX_POWER_INDEX_TO_DBM.get(p_idx, node.tx_power)
+
+                        if sf != node.sf or power != node.tx_power:
+                            node.sf = sf
+                            node.channel.detection_threshold_dBm = (
+                                Channel.flora_detection_threshold(
+                                    node.sf, node.channel.bandwidth
+                                )
+                                + node.channel.sensitivity_margin_dB
                             )
-                            + node.channel.sensitivity_margin_dB
-                        )
-                        self.send_downlink(
-                            node,
-                            adr_command=(
-                                optimal_sf,
-                                node.tx_power,
-                                node.chmask,
-                                node.nb_trans,
-                            ),
-                        )
+                            node.tx_power = power
+                            self.send_downlink(
+                                node,
+                                adr_command=(
+                                    sf,
+                                    power,
+                                    node.chmask,
+                                    node.nb_trans,
+                                ),
+                            )
+                            node.snr_history.clear()
                 elif self.adr_method == "adr-lite":
                     # ADR-Lite: quick adjustment using fixed SNR thresholds
                     optimal_sf = 12

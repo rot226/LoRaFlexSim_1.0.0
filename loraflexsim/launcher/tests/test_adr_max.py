@@ -31,7 +31,7 @@ def test_adr_max_apply_configures_simulator():
     assert node.adr_ack_delay == 32
 
 
-def test_adr_max_server_selects_highest_sf():
+def test_adr_max_server_uses_snr_history():
     sim = Simulator(
         num_nodes=1,
         num_gateways=1,
@@ -46,12 +46,10 @@ def test_adr_max_server_selects_highest_sf():
     adr_max.apply(sim)
     node = sim.nodes[0]
     ns = sim.network_server
-    node.sf = 7
-    node.channel.detection_threshold_dBm = (
-        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
-        + node.channel.sensitivity_margin_dB
-    )
     noise = ns.channel.noise_floor_dBm()
-    rssi = noise + server.REQUIRED_SNR[7] + server.MARGIN_DB + 5.0
-    ns.receive(1, node.id, sim.gateways[0].id, rssi)
-    assert node.sf == 12
+    rssi = noise + server.REQUIRED_SNR[12] + server.MARGIN_DB + 30.0
+    for i in range(20):
+        ns.receive(i + 1, node.id, sim.gateways[0].id, rssi)
+    assert node.sf == 7
+    assert node.tx_power == 4.0
+    assert node.snr_history == []
