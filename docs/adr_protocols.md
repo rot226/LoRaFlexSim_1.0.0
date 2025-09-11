@@ -9,7 +9,7 @@ Le protocole `ADR_ML` propose une approche fondée sur le machine learning.
 | EXPLoRa-SF | Répartition équitable des spreading factors pour maximiser le débit global. | Non | Améliore l'équité entre nœuds, réduit les collisions. | Nécessite une coordination centrale, peut augmenter la latence pour certains nœuds. |
 | EXPLoRa-AT | Extension d'EXPLoRa optimisant SF et temps d'accès pour équilibrer l'occupation du canal. | Non | Meilleure utilisation du temps d'antenne, réduit la congestion. | Complexité accrue, besoin de synchronisation précise. |
 | ADR-Lite | Version simplifiée avec seuils SNR fixes pour un ajustement rapide. | Non | Faible calcul côté serveur, adaptation rapide. | Moins précise, risque d'augmentation de la consommation ou des collisions. |
-| ADR-Max | Sélection agressive du spreading factor maximal supporté. | Non | Robustesse accrue et portée maximale. | Temps d'antenne long, capacité réseau réduite, risque de congestion. |
+| ADR-Max | Algorithme ADR standard exploitant le SNR maximal des 20 derniers uplinks pour réduire SF et puissance. | Non | Compatible LoRaWAN, optimise le débit. | Requiert un historique suffisant, réagit lentement aux variations rapides. |
 | RADR | ADR réactif ajustant SF et puissance à chaque message selon la dernière qualité du lien. | Oui | Très réactif aux variations, adapté aux scénarios de mobilité. | Mesures bruyantes entraînant des oscillations, nécessite plus de signalisations. |
 | ADR_ML | Modèle fondé sur le machine learning pour prédire SF et puissance à partir des caractéristiques du lien. | Oui | Peut s'adapter à des scénarios complexes, performances potentielles supérieures. | Besoin de données d'entraînement, coût computationnel, explicabilité limitée. |
 
@@ -17,20 +17,21 @@ L'algorithme **ADR-Lite** n'emploie aucun procédé de machine learning : il se
 
 ## ADR-Max
 
-Cette stratégie force les nœuds à utiliser le plus grand spreading factor que la
-qualité de liaison permet encore de décoder. Elle privilégie donc la portée et
-la robustesse plutôt que le débit.
+Cette stratégie suit l'algorithme ADR standard décrit dans la spécification LoRaWAN.
+Le serveur calcule le SNR maximal observé parmi les 20 derniers uplinks d'un nœud.
+Lorsque ce SNR offre une marge suffisante, l'algorithme réduit d'abord le
+spreading factor puis la puissance d'émission afin d'augmenter le débit tout en
+restant compatible avec LoRaWAN.
 
 **Avantages**
 
-- Portée maximale et meilleure tolérance aux fluctuations de SNR.
-- Mise en œuvre simple côté serveur comme côté nœud.
+- Optimise le débit et la consommation énergétique.
+- Conserve une compatibilité totale avec la spécification LoRaWAN.
 
 **Risques**
 
-- Occupe longtemps le canal, ce qui réduit la capacité globale du réseau.
-- Peut augmenter la consommation énergétique et les collisions lorsque de
-  nombreux nœuds l'utilisent simultanément.
+- Nécessite au moins 20 uplinks pour une estimation fiable.
+- Réagit lentement aux fluctuations rapides du canal radio.
 
 ## EXPLoRa-AT
 
