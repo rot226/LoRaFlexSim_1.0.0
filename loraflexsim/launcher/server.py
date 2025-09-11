@@ -85,6 +85,32 @@ class NetworkServer:
         """Record that a beacon was emitted at ``time``."""
         self.last_beacon_time = time
 
+    def assign_explora_sf_groups(self) -> None:
+        """Assign nodes to spreading factor groups based on last RSSI."""
+        nodes = [n for n in self.nodes if getattr(n, "last_rssi", None) is not None]
+        if not nodes:
+            return
+        nodes.sort(key=lambda n: n.last_rssi, reverse=True)
+        base, extra = divmod(len(nodes), 6)
+        index = 0
+        for i, sf in enumerate(range(7, 13)):
+            size = base + (1 if i < extra else 0)
+            group = nodes[index : index + size]
+            for node in group:
+                if node.sf != sf:
+                    node.sf = sf
+                    node.channel.detection_threshold_dBm = (
+                        Channel.flora_detection_threshold(
+                            node.sf, node.channel.bandwidth
+                        )
+                        + node.channel.sensitivity_margin_dB
+                    )
+                    self.send_downlink(
+                        node,
+                        adr_command=(sf, node.tx_power, node.chmask, node.nb_trans),
+                    )
+            index += size
+
     # ------------------------------------------------------------------
     # Downlink management
     # ------------------------------------------------------------------
@@ -412,33 +438,11 @@ class NetworkServer:
         if self.adr_enabled and rssi is not None:
             node = next((n for n in self.nodes if n.id == node_id), None)
             if node:
+                node.last_rssi = rssi
                 snr = rssi - self.channel.noise_floor_dBm()
                 if self.adr_method == "explora-sf":
-                    # EXPLoRa-SF : choisir le plus petit SF garantissant
-                    # une marge suffisante sur la mesure de SNR.
-                    optimal_sf = 12
-                    for sf in range(7, 13):
-                        required = REQUIRED_SNR.get(sf, -20.0) + MARGIN_DB
-                        if snr >= required:
-                            optimal_sf = sf
-                            break
-                    if optimal_sf != node.sf:
-                        node.sf = optimal_sf
-                        node.channel.detection_threshold_dBm = (
-                            Channel.flora_detection_threshold(
-                                node.sf, node.channel.bandwidth
-                            )
-                            + node.channel.sensitivity_margin_dB
-                        )
-                        self.send_downlink(
-                            node,
-                            adr_command=(
-                                optimal_sf,
-                                node.tx_power,
-                                node.chmask,
-                                node.nb_trans,
-                            ),
-                        )
+                    if all(getattr(n, "last_rssi", None) is not None for n in self.nodes):
+                        self.assign_explora_sf_groups()
                 elif self.adr_method == "adr-max":
                     from .lorawan import (
                         DBM_TO_TX_POWER_INDEX,
