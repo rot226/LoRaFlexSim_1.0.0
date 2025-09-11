@@ -80,6 +80,24 @@ python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 Le premier script génère `results/mobility_multichannel.csv`, puis le second
 crée des graphiques dans le dossier `figures`.
 
+## Activer EXPLoRa-AT
+
+Pour répartir équitablement le temps d'antenne entre les spreading factors,
+le simulateur peut être configuré avec l'algorithme EXPLoRa‑AT :
+
+```python
+from loraflexsim.launcher import Simulator, explora_at
+
+sim = Simulator(nodes=100, packets=50)
+explora_at.apply(sim)  # active l'ADR EXPLoRa‑AT
+sim.run()
+```
+
+Après quelques uplinks, le serveur trie les nœuds par RSSI et leur assigne
+un SF de sorte que `N_sf * Channel.airtime(sf)` soit identique pour tous les
+groupes. La puissance d'émission est ensuite augmentée ou réduite par pas
+de 3 dB pour maintenir une marge SNR positive.
+
 ## Interprétation des métriques
 
 - **PDR** (« Packet Delivery Ratio ») : pourcentage de paquets reçus. 100 %

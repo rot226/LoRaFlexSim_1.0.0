@@ -40,3 +40,53 @@ d'installation de 10 dB et le spreading factor SF12. Chaque nœud émet
 ainsi à puissance maximale et l'algorithme ajuste ensuite SF et puissance
 en fonction du SNR mesuré lors des premiers uplinks pour équilibrer
 l'occupation du canal.
+
+Le serveur trie d'abord les nœuds par RSSI décroissant puis répartit les
+spreading factors de manière à ce que le temps d'antenne cumulé soit
+identique pour chaque groupe. La durée d'un paquet pour un SF donné est
+calculée par la fonction :func:`Channel.airtime(sf, L)`\u2009; elle implémente
+la formule LoRa classique\u00a0:
+
+\[
+t_{\text{air}} = t_{\text{preamble}} + t_{\text{payload}},\qquad
+t_{\text{preamble}} = (N_{\text{preamble}}+4.25)T_s,
+\]
+\[
+T_s = \frac{2^{\text{SF}}}{\text{BW}},\qquad
+n_{\text{payload}} = \max\left(\left\lceil\frac{8L-4\text{SF}+28+16}{4(\text{SF}-2d_e)}\right\rceil,0\right)(\text{CR}+4)+8,
+\]
+\[
+t_{\text{payload}} = n_{\text{payload}}T_s
+\]
+avec \(L\) la taille de la charge utile (20\u00a0octets par défaut) et
+\(d_e\) l'activation du "low data rate".
+
+Les tailles de groupes sont alors dérivées pour que
+\(N_{\text{SF}} t_{\text{air}}(\text{SF})\) soit constant\u00a0:
+
+\[
+N_{\text{SF}} = \frac{N}{t_{\text{air}}(\text{SF})\sum_{s=7}^{12} 1/t_{\text{air}}(s)}.
+\]
+
+Chaque nœud démarre en SF12 avec une puissance de 14\u00a0dBm. Après les
+premières mesures de SNR, le serveur vérifie la marge
+\(\text{margin} = \text{RSSI} - \text{bruit} - \text{SNR}_{\text{req}}(\text{SF}) - MARGIN_{\text{dB}}\).
+La puissance est ajustée par pas de 3\u00a0dB pour maintenir une marge
+positive; si celle\u2011ci reste négative, le SF est augmenté. Une marge
+supérieure à 3\u00a0dB entraîne une réduction de puissance. Un
+``LinkADRReq`` est envoyé à chaque changement.
+
+### Exemple de configuration
+
+```python
+from loraflexsim.launcher import Simulator, explora_at
+
+sim = Simulator(nodes=50, packets=100, interval=60.0)
+explora_at.apply(sim)  # active EXPLoRa‑AT
+sim.run()
+```
+
+Les nœuds les plus proches reçoivent ainsi un SF plus faible et une
+puissance réduite, tandis que les nœuds éloignés conservent un SF plus
+élevé et la pleine puissance, aboutissant à une occupation du canal
+uniforme.
