@@ -111,6 +111,92 @@ class NetworkServer:
                     )
             index += size
 
+    def assign_explora_at_groups(self) -> None:
+        """Assign nodes to SF groups balancing total airtime.
+
+        Nodes are first ordered by their last RSSI (strongest to weakest).
+        Group sizes are derived so that the aggregate airtime used by each
+        spreading factor is roughly identical.  After assigning the target SF
+        for each group, the individual SNR of every node is checked and, if the
+        margin is insufficient, the node is moved to a more robust SF and the
+        transmit power adjusted.  A ``LinkADRReq`` is issued whenever a node
+        needs new parameters.
+        """
+
+        nodes = [n for n in self.nodes if getattr(n, "last_rssi", None) is not None]
+        if not nodes:
+            return
+
+        # Sort from highest RSSI (closest) to lowest (furthest)
+        nodes.sort(key=lambda n: n.last_rssi, reverse=True)
+
+        # Determine group sizes so that group airtimes are uniform
+        airtimes = {sf: self.channel.airtime(sf) for sf in range(7, 13)}
+        inv = {sf: 1.0 / t for sf, t in airtimes.items()}
+        total = sum(inv.values())
+        n_nodes = len(nodes)
+        raw = {sf: n_nodes * inv[sf] / total for sf in range(7, 13)}
+        sizes = {sf: int(raw[sf]) for sf in range(7, 13)}
+        remaining = n_nodes - sum(sizes.values())
+        # Distribute remaining nodes to SFs with largest fractional parts,
+        # favouring lower SFs when remainders are equal.
+        order = sorted(range(7, 13), key=lambda s: (-(raw[s] - sizes[s]), s))
+        for sf in order[:remaining]:
+            sizes[sf] += 1
+
+        from .lorawan import DBM_TO_TX_POWER_INDEX, TX_POWER_INDEX_TO_DBM
+
+        noise = self.channel.noise_floor_dBm()
+        index = 0
+        for sf in range(7, 13):
+            group = nodes[index : index + sizes.get(sf, 0)]
+            for node in group:
+                snr = node.last_rssi - noise
+                target_sf = sf
+                required = REQUIRED_SNR.get(target_sf, -20.0)
+                margin = snr - required - MARGIN_DB
+
+                p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
+                max_idx = max(TX_POWER_INDEX_TO_DBM.keys())
+
+                # Increase power first if the margin is negative
+                while margin < 0 and p_idx > 0:
+                    p_idx -= 1
+                    margin += 3.0
+
+                # If still negative margin, move to a higher SF
+                while margin < 0 and target_sf < 12:
+                    target_sf += 1
+                    required = REQUIRED_SNR.get(target_sf, -20.0)
+                    margin = snr - required - MARGIN_DB
+
+                # Reduce power if we have excess margin
+                while margin >= 3.0 and p_idx < max_idx:
+                    p_idx += 1
+                    margin -= 3.0
+
+                power = TX_POWER_INDEX_TO_DBM.get(p_idx, node.tx_power)
+
+                if node.sf != target_sf or node.tx_power != power:
+                    node.sf = target_sf
+                    node.channel.detection_threshold_dBm = (
+                        Channel.flora_detection_threshold(
+                            node.sf, node.channel.bandwidth
+                        )
+                        + node.channel.sensitivity_margin_dB
+                    )
+                    node.tx_power = power
+                    self.send_downlink(
+                        node,
+                        adr_command=(
+                            target_sf,
+                            power,
+                            node.chmask,
+                            node.nb_trans,
+                        ),
+                    )
+            index += sizes.get(sf, 0)
+
     # ------------------------------------------------------------------
     # Downlink management
     # ------------------------------------------------------------------
@@ -440,9 +526,13 @@ class NetworkServer:
             if node:
                 node.last_rssi = rssi
                 snr = rssi - self.channel.noise_floor_dBm()
+                node.last_snr = snr
                 if self.adr_method == "explora-sf":
                     if all(getattr(n, "last_rssi", None) is not None for n in self.nodes):
                         self.assign_explora_sf_groups()
+                elif self.adr_method == "explora-at":
+                    if all(getattr(n, "last_rssi", None) is not None for n in self.nodes):
+                        self.assign_explora_at_groups()
                 elif self.adr_method == "adr-max":
                     from .lorawan import (
                         DBM_TO_TX_POWER_INDEX,
