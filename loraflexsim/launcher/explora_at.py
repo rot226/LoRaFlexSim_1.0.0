@@ -16,14 +16,19 @@ def apply(sim: Simulator) -> None:
     # Typical installation margin for EXPLoRa-AT. Both the simulator and the
     # network server rely on this constant when evaluating SNR margins.
     Simulator.MARGIN_DB = 10.0
+    # Typical payload size used when balancing airtime across SF groups.
+    Simulator.EXPLORA_AT_PAYLOAD_SIZE = 20
     from . import server as ns
 
     ns.MARGIN_DB = 10.0
+    ns.EXPLORA_AT_PAYLOAD_SIZE = Simulator.EXPLORA_AT_PAYLOAD_SIZE
 
     sim.adr_node = True
     sim.adr_server = True
     sim.network_server.adr_enabled = True
     sim.network_server.adr_method = "explora-at"
+    # Ensure the initial grouping happens once every node has reported SNR
+    sim.network_server.explora_at_groups_assigned = False
 
     for node in sim.nodes:
         # Start with the most robust SF so that connectivity is guaranteed

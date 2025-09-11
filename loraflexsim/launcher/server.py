@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 # Paramètres ADR (valeurs issues de la spécification LoRaWAN)
 REQUIRED_SNR = {7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0}
 MARGIN_DB = 15.0
+# Typical payload size (in bytes) used when balancing airtime for EXPLoRa-AT
+EXPLORA_AT_PAYLOAD_SIZE = 20
 
 
 class NetworkServer:
@@ -69,6 +71,8 @@ class NetworkServer:
         self.ping_slot_interval = 1.0
         self.ping_slot_offset = 2.0
         self.last_beacon_time: float | None = None
+        # Ensure EXPLoRa-AT grouping is only performed once after initial SNRs
+        self.explora_at_groups_assigned = False
 
     def next_beacon_time(self, after_time: float) -> float:
         """Return the next beacon time after ``after_time``."""
@@ -131,7 +135,9 @@ class NetworkServer:
         nodes.sort(key=lambda n: n.last_rssi, reverse=True)
 
         # Determine group sizes so that group airtimes are uniform
-        airtimes = {sf: self.channel.airtime(sf) for sf in range(7, 13)}
+        airtimes = {
+            sf: self.channel.airtime(sf, EXPLORA_AT_PAYLOAD_SIZE) for sf in range(7, 13)
+        }
         inv = {sf: 1.0 / t for sf, t in airtimes.items()}
         total = sum(inv.values())
         n_nodes = len(nodes)
@@ -531,8 +537,14 @@ class NetworkServer:
                     if all(getattr(n, "last_rssi", None) is not None for n in self.nodes):
                         self.assign_explora_sf_groups()
                 elif self.adr_method == "explora-at":
-                    if all(getattr(n, "last_rssi", None) is not None for n in self.nodes):
+                    if (
+                        not self.explora_at_groups_assigned
+                        and all(
+                            getattr(n, "last_rssi", None) is not None for n in self.nodes
+                        )
+                    ):
                         self.assign_explora_at_groups()
+                        self.explora_at_groups_assigned = True
                 elif self.adr_method == "adr-max":
                     from .lorawan import (
                         DBM_TO_TX_POWER_INDEX,
