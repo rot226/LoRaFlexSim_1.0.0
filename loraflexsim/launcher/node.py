@@ -2,7 +2,7 @@
 import math
 import numpy as np
 
-from .energy_profiles import EnergyProfile, FLORA_PROFILE
+from .energy_profiles import EnergyProfile, FLORA_PROFILE, EnergyAccumulator
 from .channel import Channel
 from traffic.exponential import sample_interval
 
@@ -130,6 +130,8 @@ class Node:
         self.energy_startup = 0.0
         self.energy_listen = 0.0
         self.energy_preamble = 0.0
+        # Accumulateur d'énergie par état
+        self.energy = EnergyAccumulator()
         # Transmission counters
         self.packets_sent = 0
         self.packets_success = 0
@@ -426,31 +428,44 @@ class Node:
             )
 
         total = energy_joules + extra + startup + preamble
-        self.energy_consumed += total
         if state == "tx":
+            self.energy.add("tx", energy_joules + extra)
             self.energy_tx += energy_joules + extra
             if startup > 0.0:
+                self.energy.add("startup", startup)
                 self.energy_startup += startup
             if preamble > 0.0:
+                self.energy.add("preamble", preamble)
                 self.energy_preamble += preamble
         elif state == "rx":
+            self.energy.add("rx", energy_joules + extra)
             self.energy_rx += energy_joules + extra
         elif state == "sleep":
+            self.energy.add("sleep", total)
             self.energy_sleep += total
         elif state == "processing":
+            self.energy.add("processing", total)
             self.energy_processing += total
         elif state == "startup":
+            self.energy.add("startup", total)
             self.energy_startup += total
         elif state == "listen":
+            self.energy.add("listen", total)
             self.energy_listen += total
         elif state == "preamble":
+            self.energy.add("preamble", total)
             self.energy_preamble += total
-
+        self.energy_consumed += total
+        
         if self.battery_remaining_j != float("inf"):
             self.battery_remaining_j -= total
             if self.battery_remaining_j <= 0:
                 self.battery_remaining_j = 0.0
                 self.alive = False
+
+    def get_energy_breakdown(self) -> dict[str, float]:
+        """Retourne la consommation d'énergie par état."""
+        return self.energy.to_dict()
 
     def consume_until(self, current_time: float) -> None:
         """Accumulate energy from ``last_state_time`` to ``current_time``."""

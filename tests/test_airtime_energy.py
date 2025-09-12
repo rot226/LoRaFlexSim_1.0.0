@@ -1,4 +1,5 @@
 from loraflexsim.launcher.simulator import Simulator
+import pytest
 
 
 def test_energy_and_airtime_metrics():
@@ -17,3 +18,6 @@ def test_energy_and_airtime_metrics():
     nid = node.id
     assert abs(metrics["energy_by_node"][nid] - node.energy_consumed) < 1e-9
     assert abs(metrics["airtime_by_node"][nid] - node.total_airtime) < 1e-9
+    assert metrics["energy_breakdown_by_node"][nid]["tx"] == pytest.approx(
+        node.energy_tx
+    )
