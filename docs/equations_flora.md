@@ -153,6 +153,22 @@ SNRmargin = 5 - (-12.5) - 10 = 7.5 dB
 Nstep = round(7.5 / 3) = 3
 ```
 
+## Consommation d'énergie
+
+Chaque état du transceiver applique la relation élémentaire
+``E = V \times I \times t`` où ``V`` est la tension d'alimentation,
+``I`` le courant propre à l'état et ``t`` la durée passée dans cet état.
+La méthode ``OmnetPHY.update`` incrémente ainsi quatre compteurs :
+
+- ``E_tx = V \times I_tx \times t_tx`` pour l'émission,
+- ``E_rx = V \times I_rx \times t_rx`` pour la réception,
+- ``E_idle = V \times I_idle \times t_idle`` lorsque la radio est au repos,
+- ``E_start = V \times I_start \times t_start`` durant les phases de
+  démarrage (``start_tx`` ou ``start_rx``).
+
+Un test de régression vérifie l'accumulation correcte de ces énergies lors
+d'une transmission.
+
 ## Tableau de capture SF
 
 La décision de capture entre deux paquets repose sur la matrice

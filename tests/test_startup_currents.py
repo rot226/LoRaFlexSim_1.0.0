@@ -20,16 +20,16 @@ def test_startup_current_energy():
 
     phy.start_tx()
     phy.update(1.0)
-    assert phy.energy_tx == pytest.approx(2.0)
+    assert phy.energy_start == pytest.approx(2.0)
     phy.update(1.0)
-    assert phy.energy_tx == pytest.approx(3.0)
+    assert phy.energy_tx == pytest.approx(1.0)
     phy.stop_tx()
 
     phy.start_rx()
     phy.update(0.5)
-    assert phy.energy_rx == pytest.approx(0.75)
+    assert phy.energy_start == pytest.approx(2.75)
     phy.update(1.0)
-    assert phy.energy_rx == pytest.approx(1.25)
+    assert phy.energy_rx == pytest.approx(0.5)
     phy.stop_rx()
     phy.update(1.0)
 
