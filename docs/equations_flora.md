@@ -12,6 +12,38 @@ loss = PATH_LOSS_D0 + 10 * n * math.log10(distance / REFERENCE_DISTANCE)
 
 avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `n` vaut `2.7` pour le profil `flora`【F:README.md†L424-L433】【F:loraflexsim/launcher/flora_phy.py†L29-L61】.
 
+### Modèle Hata‑Okumura
+
+La variante Hata‑Okumura introduite dans `Channel` suit :
+
+```python
+loss = K1 + K2 * log10(distance_km)
+```
+
+avec `distance_km = distance / 1000`. Les constantes utilisées dans le profil
+``flora_hata`` sont `K1 = 127.5` dB et `K2 = 35.2`【F:loraflexsim/launcher/channel.py†L12-L23】【F:loraflexsim/launcher/channel.py†L69-L76】.
+Par exemple, pour `distance = 2` km :
+
+```text
+loss = 127.5 + 35.2 * log10(2) ≈ 138.1 dB
+```
+
+### Modèle Oulu
+
+Le modèle basé sur les mesures d'Oulu calcule :
+
+```python
+loss = B + 10 * n * log10(distance / d0) - antenna_gain
+```
+
+Les paramètres par défaut sont `B = 128.95` dB, `n = 2.32`, `d0 = 1000` m et
+`antenna_gain = 0` dBi【F:loraflexsim/launcher/channel.py†L26-L42】. Pour une
+distance de `2` km :
+
+```text
+loss = 128.95 + 23.2 * log10(2) ≈ 135.9 dB
+```
+
 ## Taux d'erreur paquet (PER)
 
 La fonction `FloraPHY.packet_error_rate` accepte un paramètre `per_model`
@@ -100,3 +132,42 @@ Une méthode utilitaire expose ce calcul via
 ``Channel.flora_detection_threshold`` qui fournit ``-110`` dBm par défaut
 lorsque la paire ``(SF, BW)`` n'est pas présente dans la table
 【F:loraflexsim/launcher/channel.py†L52-L63】.
+
+## Calcul ADR : SNRmargin et Nstep
+
+Lors de l'ADR serveur, la marge SNR et le nombre de pas d'adaptation sont
+évalués ainsi :
+
+```text
+SNRmargin = SNRm - requiredSNR - adrDeviceMargin
+Nstep = round(SNRmargin / 3)
+```
+
+où `SNRm` est le SNR moyen mesuré et `requiredSNR` le seuil requis selon le
+spreading factor【F:flora-master/src/LoRa/NetworkServerApp.cc†L361-L372】.
+Exemple pour `SNRm = 5` dB, `requiredSNR = -12.5` dB (SF9) et
+`adrDeviceMargin = 10` dB :
+
+```text
+SNRmargin = 5 - (-12.5) - 10 = 7.5 dB
+Nstep = round(7.5 / 3) = 3
+```
+
+## Tableau de capture SF
+
+La décision de capture entre deux paquets repose sur la matrice
+`nonOrthDelta` ; un paquet est conservé si la différence `signalRSSI -
+interferenceRSSI` dépasse la valeur correspondante :
+
+| SF\Interf. | 7  | 8   | 9   | 10  | 11  | 12  |
+|------------|----|-----|-----|-----|-----|-----|
+| **7**      | 1  | -8  | -9  | -9  | -9  | -9  |
+| **8**      | -11| 1   | -11 | -12 | -13 | -13 |
+| **9**      | -15| -13 | 1   | -13 | -14 | -15 |
+| **10**     | -19| -18 | -17 | 1   | -17 | -18 |
+| **11**     | -22| -22 | -21 | -20 | 1   | -20 |
+| **12**     | -25| -25 | -25 | -24 | -23 | 1   |
+
+Par exemple, un paquet SF7 reçu à `-97` dBm en présence d'une interférence SF9
+à `-90` dBm est décodé car `-97 - (-90) = -7` dB ≥ `-9` dB. La table provient du
+récepteur FLoRa【F:flora-master/src/LoRaPhy/LoRaReceiver.h†L60-L67】.
