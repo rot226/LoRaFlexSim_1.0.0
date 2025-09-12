@@ -1414,6 +1414,10 @@ class Simulator:
         energy_by_node = {n.id: n.energy_consumed for n in self.nodes}
         airtime_by_node = {n.id: n.total_airtime for n in self.nodes}
         energy_by_gateway = {gw.id: gw.energy_consumed for gw in self.gateways}
+        energy_breakdown_by_node = {n.id: n.get_energy_breakdown() for n in self.nodes}
+        energy_breakdown_by_gateway = {
+            gw.id: gw.get_energy_breakdown() for gw in self.gateways
+        }
 
         interval_sum = 0.0
         interval_count = 0
@@ -1463,6 +1467,8 @@ class Simulator:
             "energy_by_node": energy_by_node,
             "airtime_by_node": airtime_by_node,
             "energy_by_gateway": energy_by_gateway,
+            "energy_breakdown_by_node": energy_breakdown_by_node,
+            "energy_breakdown_by_gateway": energy_breakdown_by_gateway,
             **{f"energy_class_{ct}_J": energy_by_class[ct] for ct in energy_by_class},
             "retransmissions": self.retransmissions,
         }
@@ -1505,6 +1511,18 @@ class Simulator:
         df["rx_delivered"] = df["node_id"].apply(
             lambda nid: node_dict[nid].rx_delivered
         )
+        df["energy_tx_J_node"] = df["node_id"].apply(
+            lambda nid: node_dict[nid].energy_tx
+        )
+        df["energy_rx_J_node"] = df["node_id"].apply(
+            lambda nid: node_dict[nid].energy_rx
+        )
+        df["energy_sleep_J_node"] = df["node_id"].apply(
+            lambda nid: node_dict[nid].energy_sleep
+        )
+        df["energy_processing_J_node"] = df["node_id"].apply(
+            lambda nid: node_dict[nid].energy_processing
+        )
         df["energy_consumed_J_node"] = df["node_id"].apply(
             lambda nid: node_dict[nid].energy_consumed
         )
@@ -1537,6 +1555,10 @@ class Simulator:
             "packets_collision",
             "tx_attempted",
             "rx_delivered",
+            "energy_tx_J_node",
+            "energy_rx_J_node",
+            "energy_sleep_J_node",
+            "energy_processing_J_node",
             "energy_consumed_J_node",
             "battery_capacity_J",
             "battery_remaining_J",

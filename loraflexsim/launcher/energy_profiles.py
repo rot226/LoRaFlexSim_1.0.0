@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections import defaultdict
 
 DEFAULT_TX_CURRENT_MAP_A: dict[float, float] = {
     2.0: 0.02,  # ~20 mA
@@ -35,6 +36,47 @@ class EnergyProfile:
             return 0.0
         key = min(self.tx_current_map_a.keys(), key=lambda k: abs(k - power_dBm))
         return self.tx_current_map_a[key]
+
+    def energy_for(
+        self, state: str, duration_s: float, power_dBm: float | None = None
+    ) -> float:
+        """Return the energy (J) spent in ``state`` during ``duration_s`` seconds."""
+        if duration_s <= 0:
+            return 0.0
+        if state == "sleep":
+            current = self.sleep_current_a
+        elif state == "rx":
+            current = self.rx_current_a
+        elif state == "listen":
+            current = self.listen_current_a
+        elif state == "processing":
+            current = self.process_current_a
+        elif state == "tx":
+            if power_dBm is None:
+                raise ValueError("power_dBm is required for TX energy computation")
+            current = self.get_tx_current(power_dBm)
+        else:
+            current = 0.0
+        return current * self.voltage_v * duration_s
+
+
+class EnergyAccumulator:
+    """Simple accumulator tracking energy per state."""
+
+    def __init__(self) -> None:
+        self._by_state: defaultdict[str, float] = defaultdict(float)
+
+    def add(self, state: str, energy_joules: float) -> None:
+        self._by_state[state] += energy_joules
+
+    def get(self, state: str) -> float:
+        return self._by_state.get(state, 0.0)
+
+    def total(self) -> float:
+        return sum(self._by_state.values())
+
+    def to_dict(self) -> dict[str, float]:
+        return dict(self._by_state)
 
 
 # Default profile based on the FLoRa model (OMNeT++)

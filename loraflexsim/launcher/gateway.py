@@ -5,7 +5,7 @@ from .non_orth_delta import (
     DEFAULT_NON_ORTH_DELTA as FLORA_NON_ORTH_DELTA,
     load_non_orth_delta,
 )
-from .energy_profiles import EnergyProfile, FLORA_PROFILE
+from .energy_profiles import EnergyProfile, FLORA_PROFILE, EnergyAccumulator
 
 # Default energy profile for gateways (same as nodes by default)
 DEFAULT_ENERGY_PROFILE = FLORA_PROFILE
@@ -59,6 +59,10 @@ class Gateway:
         self.energy_rx = 0.0
         self.energy_listen = 0.0
         self.energy_preamble = 0.0
+        self.energy_sleep = 0.0
+        self.energy_processing = 0.0
+        # Accumulateur d'énergie par état
+        self.energy = EnergyAccumulator()
         # Transmissions en cours indexées par (sf, frequency)
         self.active_map: dict[tuple[int, float], list[dict]] = {}
         # Mapping event_id -> (key, dict) for quick removal
@@ -68,6 +72,7 @@ class Gateway:
 
     def add_energy(self, energy_joules: float, state: str = "tx") -> None:
         """Ajoute de l'énergie consommée par la passerelle."""
+        self.energy.add(state, energy_joules)
         self.energy_consumed += energy_joules
         if state == "tx":
             self.energy_tx += energy_joules
@@ -77,6 +82,14 @@ class Gateway:
             self.energy_listen += energy_joules
         elif state == "preamble":
             self.energy_preamble += energy_joules
+        elif state == "sleep":
+            self.energy_sleep += energy_joules
+        elif state == "processing":
+            self.energy_processing += energy_joules
+
+    def get_energy_breakdown(self) -> dict[str, float]:
+        """Retourne la consommation d'énergie par état."""
+        return self.energy.to_dict()
 
     def start_reception(
         self,

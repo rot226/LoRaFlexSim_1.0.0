@@ -34,3 +34,7 @@ def test_cumulative_energy_matches_flora_model():
     assert node.energy_preamble == pytest.approx(
         profile.preamble_current_a * profile.voltage_v * profile.preamble_time_s
     )
+    breakdown = node.get_energy_breakdown()
+    assert breakdown["tx"] == pytest.approx(node.energy_tx)
+    assert breakdown["startup"] == pytest.approx(node.energy_startup)
+    assert node.energy.total() == pytest.approx(node.energy_consumed)
