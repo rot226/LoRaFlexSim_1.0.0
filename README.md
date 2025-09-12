@@ -471,6 +471,24 @@ d'atténuation : ``"lognorm"`` (par défaut), ``"oulu"`` correspondant à
 ``LoRaPathLossOulu`` (B = 128.95 dB, n = 2.32, d0 = 1000 m) ou ``"hata"`` pour
 ``LoRaHataOkumura`` (K1 = 127.5, K2 = 35.2).
 
+Les deux derniers modèles utilisent les expressions suivantes :
+
+```python
+# Hata-Okumura
+loss = K1 + K2 * log10(distance_km)
+
+# Oulu
+loss = B + 10 * n * log10(distance / d0) - antenna_gain
+```
+
+Exemple pour une distance de `2` km avec les paramètres par défaut et sans gain
+d'antenne :
+
+```text
+Hata-Okumura : 127.5 + 35.2 * log10(2) ≈ 138.1 dB
+Oulu : 128.95 + 23.2 * log10(2) ≈ 135.9 dB
+```
+
 
 ## SF et puissance initiaux
 
@@ -495,6 +513,17 @@ le compteur `adr_ack_cnt` respecte le délai `ADR_ACK_DELAY`, est remis à zéro
 sollicite `ADRACKReq`. Cette
 implémentation est complète et directement inspirée du modèle FLoRa,
 adaptée ici sous une forme plus légère sans OMNeT++.
+
+La décision d'ajuster le débit repose sur la marge SNR calculée côté
+serveur :
+
+```text
+SNRmargin = SNRm - requiredSNR - adrDeviceMargin
+Nstep = round(SNRmargin / 3)
+```
+
+Avec `SNRm = 5` dB, `requiredSNR = -12.5` dB (SF9) et `adrDeviceMargin = 10` dB,
+on obtient `SNRmargin = 7.5` dB et `Nstep = 3`【F:flora-master/src/LoRa/NetworkServerApp.cc†L361-L372】.
 
 Lancer l'exemple minimal :
 
@@ -551,6 +580,20 @@ plus faible d'au moins 6 dB et si ce signal domine pendant **cinq symboles de
 preambule** au minimum. Lorsque `phy_model` vaut `"flora"`, `"flora_full"` ou `"flora_cpp"`, la
 décision reprend la matrice `nonOrthDelta` du simulateur FLoRa original ; la
 différence de puissance exigée dépend alors des Spreading Factors en présence.
+
+| SF\Interf. | 7  | 8   | 9   | 10  | 11  | 12  |
+|------------|----|-----|-----|-----|-----|-----|
+| **7**      | 1  | -8  | -9  | -9  | -9  | -9  |
+| **8**      | -11| 1   | -11 | -12 | -13 | -13 |
+| **9**      | -15| -13 | 1   | -13 | -14 | -15 |
+| **10**     | -19| -18 | -17 | 1   | -17 | -18 |
+| **11**     | -22| -22 | -21 | -20 | 1   | -20 |
+| **12**     | -25| -25 | -25 | -24 | -23 | 1   |
+
+Un paquet est conservé si `signalRSSI - interferenceRSSI` est supérieur ou égal
+à la valeur correspondante. Ainsi, un message SF7 à `-97` dBm face à une
+interférence SF9 à `-90` dBm reste décodable car `-97 - (-90) = -7` dB ≥ `-9` dB
+【F:flora-master/src/LoRaPhy/LoRaReceiver.h†L60-L67】.
 
 Pour reproduire un scénario FLoRa :
 1. Passez `flora_mode=True` et `flora_timing=True` lors de la création du
