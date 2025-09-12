@@ -145,9 +145,13 @@ class OmnetPHY:
         self._tx_timer = 0.0
         self._rx_timer = 0.0
         self._tx_level = 1.0 if self.tx_state == "on" else 0.0
+        # Energy accumulated in Joules for each radio state.  The same
+        # elementary relationship ``E = V * I * t`` is applied to
+        # transmission, reception, idle and start-up phases.
         self.energy_tx = 0.0
         self.energy_rx = 0.0
         self.energy_idle = 0.0
+        self.energy_start = 0.0
 
     # ------------------------------------------------------------------
     # Transceiver state helpers
@@ -185,14 +189,16 @@ class OmnetPHY:
         self.rx_state = "off"
 
     def update(self, dt: float) -> None:
-        # Accumulate energy consumption based on current state
+        # Accumulate energy consumption based on current state.
+        # Each branch applies ``E = V * I * t`` to the corresponding
+        # current draw.
         if self.tx_state == "starting":
             current = (
                 self.tx_start_current_a
                 if self.tx_start_current_a is not None
                 else self.tx_current_a
             )
-            self.energy_tx += self.voltage_v * current * dt
+            self.energy_start += self.voltage_v * current * dt
         elif self.tx_state != "off":
             self.energy_tx += (
                 self.voltage_v * self.tx_current_a * self._tx_level * dt
@@ -203,7 +209,7 @@ class OmnetPHY:
                 if self.rx_start_current_a is not None
                 else self.rx_current_a
             )
-            self.energy_rx += self.voltage_v * current * dt
+            self.energy_start += self.voltage_v * current * dt
         elif self.rx_state == "on":
             self.energy_rx += self.voltage_v * self.rx_current_a * dt
         else:
