@@ -697,16 +697,28 @@ class Channel:
         self.last_filter_att_dB = attenuation
         return rssi, snr
 
-    def packet_error_rate(self, snr: float, sf: int, payload_bytes: int = 20) -> float:
-        """Return PER based on the OMNeT++ BER model."""
+    def packet_error_rate(
+        self,
+        snr: float,
+        sf: int,
+        payload_bytes: int = 20,
+        ber_model: str = "croce",
+    ) -> float:
+        """Return PER based on the selected BER model."""
         if getattr(self, "flora_phy", None) and self.use_flora_curves:
             return self.flora_phy.packet_error_rate(snr, sf, payload_bytes)
 
-        from .omnet_modulation import calculate_ber, calculate_ser
+        from .omnet_modulation import calculate_ber, calculate_ber_flora
 
         snir = 10 ** (snr / 10.0)
-        ber = calculate_ber(snir, sf)
-        ser = calculate_ser(snir, sf)
+        if ber_model == "flora":
+            ber = calculate_ber_flora(snir, sf, self.bandwidth)
+        elif ber_model == "croce":
+            ber = calculate_ber(snir, sf)
+        else:
+            raise ValueError(f"Unknown BER model: {ber_model}")
+
+        ser = 1.0 - (1.0 - ber) ** sf
         n_bits = payload_bytes * 8
         per_bit = 1.0 - (1.0 - ber) ** n_bits
         n_sym = math.ceil(n_bits / sf)
