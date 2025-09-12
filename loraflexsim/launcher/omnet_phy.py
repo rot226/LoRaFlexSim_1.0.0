@@ -369,6 +369,59 @@ class OmnetPHY:
         penalty = 1.5 * (freq_factor ** 2 + time_factor ** 2 + phase_factor ** 2)
         return 10 * math.log10(1.0 + penalty)
 
+    def compute_snrs(
+        self,
+        rssi_list: list[float],
+        start_list: list[float],
+        end_list: list[float],
+        noise_dBm: float | None = None,
+    ) -> list[float]:
+        """Return the SNIR for each signal accounting for partial overlaps.
+
+        The implementation mirrors the integration performed by FLoRa's
+        ``LoRaAnalogModel::computeNoise``.  The total noise power over the
+        packet duration is obtained by accumulating the power of all
+        overlapping transmissions weighted by their overlap time.
+        """
+
+        if noise_dBm is None:
+            noise_dBm = self.noise_floor()
+        noise_lin = 10 ** (noise_dBm / 10.0)
+        powers = [10 ** (r / 10.0) for r in rssi_list]
+        snrs: list[float] = []
+        n = len(rssi_list)
+
+        for i in range(n):
+            start_i = start_list[i]
+            end_i = end_list[i]
+            dur_i = max(end_i - start_i, 1e-9)
+
+            # Build the "power change" map as done in LoRaAnalogModel
+            events: dict[float, float] = {start_i: noise_lin, end_i: -noise_lin}
+            for j in range(n):
+                if j == i:
+                    continue
+                o_start = max(start_i, start_list[j])
+                o_end = min(end_i, end_list[j])
+                if o_end <= o_start:
+                    continue
+                p = powers[j]
+                events[o_start] = events.get(o_start, 0.0) + p
+                events[o_end] = events.get(o_end, 0.0) - p
+
+            level = 0.0
+            last = start_i
+            energy = 0.0
+            for t in sorted(events):
+                energy += level * (t - last)
+                level += events[t]
+                last = t
+
+            avg_noise = energy / dur_i
+            snrs.append(10 * math.log10(powers[i] / avg_noise))
+
+        return snrs
+
     def capture(
         self,
         rssi_list: list[float],
@@ -438,19 +491,7 @@ class OmnetPHY:
             return winners
 
         noise = self.noise_floor()
-        powers = [10 ** (r / 10.0) for r in rssi_list]
-        snrs: list[float] = []
-        for i in range(n):
-            total = 10 ** (noise / 10.0)
-            dur_i = max(end_list[i] - start_list[i], 1e-9)
-            for j in range(n):
-                if j == i:
-                    continue
-                overlap = min(end_list[i], end_list[j]) - max(start_list[i], start_list[j])
-                if overlap <= 0.0:
-                    continue
-                total += (overlap / dur_i) * powers[j]
-            snrs.append(10 * math.log10(powers[i] / total))
+        snrs = self.compute_snrs(rssi_list, start_list, end_list, noise)
 
         order = sorted(range(n), key=lambda i: snrs[i], reverse=True)
         if n == 1:
