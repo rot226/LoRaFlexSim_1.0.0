@@ -8,6 +8,39 @@ import numpy as np
 from .obstacle_loss import ObstacleLoss
 from .omnet_model import OmnetModel
 
+
+def path_loss_hata_okumura(distance: float, k1: float, k2: float) -> float:
+    """Return Hata-Okumura path loss in dB for ``distance`` in meters.
+
+    The formula follows the model used in FLoRa where the loss is
+    ``K1 + K2 * log10(d/1000)``. The random shadowing component ``σ`` is
+    handled separately by :meth:`Channel.compute_rssi`.
+    """
+
+    if distance <= 0:
+        return 0.0
+    d_km = max(distance, 1.0) / 1000.0
+    return k1 + k2 * math.log10(d_km)
+
+
+def path_loss_oulu(
+    distance: float,
+    b: float,
+    n: float,
+    d0: float,
+    antenna_gain: float,
+) -> float:
+    """Return Oulu path loss in dB for ``distance`` in meters.
+
+    Implements ``B + 10 * n * log10(d/d0) - antennaGain`` as in FLoRa.
+    The Gaussian shadowing term ``σ`` is applied outside this function.
+    """
+
+    if distance <= 0:
+        return 0.0
+    d = max(distance, 1.0)
+    return b + 10 * n * math.log10(d / d0) - antenna_gain
+
 class _CorrelatedValue:
     """Correlated random walk used for optional impairments."""
 
@@ -106,6 +139,12 @@ class Channel:
         shadowing_std: float = 6.0,
         path_loss_d0: float | None = None,
         reference_distance: float = 1.0,
+        hata_k1: float = 127.5,
+        hata_k2: float = 35.2,
+        oulu_b: float = 128.95,
+        oulu_n: float = 2.32,
+        oulu_d0: float = 1000.0,
+        oulu_antenna_gain: float = 2.0,
         fast_fading_std: float = 0.0,
         multipath_taps: int = 1,
         cable_loss_dB: float = 0.0,
@@ -307,6 +346,12 @@ class Channel:
             path_loss_d0 = 32.45 + 20 * math.log10(freq_mhz) - 60.0
         self.path_loss_d0 = path_loss_d0
         self.reference_distance = reference_distance
+        self.hata_k1 = hata_k1
+        self.hata_k2 = hata_k2
+        self.oulu_b = oulu_b
+        self.oulu_n = oulu_n
+        self.oulu_d0 = oulu_d0
+        self.oulu_antenna_gain = oulu_antenna_gain
         self.fast_fading_std = fast_fading_std
         self.multipath_taps = int(multipath_taps)
         self.cable_loss_dB = cable_loss_dB
@@ -513,15 +558,24 @@ class Channel:
         """Calcule la perte de parcours (en dB) pour une distance donnée (m)."""
         if self.omnet_phy:
             return self.omnet_phy.path_loss(distance)
-        if getattr(self, "flora_phy", None):
-            return self.flora_phy.path_loss(distance)
         if distance <= 0:
             return 0.0
-        d = max(distance, 1.0)
-        pl = self.path_loss_d0 + 10 * self.path_loss_exp * math.log10(
-            d / self.reference_distance
-        )
-        return pl + self.system_loss_dB
+        if self.flora_loss_model == "hata":
+            loss = path_loss_hata_okumura(distance, self.hata_k1, self.hata_k2)
+        elif self.flora_loss_model == "oulu":
+            loss = path_loss_oulu(
+                distance,
+                self.oulu_b,
+                self.oulu_n,
+                self.oulu_d0,
+                self.oulu_antenna_gain,
+            )
+        else:
+            d = max(distance, 1.0)
+            loss = self.path_loss_d0 + 10 * self.path_loss_exp * math.log10(
+                d / self.reference_distance
+            )
+        return loss + self.system_loss_dB
 
     def compute_rssi(
         self,
@@ -552,7 +606,7 @@ class Channel:
         loss = self.path_loss(distance)
         if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
             loss += self.obstacle_loss.loss(tx_pos, rx_pos)
-        if self.shadowing_std > 0 and not getattr(self, "flora_phy", None):
+        if self.shadowing_std > 0:
             loss += self.rng.normal(0, self.shadowing_std)
 
         tx_power_dBm += self._pa_nl.sample()
