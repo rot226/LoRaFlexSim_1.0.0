@@ -2,6 +2,7 @@
 
 import heapq
 import logging
+import math
 import random
 import numpy as np
 
@@ -56,6 +57,49 @@ class Event:
 
 logger = logging.getLogger(__name__)
 diag_logger = logging.getLogger("diagnostics")
+
+
+class _TxManager:
+    """Track ongoing transmissions per gateway and frequency."""
+
+    def __init__(self) -> None:
+        self.active: dict[tuple[int, float], list[dict]] = {}
+
+    def add(
+        self,
+        gateway_id: int,
+        frequency: float,
+        rssi_dBm: float,
+        end_time: float,
+        event_id: int,
+    ) -> None:
+        key = (gateway_id, frequency)
+        self.active.setdefault(key, []).append(
+            {"rssi": rssi_dBm, "end": end_time, "id": event_id}
+        )
+
+    def total_power(self, gateway_id: int, frequency: float, current_time: float) -> float:
+        key = (gateway_id, frequency)
+        transmissions = self.active.get(key)
+        if not transmissions:
+            return 0.0
+        total = 0.0
+        remaining = []
+        for t in transmissions:
+            if t["end"] > current_time:
+                total += 10 ** (t["rssi"] / 10.0)
+                remaining.append(t)
+        if remaining:
+            self.active[key] = remaining
+        else:
+            self.active.pop(key, None)
+        return total
+
+    def remove(self, event_id: int) -> None:
+        for key in list(self.active.keys()):
+            self.active[key] = [t for t in self.active[key] if t["id"] != event_id]
+            if not self.active[key]:
+                self.active.pop(key, None)
 
 
 class Simulator:
@@ -578,6 +622,9 @@ class Simulator:
         self.rx_delivered = 0
         self.retransmissions = 0
 
+        # Gestion des transmissions simultanées pour calculer l'interférence
+        self._tx_manager = _TxManager()
+
         # Journal des événements (pour export CSV)
         self.events_log: list[dict] = []
         # Accès direct aux événements par identifiant
@@ -789,6 +836,9 @@ class Simulator:
             # Propagation du paquet vers chaque passerelle
             best_snr = None
             for gw in self.gateways:
+                interference = self._tx_manager.total_power(
+                    gw.id, node.channel.frequency_hz, time
+                )
                 distance = node.distance_to(gw)
                 kwargs = {
                     "freq_offset_hz": getattr(node, "current_freq_offset", 0.0),
@@ -797,8 +847,12 @@ class Simulator:
                     "rx_pos": (gw.x, gw.y, getattr(gw, "altitude", 0.0)),
                 }
                 if hasattr(node.channel, "_obstacle_loss"):
-                    kwargs["tx_angle"] = getattr(node, "orientation_az", getattr(node, "direction", 0.0))
-                    kwargs["rx_angle"] = getattr(gw, "orientation_az", getattr(gw, "direction", 0.0))
+                    kwargs["tx_angle"] = getattr(
+                        node, "orientation_az", getattr(node, "direction", 0.0)
+                    )
+                    kwargs["rx_angle"] = getattr(
+                        gw, "orientation_az", getattr(gw, "direction", 0.0)
+                    )
                 else:
                     kwargs["tx_angle"] = (
                         getattr(node, "orientation_az", 0.0),
@@ -814,8 +868,15 @@ class Simulator:
                     sf,
                     **kwargs,
                 )
+                if interference > 0.0:
+                    noise_lin = 10 ** (node.channel.noise_floor_dBm() / 10.0)
+                    snr -= 10 * math.log10(1.0 + interference / noise_lin)
                 rssi += getattr(gw, "rx_gain_dB", 0.0)
                 snr += getattr(gw, "rx_gain_dB", 0.0)
+                # Enregistrer la transmission pour l'interférence future
+                self._tx_manager.add(
+                    gw.id, node.channel.frequency_hz, rssi, end_time, event_id
+                )
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
                         continue  # trop faible pour être détecté
@@ -906,6 +967,7 @@ class Simulator:
 
         elif priority == EventType.TX_END:
             # Fin d'une transmission – traitement de la réception/perte
+            self._tx_manager.remove(event_id)
             node_id = node.id
             # Marquer la fin de transmission du nœud
             if getattr(node.channel, "omnet_phy", None):
