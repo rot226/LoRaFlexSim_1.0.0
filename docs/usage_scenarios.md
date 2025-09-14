@@ -10,7 +10,7 @@ sortie attendue.
 
 ### `run_mobility_multichannel.py`
 - **Description** : exécute plusieurs scénarios combinant mobilité et mono/tri‑canal,
-  dont `mobile_multi_fast` où les nœuds se déplacent à 10 m/s.
+  dont `mobile_multi_fast`, où les nœuds se déplacent à 10 m/s.
 - **Paramètres principaux**
   - `--nodes` (50) : nombre de nœuds simulés.
   - `--packets` (100) : paquets à émettre par nœud.
@@ -142,7 +142,15 @@ fournies et les tests de mobilité associés.
 5. `run_battery_tracking.py` : enregistre `results/battery_tracking.csv`.
 6. `plot_battery_tracking.py` : sauvegarde `figures/battery_tracking.png`.
 7. `plot_node_positions.py` : exporte la carte des nœuds
-   (`figures/node_positions.png`).
+    (`figures/node_positions.png`).
+
+### Abréviations des figures
+
+Les légendes des graphiques utilisent les abréviations suivantes :
+
+- `N` : nombre de nœuds.
+- `C` : nombre de canaux.
+- `speed` : vitesse des nœuds en m/s.
 
 ### Génération des tests de mobilité
 
