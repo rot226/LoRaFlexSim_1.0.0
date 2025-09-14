@@ -22,6 +22,7 @@ def plot(
     max_energy: float | None = None,
 ) -> None:
     df = pd.read_csv(csv_path)
+    plt.rcParams.update({"font.size": 16})
 
     if "scenario" not in df.columns:
         raise ValueError("CSV must contain a 'scenario' column")
@@ -59,8 +60,8 @@ def plot(
         if mean_col not in df.columns:
             continue
         yerr = df[std_col] if std_col in df.columns else None
-        fig_width = max(12, 0.6 * len(df))
-        fig, ax = plt.subplots(figsize=(fig_width, 6))
+        fig_width = max(16, 0.6 * len(df))
+        fig, ax = plt.subplots(figsize=(fig_width, 8))
         label = f"{name} ({unit})"
         bars = ax.bar(
             range(len(df)),
@@ -76,6 +77,7 @@ def plot(
             df["scenario_label"], rotation=45, ha="right"
         )
         ax.set_ylabel(label)
+        ax.tick_params(axis="both", labelsize=16)
 
         if metric == "pdr":
             cap = 100.0
