@@ -163,6 +163,11 @@ def main() -> None:
             "channels": args.channels,
             "nodes": 200,
         },
+        "static_single_many_nodes": {
+            "mobility": False,
+            "channels": 1,
+            "nodes": 200,
+        },
     }
 
     rows: List[dict] = []
