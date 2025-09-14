@@ -72,7 +72,7 @@ def plot(
 
         ax.set_title(f"{name} by model (0 ≤ {name} ≤ {cap:g} {unit})")
         ax.bar_label(bars, fmt=fmt, label_type="center")
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.25), ncol=1)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.3), ncol=1)
         fig.tight_layout(rect=[0, 0, 1, 0.9])
         for ext in ("png", "jpg", "eps"):
             dpi = 300 if ext in ("png", "jpg") else None
