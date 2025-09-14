@@ -11,34 +11,34 @@ def main(files: list[str], output_dir: Path, basename: str) -> None:
     by_nodes = df.groupby("nodes")["PDR(%)"].mean()
     print(by_nodes)
     by_nodes.plot(marker="o")
-    plt.xlabel("Nombre de nœuds")
-    plt.ylabel("PDR moyen (%)")
+    plt.xlabel("Number of nodes")
+    plt.ylabel("Average PDR (%)")
     plt.grid(True)
     plt.tight_layout()
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext, params in {"png": {"dpi": 300}, "jpg": {"dpi": 300}, "eps": {}}.items():
         path = output_dir / f"{basename}.{ext}"
         plt.savefig(path, **params)
-        print(f"Graphique sauvegardé dans {path}")
+        print(f"Figure saved to {path}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Analyse des résultats et sauvegarde le PDR moyen en PNG, JPG et EPS"
+            "Analyze results and save the mean PDR as PNG, JPG and EPS"
         )
     )
-    parser.add_argument("files", nargs="+", help="Fichiers de résultats CSV")
+    parser.add_argument("files", nargs="+", help="Result CSV files")
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("."),
-        help="Répertoire de sortie (défaut : dossier courant)",
+        help="Output directory (default: current folder)",
     )
     parser.add_argument(
         "--basename",
-        default="pdr_par_nodes",
-        help="Nom de base du fichier sans extension",
+        default="pdr_by_nodes",
+        help="Base filename without extension",
     )
     return parser.parse_args(argv)
 

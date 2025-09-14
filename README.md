@@ -679,47 +679,46 @@ nodes,gateways,channels,mode,interval,steps,delivered,collisions,PDR(%),energy,a
 * **avg_delay** : délai moyen des paquets livrés.
 * **throughput_bps** : débit binaire moyen des paquets délivrés.
 
-## Exemple d'analyse
+## Analysis example
 
-Un script Python d'exemple nommé `analyse_resultats.py` est disponible dans le
-dossier `examples`. Il agrège plusieurs fichiers CSV et trace le PDR en fonction
-du nombre de nœuds :
-
-```bash
-python examples/analyse_resultats.py resultats1.csv resultats2.csv
-```
-
-Le script affiche le PDR moyen puis sauvegarde un graphique `pdr_par_nodes`
-en PNG, JPG et EPS.
-
-Si le même fichier CSV contient plusieurs runs produits avec le dashboard ou
-`run.py --runs`, le script `analyse_runs.py` permet d'obtenir les moyennes par
-run :
+An example Python script named `analyse_resultats.py` is available in the
+`examples` folder. It aggregates several CSV files and plots PDR against the
+number of nodes:
 
 ```bash
-python examples/analyse_runs.py résultats.csv
+python examples/analyse_resultats.py results1.csv results2.csv
 ```
 
-Deux autres utilitaires exploitent les fichiers `metrics_*.csv` exportés par le
-tableau de bord :
+The script prints the average PDR and saves a `pdr_by_nodes` figure
+as PNG, JPG and EPS.
+
+If the same CSV file contains multiple runs produced with the dashboard or
+`run.py --runs`, the `analyse_runs.py` script computes the mean per run:
+
+```bash
+python examples/analyse_runs.py results.csv
+```
+
+Two other utilities work with the `metrics_*.csv` files exported by the
+dashboard:
 
 ```bash
 python examples/plot_sf_distribution.py metrics1.csv metrics2.csv
-python examples/plot_energy.py metrics.csv            # énergie totale
-python examples/plot_energy.py --per-node metrics.csv # par nœud
+python examples/plot_energy.py metrics.csv            # total energy
+python examples/plot_energy.py --per-node metrics.csv # per node
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 ```
 
-`plot_sf_distribution.py` génère `sf_distribution` en PNG, JPG et EPS alors
-que `plot_energy.py` crée `energy_total` ou `energy_per_node` dans ces
-formats.
-`plot_mobility_multichannel.py` enregistre `pdr_vs_scenario.png`,
-`collision_rate_vs_scenario.png` et `avg_energy_per_node_vs_scenario.png`
-dans le dossier `figures/`.
-`plot_mobility_latency_energy.py` crée `pdr_vs_scenario.svg`,
-`avg_delay_vs_scenario.svg` et `avg_energy_per_node_vs_scenario.svg` au
-format vectoriel.
+`plot_sf_distribution.py` generates `sf_distribution` in PNG, JPG and EPS,
+while `plot_energy.py` creates `energy_total` or `energy_per_node` in the
+same formats.
+`plot_mobility_multichannel.py` saves `pdr_vs_scenario.png`,
+`collision_rate_vs_scenario.png` and `avg_energy_per_node_vs_scenario.png`
+in the `figures/` folder.
+`plot_mobility_latency_energy.py` creates `pdr_vs_scenario.svg`,
+`avg_delay_vs_scenario.svg` and `avg_energy_per_node_vs_scenario.svg` as
+vector graphics.
 
 ## Calcul de l'airtime
 

@@ -1,4 +1,4 @@
-"""Trace la distribution des Spreading Factors depuis des fichiers CSV."""
+"""Plot the distribution of Spreading Factors from CSV files."""
 import sys
 import argparse
 from pathlib import Path
@@ -15,7 +15,7 @@ def main(files: list[str], output_dir: Path, basename: str) -> None:
         sf_cols = [c for c in df.columns if c.startswith("sf")]
         sf_counts = {int(c[2:]): int(df[c].sum()) for c in sf_cols}
     if not sf_counts:
-        print("Aucune colonne SF trouvée dans les fichiers fournis.")
+        print("No SF column found in provided files.")
         return
     sfs = sorted(sf_counts)
     counts = [sf_counts[sf] for sf in sfs]
@@ -23,31 +23,31 @@ def main(files: list[str], output_dir: Path, basename: str) -> None:
         print(f"SF{sf}: {count}")
     plt.bar(sfs, counts)
     plt.xlabel("Spreading Factor")
-    plt.ylabel("Paquets")
+    plt.ylabel("Packets")
     plt.grid(True)
     plt.tight_layout()
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext, params in {"png": {"dpi": 300}, "jpg": {"dpi": 300}, "eps": {}}.items():
         path = output_dir / f"{basename}.{ext}"
         plt.savefig(path, **params)
-        print(f"Graphique sauvegardé dans {path}")
+        print(f"Figure saved to {path}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Trace la distribution des SF et sauvegarde en PNG, JPG et EPS"
+        description="Plot SF distribution and save as PNG, JPG and EPS",
     )
-    parser.add_argument("files", nargs="+", help="Fichiers metrics CSV")
+    parser.add_argument("files", nargs="+", help="Metrics CSV files")
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("."),
-        help="Répertoire de sortie (défaut : dossier courant)",
+        help="Output directory (default: current folder)",
     )
     parser.add_argument(
         "--basename",
         default="sf_distribution",
-        help="Nom de base du fichier sans extension",
+        help="Base filename without extension",
     )
     return parser.parse_args(argv)
 
