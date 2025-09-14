@@ -99,7 +99,12 @@ def main() -> None:
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on server")
     parser.add_argument("--area-size", type=float, default=1000.0, help="Square area size in metres")
     parser.add_argument("--interval", type=float, default=60.0, help="Mean packet interval (s)")
-    parser.add_argument("--replicates", type=int, default=1, help="Number of simulation replicates")
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=5,
+        help="Number of simulation replicates (>=5)",
+    )
     parser.add_argument("--path-map", help="Path map file (JSON or CSV) for path mobility")
     parser.add_argument(
         "--model",
@@ -108,6 +113,9 @@ def main() -> None:
         help="Mobility model to simulate (may be repeated). Defaults to all.",
     )
     args = parser.parse_args()
+
+    if args.replicates < 5:
+        parser.error("replicates must be ≥5")
 
     if args.model and "path" in args.model and not args.path_map:
         parser.error("--path-map is required when using the 'path' model")
