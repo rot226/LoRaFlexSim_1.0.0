@@ -18,8 +18,8 @@ def path_loss_hata_okumura(distance: float, k1: float, k2: float) -> float:
     """
 
     if distance <= 0:
-        return 0.0
-    d_km = max(distance, 1.0) / 1000.0
+        raise ValueError("distance must be > 0")
+    d_km = distance / 1000.0
     return k1 + k2 * math.log10(d_km)
 
 
@@ -37,9 +37,8 @@ def path_loss_oulu(
     """
 
     if distance <= 0:
-        return 0.0
-    d = max(distance, 1.0)
-    return b + 10 * n * math.log10(d / d0) - antenna_gain
+        raise ValueError("distance must be > 0")
+    return b + 10 * n * math.log10(distance / d0) - antenna_gain
 
 class _CorrelatedValue:
     """Correlated random walk used for optional impairments."""
