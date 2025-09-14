@@ -50,7 +50,7 @@ def plot(
             color=color,
             label=label,
         )
-        ax.set_xlabel("Mobility model")
+        ax.set_xlabel("")
         ax.set_xticks(x)
         ax.set_xticklabels(df["model"], rotation=45, ha="right")
         ax.set_ylabel(label)
