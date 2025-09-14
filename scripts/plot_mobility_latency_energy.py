@@ -90,7 +90,7 @@ def plot(
             color=color,
             label=label,
         )
-        ax.set_xlabel("Scenario")
+        ax.set_xlabel("")
         ax.set_xticks(range(len(df["scenario"])))
         ax.set_xticklabels(df["scenario_label"], rotation=45, ha="right")
         ax.set_ylabel(label)
