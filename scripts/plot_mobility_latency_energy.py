@@ -22,6 +22,7 @@ def plot(
     max_energy: float | None = None,
 ) -> None:
     df = pd.read_csv(csv_path)
+    plt.rcParams.update({"font.size": 16})
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -73,7 +74,7 @@ def plot(
         if mean_col not in df.columns:
             continue
         yerr = df[std_col] if std_col in df.columns else None
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(16, 8))
         label = f"{name} ({unit})"
         bars = ax.bar(
             df["scenario"],
@@ -87,6 +88,7 @@ def plot(
         ax.set_xticks(range(len(df["scenario"])))
         ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
         ax.set_ylabel(label)
+        ax.tick_params(axis="both", labelsize=16)
 
         if metric == "pdr":
             cap = 100.0
