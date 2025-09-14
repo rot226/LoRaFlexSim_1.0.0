@@ -22,6 +22,12 @@ def plot(
     max_energy: float | None = None,
 ) -> None:
     df = pd.read_csv(csv_path)
+    if "nodes" in df.columns:
+        df["scenario_label"] = (
+            df["scenario"] + " (" + df["nodes"].astype(str) + " nodes)"
+        )
+    else:
+        df["scenario_label"] = df["scenario"]
     plt.rcParams.update({"font.size": 16})
 
     out_dir = Path(output_dir)
@@ -86,7 +92,7 @@ def plot(
         )
         ax.set_xlabel("Scenario")
         ax.set_xticks(range(len(df["scenario"])))
-        ax.set_xticklabels(df["scenario"], rotation=45, ha="right")
+        ax.set_xticklabels(df["scenario_label"], rotation=45, ha="right")
         ax.set_ylabel(label)
         ax.tick_params(axis="both", labelsize=16)
 
