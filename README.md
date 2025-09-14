@@ -153,6 +153,10 @@ avec `--path-map` :
 python scripts/run_mobility_models.py --model path --path-map carte.json
 ```
 
+Le paramètre `--replicates` répète chaque scénario (valeur par défaut : 5).
+Nous recommandons d'exécuter au moins 5 répétitions pour obtenir des
+statistiques fiables.
+
 ## Multi-canaux
 
 LoRaFlexSim permet d'utiliser plusieurs canaux radio. Passez une instance
