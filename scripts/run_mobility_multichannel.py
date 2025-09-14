@@ -8,6 +8,7 @@ scenarios (``static_single``, ``static_multi``, ``mobile_single`` and
 * ``mobile_multi_fast`` – mobile nodes moving at 10 m/s
 * ``mobile_multi_many_channels`` – mobile nodes operating on six channels
 * ``static_multi_many_nodes`` – static nodes with 200 devices
+* ``mobile_single_many_nodes`` – mobile nodes with 200 devices
 
 The number of nodes, packet interval, mobility speed and number of channels can
 be customised for each scenario via command-line options.  Every scenario may be
@@ -165,6 +166,11 @@ def main() -> None:
         },
         "static_single_many_nodes": {
             "mobility": False,
+            "channels": 1,
+            "nodes": 200,
+        },
+        "mobile_single_many_nodes": {
+            "mobility": True,
             "channels": 1,
             "nodes": 200,
         },
