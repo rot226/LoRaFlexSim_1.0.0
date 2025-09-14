@@ -117,9 +117,9 @@ def plot(
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(
             loc="upper center",
-            bbox_to_anchor=(0.5, 1.25),
+            bbox_to_anchor=(0.5, 1.3),
             ncol=1,
-            title="N : nombre de nœuds, C : nombre de canaux, speed : m/s",
+            title="N: number of nodes, C: number of channels, speed: m/s",
         )
         fig.tight_layout(rect=[0, 0, 1, 0.9])
         stem = Path(filename).stem
