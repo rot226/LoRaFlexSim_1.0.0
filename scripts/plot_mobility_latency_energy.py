@@ -112,7 +112,7 @@ def plot(
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.15), ncol=1)
         fig.tight_layout(rect=[0, 0, 1, 0.9])
         stem = Path(filename).stem
-        for ext in ("png", "jpg", "eps"):
+        for ext in ("png", "jpg", "eps", "svg"):
             dpi = 300 if ext in ("png", "jpg") else None
             fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
         plt.close(fig)
