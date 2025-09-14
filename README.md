@@ -787,6 +787,9 @@ python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
 python scripts/run_mobility_latency_energy.py --nodes 50 --packets 100 --seed 1
 ```
 
+Le script `run_mobility_multichannel.py` propose notamment le scénario
+`mobile_multi_fast` où les nœuds se déplacent à 10 m/s.
+
 `run_mobility_latency_energy.py` produit `results/mobility_latency_energy.csv`
 que `plot_mobility_latency_energy.py` peut visualiser.
 

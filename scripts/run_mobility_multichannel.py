@@ -5,7 +5,7 @@ nodes and mono/multi-channel operation.  In addition to the original four
 scenarios (``static_single``, ``static_multi``, ``mobile_single`` and
 ``mobile_multi``) the following are provided:
 
-* ``mobile_multi_fast`` – mobile nodes with increased speed
+* ``mobile_multi_fast`` – mobile nodes moving at 10 m/s
 * ``mobile_multi_many_channels`` – mobile nodes operating on six channels
 * ``static_multi_many_nodes`` – static nodes with 200 devices
 
@@ -156,7 +156,7 @@ def main() -> None:
         "static_multi": {"mobility": False, "channels": args.channels},
         "mobile_single": {"mobility": True, "channels": 1},
         "mobile_multi": {"mobility": True, "channels": args.channels},
-        "mobile_multi_fast": {"mobility": True, "channels": args.channels, "speed": 20.0},
+        "mobile_multi_fast": {"mobility": True, "channels": args.channels, "speed": 10.0},
         "mobile_multi_many_channels": {"mobility": True, "channels": 6},
         "static_multi_many_nodes": {
             "mobility": False,

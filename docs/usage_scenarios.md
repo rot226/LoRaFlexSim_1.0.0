@@ -9,7 +9,8 @@ sortie attendue.
 ## Scripts de simulation (`run_*`)
 
 ### `run_mobility_multichannel.py`
-- **Description** : exécute quatre scénarios combinant mobilité et mono/tri‑canal.
+- **Description** : exécute plusieurs scénarios combinant mobilité et mono/tri‑canal,
+  dont `mobile_multi_fast` où les nœuds se déplacent à 10 m/s.
 - **Paramètres principaux**
   - `--nodes` (50) : nombre de nœuds simulés.
   - `--packets` (100) : paquets à émettre par nœud.
