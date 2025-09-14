@@ -102,7 +102,7 @@ def plot(
             loc="upper center",
             bbox_to_anchor=(0.5, 1.25),
             ncol=1,
-            title="N : nombre de nœuds, C : nombre de canaux, speed : m/s",
+            title="N: nombre de nœuds, C: nombre de canaux, speed: m/s",
         )
         fig.tight_layout(rect=[0, 0, 1, 0.9])
         for ext in ("png", "jpg", "eps", "svg"):
