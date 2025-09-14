@@ -41,16 +41,25 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    plt.rcParams.update({"font.size": 14})
+    fig, ax = plt.subplots(figsize=(16, 8))
     x = range(len(df[x_col]))
-    bars = ax.bar(x, df["avg_sf_mean"], yerr=df["avg_sf_std"], capsize=4, color="C0")
+    bars = ax.bar(
+        x,
+        df["avg_sf_mean"],
+        yerr=df["avg_sf_std"],
+        capsize=4,
+        color="C0",
+        label="Average SF",
+    )
     ax.set_xticks(x)
     ax.set_xticklabels(df[x_col], rotation=45, ha="right")
     ax.set_xlabel("Mobility model" if by_model else "Scenario")
     ax.set_ylabel("Average SF")
     ax.set_title("Average SF by " + ("model" if by_model else "scenario"))
     ax.bar_label(bars, fmt="%.2f", label_type="center")
-    fig.tight_layout()
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.15), ncol=3)
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
 
     stem = "avg_sf_vs_model" if by_model else "avg_sf_vs_scenario"
     for ext in ("png", "jpg", "eps"):
