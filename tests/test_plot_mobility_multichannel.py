@@ -30,9 +30,17 @@ def test_plot(tmp_path, monkeypatch):
         def get_text(self):
             return self._text
 
+    class _Legend:
+        def __init__(self, title=""):
+            self._title = title
+
+        def get_title(self):
+            return _Tick(self._title)
+
     class _Axes:
         def __init__(self):
             self._labels = []
+            self._legend = None
 
         def bar(self, *args, **kwargs):
             return []
@@ -62,7 +70,11 @@ def test_plot(tmp_path, monkeypatch):
             pass
 
         def legend(self, *args, **kwargs):
-            pass
+            self._legend = _Legend(kwargs.get("title", ""))
+            return self._legend
+
+        def get_legend(self):
+            return self._legend
 
         def get_xticklabels(self):
             return [_Tick(label) for label in self._labels]
@@ -116,3 +128,10 @@ def test_plot(tmp_path, monkeypatch):
     assert labels
     for label in labels:
         assert 'N=' in label and 'C=' in label
+
+    legend = captured['ax'].get_legend()
+    if legend is not None:
+        title = legend.get_title().get_text()
+        assert 'N:' in title and 'C:' in title
+        if 'speed' in title:
+            assert 'speed' in title
