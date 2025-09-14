@@ -92,8 +92,8 @@ def main() -> None:
     ax.set_title("Temporal evolution of residual battery energy")
     ax.set_ylim(0, 100)
     ax.grid(True)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.3), ncol=1)
-    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.4), ncol=1)
+    fig.tight_layout(rect=[0, 0, 1, 0.85])
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
     base = os.path.join(FIGURES_DIR, "battery_tracking")

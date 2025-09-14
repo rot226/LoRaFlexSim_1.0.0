@@ -58,8 +58,8 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
     ax.set_ylabel("Average SF")
     ax.set_title("Average SF by " + ("model" if by_model else "scenario"))
     ax.bar_label(bars, fmt="%.2f", label_type="center")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.3), ncol=3)
-    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.4), ncol=3)
+    fig.tight_layout(rect=[0, 0, 1, 0.85])
 
     stem = "avg_sf_vs_model" if by_model else "avg_sf_vs_scenario"
     for ext in ("png", "jpg", "eps"):
