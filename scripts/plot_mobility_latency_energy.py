@@ -115,7 +115,12 @@ def plot(
             title += f"\n{param_text}"
         ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.15), ncol=1)
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.25),
+            ncol=1,
+            title="N : nombre de nœuds, C : nombre de canaux, speed : m/s",
+        )
         fig.tight_layout(rect=[0, 0, 1, 0.9])
         stem = Path(filename).stem
         for ext in ("png", "jpg", "eps", "svg"):
