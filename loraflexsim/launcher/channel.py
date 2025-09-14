@@ -596,13 +596,25 @@ class Channel:
         représenter l'effet d'étalement de spectre LoRa.
         """
         if self.omnet_phy:
-            return self.omnet_phy.compute_rssi(
+            # When using the lightweight OMNeT++-inspired PHY we still want to
+            # account for optional obstacle attenuation.  The original
+            # implementation returned immediately which skipped any loss
+            # contribution from ``self.obstacle_loss``.  As a result the RSSI
+            # was identical whether an obstacle map was provided or not.  We
+            # compute the base RSSI/SNR using ``OmnetPHY`` and then subtract
+            # the additional obstacle loss if positions are supplied.
+            rssi, snr = self.omnet_phy.compute_rssi(
                 tx_power_dBm,
                 distance,
                 sf,
                 freq_offset_hz=freq_offset_hz,
                 sync_offset_s=sync_offset_s,
             )
+            if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
+                att = self.obstacle_loss.loss(tx_pos, rx_pos)
+                rssi -= att
+                snr -= att
+            return rssi, snr
         loss = self.path_loss(distance)
         if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
             loss += self.obstacle_loss.loss(tx_pos, rx_pos)
