@@ -20,6 +20,7 @@ def plot(
     output_dir: str = "figures",
     max_delay: float | None = None,
     max_energy: float | None = None,
+    formats: tuple[str, ...] = ("png", "jpg", "svg"),
 ) -> None:
     df = pd.read_csv(csv_path)
     if hasattr(plt, "rcParams"):
@@ -108,8 +109,9 @@ def plot(
             ncol=1,
             title="N: number of nodes, C: number of channels, speed: m/s",
             framealpha=1.0,
+            facecolor="white",
         )
-        for ext in ("png", "jpg", "eps", "svg"):
+        for ext in formats:
             dpi = 300 if ext in ("png", "jpg") else None
             fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}", dpi=dpi)
         plt.close(fig)
@@ -136,8 +138,14 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Y-axis maximum for energy plots",
     )
+    parser.add_argument(
+        "--formats",
+        nargs="+",
+        default=("png", "jpg", "svg"),
+        help="File formats for output figures",
+    )
     args = parser.parse_args(argv)
-    plot(args.csv, args.output_dir, args.max_delay, args.max_energy)
+    plot(args.csv, args.output_dir, args.max_delay, args.max_energy, tuple(args.formats))
 
 
 if __name__ == "__main__":
