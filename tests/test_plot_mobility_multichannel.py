@@ -121,8 +121,8 @@ def test_plot(tmp_path, monkeypatch):
     csv_path = Path('tests/data/mobility_multichannel_summary.csv')
     plot_module.plot(str(csv_path), tmp_path)
 
-    for ext in ('png', 'jpg', 'eps'):
-        assert (tmp_path / f'pdr_vs_scenario.{ext}').is_file()
+    for ext in ("png", "jpg", "svg"):
+        assert (tmp_path / f"pdr_vs_scenario.{ext}").is_file()
     # The x-axis should list every tested node/channel combination once.
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
