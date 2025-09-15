@@ -41,8 +41,9 @@ sortie attendue.
 ## Scripts de visualisation (`plot_*`)
 
 ### `plot_mobility_multichannel.py`
-- **Paramètres** : chemin du CSV agrégé, `--output-dir` ("figures") et optionnel
-  `--allowed N,C` pour limiter les couples nœuds/canaux.
+- **Paramètres** : chemin du CSV agrégé, `--output-dir` ("figures") et options
+  `--allowed N,C` pour limiter les couples nœuds/canaux, `--scenarios nom` pour
+  filtrer les scénarios.
 - **Sortie** : graphiques PNG de PDR, taux de collision, délai moyen et énergie
   moyenne par nœud.
 
@@ -78,6 +79,7 @@ Les scénarios utilisés par les scripts `run_mobility_multichannel.py` et
 python scripts/run_mobility_multichannel.py --nodes 200 --interval 1 --replicates 5
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios static_single mobile_single
 ```
 
 Le premier script génère `results/mobility_multichannel.csv`, puis le second

@@ -708,6 +708,7 @@ python examples/plot_energy.py metrics.csv            # total energy
 python examples/plot_energy.py --per-node metrics.csv # per node
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios static_single mobile_single
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 ```
 
@@ -717,7 +718,8 @@ same formats.
 `plot_mobility_multichannel.py` saves `pdr_vs_scenario.png`,
 `collision_rate_vs_scenario.png` and `avg_energy_per_node_vs_scenario.png`
 in the `figures/` folder. Use `--allowed N,C ...` to limit the plot to
-specific node/channel pairs.
+specific node/channel pairs and `--scenarios NAME ...` to select particular
+scenarios.
 `plot_mobility_latency_energy.py` creates `pdr_vs_scenario.svg`,
 `avg_delay_vs_scenario.svg` and `avg_energy_per_node_vs_scenario.svg` as
 vector graphics.
