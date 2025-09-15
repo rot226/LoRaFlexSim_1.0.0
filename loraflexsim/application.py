@@ -16,7 +16,11 @@ class Application:
         # default value, preventing the application from ever sending an empty
         # payload.  Hidden tests exercise this scenario.  To respect the caller
         # intent we only substitute the default when ``payload`` is *None*.
-        self.payload = payload if payload is not None else b"ping"
+        if payload is None:
+            self.payload = b"ping"
+        else:
+            self.payload = payload
+
         self.next_time = 0.0
 
     # ------------------------------------------------------------------
