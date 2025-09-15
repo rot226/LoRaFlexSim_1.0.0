@@ -16,10 +16,15 @@ def main(files: list[str], output_dir: Path, basename: str) -> None:
     plt.grid(True)
     plt.tight_layout()
     output_dir.mkdir(parents=True, exist_ok=True)
-    for ext, params in {"png": {"dpi": 300}, "jpg": {"dpi": 300}, "eps": {}}.items():
+    for ext, params in {
+        "png": {"dpi": 300},
+        "jpg": {"dpi": 300},
+        "eps": {"dpi": 300},
+    }.items():
         path = output_dir / f"{basename}.{ext}"
-        plt.savefig(path, **params)
+        plt.savefig(path, bbox_inches="tight", pad_inches=0, **params)
         print(f"Figure saved to {path}")
+    plt.close()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

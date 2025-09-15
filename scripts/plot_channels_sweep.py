@@ -53,10 +53,11 @@ def main() -> None:
     os.makedirs(FIGURES_DIR, exist_ok=True)
     base = os.path.join(FIGURES_DIR, "pdr_collisions_vs_channels")
     for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
+        dpi = 300 if ext in ("png", "jpg", "eps") else None
         path = f"{base}.{ext}"
-        fig.savefig(path, dpi=dpi)
+        fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0)
         print(f"Saved {path}")
+    plt.close(fig)
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point

@@ -63,8 +63,13 @@ def plot(csv_path: str, output_dir: str = "figures", by_model: bool = False) -> 
 
     stem = "avg_sf_vs_model" if by_model else "avg_sf_vs_scenario"
     for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
-        fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
+        dpi = 300 if ext in ("png", "jpg", "eps") else None
+        fig.savefig(
+            out_dir / f"{stem}.{ext}",
+            dpi=dpi,
+            bbox_inches="tight",
+            pad_inches=0,
+        )
     plt.close(fig)
 
 
