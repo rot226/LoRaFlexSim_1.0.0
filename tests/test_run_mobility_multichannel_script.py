@@ -71,6 +71,12 @@ def test_run_mobility_multichannel_script(tmp_path, monkeypatch):
     assert row["nodes"] == 200
     assert row["channels"] == 1
     assert row["pdr_mean"] == 80.0
+    assert bool(row["mobility"]) is True
+    assert row["speed"] == 5.0
+
+    static_row = df[df["scenario"] == "n50_c1_static"].iloc[0]
+    assert not static_row["mobility"]
+    assert static_row["speed"] == 0.0
 
     csv_path.unlink()
 

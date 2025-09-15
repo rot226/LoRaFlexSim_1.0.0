@@ -122,7 +122,6 @@ def test_plot(tmp_path, monkeypatch):
 
     csv_path = Path('tests/data/mobility_multichannel_summary.csv')
     df = pd.read_csv(csv_path)
-    df["mobility"] = df["scenario"].str.contains("mobile")
     tmp_csv = tmp_path / "mobility_multichannel_summary.csv"
     df.to_csv(tmp_csv, index=False)
 
@@ -148,7 +147,7 @@ def test_plot(tmp_path, monkeypatch):
     assert unique_labels == expected
 
     # Filtering by allowed pairs should reduce the scenarios.
-    allowed = {(50, 1), (200, 3)}
+    allowed = {(50, 1)}
     plot_module.plot(str(tmp_csv), tmp_path, allowed=allowed)
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
@@ -159,7 +158,7 @@ def test_plot(tmp_path, monkeypatch):
     assert unique_labels == expected_allowed
 
     # Filtering by scenario names should select those scenarios.
-    scenarios = ['static_single', 'mobile_single']
+    scenarios = ['n50_c1_static', 'n50_c1_mobile']
     plot_module.plot(str(tmp_csv), tmp_path, scenarios=set(scenarios))
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
