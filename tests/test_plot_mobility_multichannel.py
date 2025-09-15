@@ -102,7 +102,7 @@ def test_plot(tmp_path, monkeypatch):
 
     plot_module = importlib.import_module('scripts.plot_mobility_multichannel')
 
-    def fake_savefig(self, filename, dpi=None):
+    def fake_savefig(self, filename, dpi=None, **kwargs):
         Path(filename).touch()
 
     monkeypatch.setattr(figure_module.Figure, 'savefig', fake_savefig)
@@ -121,7 +121,7 @@ def test_plot(tmp_path, monkeypatch):
     csv_path = Path('tests/data/mobility_multichannel_summary.csv')
     plot_module.plot(str(csv_path), tmp_path)
 
-    for ext in ("png", "jpg", "svg"):
+    for ext in ("png", "jpg", "svg", "eps"):
         assert (tmp_path / f"pdr_vs_scenario.{ext}").is_file()
     # The x-axis should list every tested node/channel combination once.
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]

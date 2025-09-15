@@ -85,6 +85,11 @@ def main() -> None:
             python,
             str(SCRIPT_DIR / "plot_mobility_multichannel.py"),
             str(RESULTS_DIR / "mobility_multichannel.csv"),
+            "--formats",
+            "png",
+            "jpg",
+            "svg",
+            "eps",
         ],
         check=True,
     )
