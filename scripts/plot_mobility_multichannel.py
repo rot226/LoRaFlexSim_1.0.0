@@ -48,6 +48,10 @@ def plot(
         if col in df.columns and df[col].nunique() > 1:
             df["scenario_label"] += ", " + df[col].map(lambda x: fmt.format(x))
 
+    allowed = {(50, 1), (50, 3), (50, 6), (200, 1), (200, 3)}
+    df = df[(df["speed"] == 5) &
+            df[["nodes", "channels"]].apply(tuple, axis=1).isin(allowed)]
+
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
         ("avg_delay_s", "Average delay", "s", "%.2f s", "C2"),
