@@ -6,6 +6,8 @@ Usage::
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
         --allowed 50,1 200,3
+    python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
+        --scenarios static_single mobile_single
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ def plot(
     max_energy: float | None = None,
     formats: tuple[str, ...] = ("png", "jpg", "svg", "eps"),
     allowed: set[tuple[int, int]] | None = None,
+    scenarios: set[str] | None = None,
 ) -> None:
     df = pd.read_csv(csv_path)
     if hasattr(plt, "rcParams"):
@@ -31,6 +34,9 @@ def plot(
 
     if "scenario" not in df.columns:
         raise ValueError("CSV must contain a 'scenario' column")
+
+    if scenarios is not None:
+        df = df[df["scenario"].isin(scenarios)]
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -157,6 +163,13 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Allowed node-channel pairs (e.g. 50,1 200,3); show all if omitted",
     )
+    parser.add_argument(
+        "--scenarios",
+        nargs="+",
+        metavar="NAME",
+        default=None,
+        help="Scenario names to include (e.g. static_single mobile_single); show all if omitted",
+    )
     args = parser.parse_args(argv)
     allowed = None
     if args.allowed is not None:
@@ -176,6 +189,7 @@ def main(argv: list[str] | None = None) -> None:
         args.max_energy,
         tuple(args.formats),
         allowed,
+        set(args.scenarios) if args.scenarios is not None else None,
     )
 
 

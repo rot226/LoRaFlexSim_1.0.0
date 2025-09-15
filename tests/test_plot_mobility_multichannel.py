@@ -148,6 +148,18 @@ def test_plot(tmp_path, monkeypatch):
     ]
     assert unique_labels == expected_allowed
 
+    # Filtering by scenario names should select those scenarios.
+    scenarios = ['static_single', 'mobile_single']
+    plot_module.plot(str(csv_path), tmp_path, scenarios=set(scenarios))
+    labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
+    unique_labels = list(dict.fromkeys(labels))
+    df_scen = df[df['scenario'].isin(scenarios)][['nodes', 'channels']].drop_duplicates()
+    expected_scenarios = [
+        f'N={int(n)}, C={int(c)}'
+        for n, c in df_scen.to_numpy()
+    ]
+    assert unique_labels == expected_scenarios
+
     legend = captured['ax'].get_legend()
     if legend is not None:
         title = legend.get_title().get_text()
