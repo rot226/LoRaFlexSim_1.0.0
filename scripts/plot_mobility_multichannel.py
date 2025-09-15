@@ -7,7 +7,8 @@ Usage::
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
         --allowed 50,1 200,3
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
-        --scenarios static_single mobile_single
+        --scenarios n50_c1_static n50_c1_mobile n50_c3_mobile n50_c6_static \
+        n200_c1_static n200_c1_mobile n200_c3_mobile n200_c6_static
 """
 
 from __future__ import annotations
@@ -41,22 +42,12 @@ def plot(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    df["scenario_label"] = (
-        "N="
-        + df["nodes"].astype(int).astype(str)
-        + ", C="
-        + df["channels"].astype(int).astype(str)
+    df["scenario_label"] = df.apply(
+        lambda r: f"N={int(r['nodes'])}, C={int(r['channels'])}, static"
+        if not r["mobility"]
+        else f"N={int(r['nodes'])}, C={int(r['channels'])}, speed={r['speed']:.0f} m/s",
+        axis=1,
     )
-    if "area_size" in df.columns:
-        df["area"] = df["area_size"] ** 2
-    optional_params = [
-        ("interval", "interval={:g}s"),
-        ("speed", "speed={:g}m/s"),
-        ("area", "area={:g}m²"),
-    ]
-    for col, fmt in optional_params:
-        if col in df.columns and df[col].nunique() > 1:
-            df["scenario_label"] += ", " + df[col].map(lambda x: fmt.format(x))
 
     if allowed is not None:
         df = df[df[["nodes", "channels"]].apply(tuple, axis=1).isin(allowed)]
@@ -97,7 +88,7 @@ def plot(
         if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
-            ax.axhline(cap, linestyle="--", color="grey", label="100 %")
+            ax.axhline(cap, linestyle="--", color="grey")
         elif metric == "avg_delay_s":
             cap = max_delay or df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
@@ -108,8 +99,6 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})"
-        ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(
             loc="upper center",
@@ -168,7 +157,10 @@ def main(argv: list[str] | None = None) -> None:
         nargs="+",
         metavar="NAME",
         default=None,
-        help="Scenario names to include (e.g. static_single mobile_single); show all if omitted",
+        help=(
+            "Scenario names to include (e.g. n50_c1_static n200_c6_static); "
+            "show all if omitted"
+        ),
     )
     args = parser.parse_args(argv)
     allowed = None

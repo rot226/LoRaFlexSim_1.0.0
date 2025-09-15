@@ -122,42 +122,51 @@ def test_plot(tmp_path, monkeypatch):
 
     csv_path = Path('tests/data/mobility_multichannel_summary.csv')
     df = pd.read_csv(csv_path)
+    df["mobility"] = df["scenario"].str.contains("mobile")
+    tmp_csv = tmp_path / "mobility_multichannel_summary.csv"
+    df.to_csv(tmp_csv, index=False)
 
-    plot_module.plot(str(csv_path), tmp_path)
+    plot_module.plot(str(tmp_csv), tmp_path)
 
     for ext in ("png", "jpg", "svg", "eps"):
         assert (tmp_path / f"pdr_vs_scenario.{ext}").is_file()
     # The x-axis should list every tested node/channel combination once.
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
+    def _label(row):
+        return (
+            f"N={int(row['nodes'])}, C={int(row['channels'])}, static"
+            if not row["mobility"]
+            else f"N={int(row['nodes'])}, C={int(row['channels'])}, speed={row['speed']:.0f} m/s"
+        )
+
     expected = [
-        f'N={int(n)}, C={int(c)}'
-        for n, c in df[['nodes', 'channels']].drop_duplicates().to_numpy()
+        _label(row)
+        for row in df.drop_duplicates(subset=["nodes", "channels", "mobility", "speed"])
+            .to_dict("records")
     ]
     assert unique_labels == expected
 
     # Filtering by allowed pairs should reduce the scenarios.
     allowed = {(50, 1), (200, 3)}
-    plot_module.plot(str(csv_path), tmp_path, allowed=allowed)
+    plot_module.plot(str(tmp_csv), tmp_path, allowed=allowed)
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
-    df_pairs = df[['nodes', 'channels']].drop_duplicates()
-    expected_allowed = [
-        f'N={int(n)}, C={int(c)}'
-        for n, c in df_pairs[df_pairs.apply(tuple, axis=1).isin(allowed)].to_numpy()
-    ]
+    df_allowed = df[
+        df[["nodes", "channels"]].apply(tuple, axis=1).isin(allowed)
+    ].drop_duplicates(subset=["nodes", "channels", "mobility", "speed"])
+    expected_allowed = [_label(row) for row in df_allowed.to_dict("records")]
     assert unique_labels == expected_allowed
 
     # Filtering by scenario names should select those scenarios.
     scenarios = ['static_single', 'mobile_single']
-    plot_module.plot(str(csv_path), tmp_path, scenarios=set(scenarios))
+    plot_module.plot(str(tmp_csv), tmp_path, scenarios=set(scenarios))
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
-    df_scen = df[df['scenario'].isin(scenarios)][['nodes', 'channels']].drop_duplicates()
-    expected_scenarios = [
-        f'N={int(n)}, C={int(c)}'
-        for n, c in df_scen.to_numpy()
-    ]
+    df_scen = df[df['scenario'].isin(scenarios)].drop_duplicates(
+        subset=["nodes", "channels", "mobility", "speed"]
+    )
+    expected_scenarios = [_label(row) for row in df_scen.to_dict("records")]
     assert unique_labels == expected_scenarios
 
     legend = captured['ax'].get_legend()
