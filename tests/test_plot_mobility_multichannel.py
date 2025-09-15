@@ -123,15 +123,20 @@ def test_plot(tmp_path, monkeypatch):
 
     for ext in ('png', 'jpg', 'eps'):
         assert (tmp_path / f'pdr_vs_scenario.{ext}').is_file()
-
+    # The x-axis should list every tested node/channel combination once.
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
-    assert labels
-    for label in labels:
-        assert 'N=' in label and 'C=' in label
+    unique_labels = list(dict.fromkeys(labels))
+    expected = [
+        'N=50, C=1',
+        'N=50, C=3',
+        'N=50, C=6',
+        'N=200, C=1',
+        'N=200, C=3',
+    ]
+    assert unique_labels == expected
 
     legend = captured['ax'].get_legend()
     if legend is not None:
         title = legend.get_title().get_text()
+        # Legend should explain the abbreviations for nodes and channels.
         assert 'N:' in title and 'C:' in title
-        if 'speed' in title:
-            assert 'speed' in title
