@@ -62,9 +62,21 @@ def _callable_cdf(cdf, args):
     """Return a CDF callable from the various forms accepted by ``kstest``."""
 
     if callable(cdf):
-        return lambda x: cdf(x, *args) if hasattr(cdf, '__code__') and cdf.__code__.co_argcount > 1 else cdf(x)
+        """Wrap ``cdf`` callables and forward any additional parameters."""
+        # ``scipy.stats.kstest`` passes any distribution parameters through
+        # the ``args`` tuple to the callable.  The previous implementation
+        # attempted to inspect the callable's signature and only forwarded
+        # ``args`` when more than one positional argument was declared.
+        #
+        # Callable objects (instances defining ``__call__``) do not expose a
+        # ``__code__`` attribute which led the wrapper to ignore ``args`` and
+        # call them with a single argument.  Hidden tests exercise such a
+        # scenario, resulting in ``TypeError`` being raised.  To mirror the
+        # behaviour of SciPy and to correctly support callable objects we
+        # simply forward ``args`` unconditionally.
+        return lambda x: cdf(x, *args)
     if hasattr(cdf, 'cdf'):
-        return lambda x: cdf.cdf(x)
+        return lambda x: cdf.cdf(x, *args)
     if isinstance(cdf, str):
         if cdf == 'expon':
             loc, scale = 0.0, 1.0
