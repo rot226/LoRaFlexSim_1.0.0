@@ -4,6 +4,8 @@
 Usage::
 
     python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
+    python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv \
+        --allowed 50,1 200,3
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ def plot(
     max_delay: float | None = None,
     max_energy: float | None = None,
     formats: tuple[str, ...] = ("png", "jpg", "svg", "eps"),
+    allowed: set[tuple[int, int]] | None = None,
 ) -> None:
     df = pd.read_csv(csv_path)
     if hasattr(plt, "rcParams"):
@@ -49,9 +52,8 @@ def plot(
         if col in df.columns and df[col].nunique() > 1:
             df["scenario_label"] += ", " + df[col].map(lambda x: fmt.format(x))
 
-    allowed = {(50, 1), (50, 3), (50, 6), (200, 1), (200, 3)}
-    df = df[(df["speed"] == 5) &
-            df[["nodes", "channels"]].apply(tuple, axis=1).isin(allowed)]
+    if allowed is not None:
+        df = df[df[["nodes", "channels"]].apply(tuple, axis=1).isin(allowed)]
 
     metrics = [
         ("pdr", "PDR", "%", "%.1f%%", "C0"),
@@ -148,8 +150,33 @@ def main(argv: list[str] | None = None) -> None:
         default=("png", "jpg", "svg", "eps"),
         help="File formats for output figures",
     )
+    parser.add_argument(
+        "--allowed",
+        nargs="+",
+        metavar="N,C",
+        default=None,
+        help="Allowed node-channel pairs (e.g. 50,1 200,3); show all if omitted",
+    )
     args = parser.parse_args(argv)
-    plot(args.csv, args.output_dir, args.max_delay, args.max_energy, tuple(args.formats))
+    allowed = None
+    if args.allowed is not None:
+        allowed = set()
+        for combo in args.allowed:
+            try:
+                n, c = combo.split(",")
+                allowed.add((int(n), int(c)))
+            except ValueError:
+                raise argparse.ArgumentTypeError(
+                    f"Invalid N,C pair: '{combo}'"
+                )
+    plot(
+        args.csv,
+        args.output_dir,
+        args.max_delay,
+        args.max_energy,
+        tuple(args.formats),
+        allowed,
+    )
 
 
 if __name__ == "__main__":

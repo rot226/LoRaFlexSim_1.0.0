@@ -41,7 +41,8 @@ sortie attendue.
 ## Scripts de visualisation (`plot_*`)
 
 ### `plot_mobility_multichannel.py`
-- **Paramètres** : chemin du CSV agrégé et `--output-dir` ("figures").
+- **Paramètres** : chemin du CSV agrégé, `--output-dir` ("figures") et optionnel
+  `--allowed N,C` pour limiter les couples nœuds/canaux.
 - **Sortie** : graphiques PNG de PDR, taux de collision, délai moyen et énergie
   moyenne par nœud.
 
@@ -76,6 +77,7 @@ Les scénarios utilisés par les scripts `run_mobility_multichannel.py` et
 ```bash
 python scripts/run_mobility_multichannel.py --nodes 200 --interval 1 --replicates 5
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
 ```
 
 Le premier script génère `results/mobility_multichannel.csv`, puis le second
@@ -133,8 +135,8 @@ fournies et les tests de mobilité associés.
 
 1. `run_mobility_multichannel.py` : génère
    `results/mobility_multichannel.csv`.
-2. `plot_mobility_multichannel.py <csv>` : crée des PNG (PDR, collisions,
-   délai moyen, énergie par nœud).
+2. `plot_mobility_multichannel.py <csv> [--allowed N,C ...]` : crée des PNG
+   (PDR, collisions, délai moyen, énergie par nœud).
 3. `run_mobility_latency_energy.py` : produit
    `results/mobility_latency_energy.csv`.
 4. `plot_mobility_latency_energy.py <csv>` : génère des SVG (PDR, délai,
