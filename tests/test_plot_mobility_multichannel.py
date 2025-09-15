@@ -15,6 +15,8 @@ def test_plot(tmp_path, monkeypatch):
     sys.modules['numpy'] = np
     sys.modules['numpy.random'] = np.random
 
+    import pandas as pd
+
     # Minimal matplotlib stand-ins.
     class _Figure:
         def savefig(self, filename, dpi=None):
@@ -119,6 +121,8 @@ def test_plot(tmp_path, monkeypatch):
     monkeypatch.setattr(plt_module, 'subplots', fake_subplots)
 
     csv_path = Path('tests/data/mobility_multichannel_summary.csv')
+    df = pd.read_csv(csv_path)
+
     plot_module.plot(str(csv_path), tmp_path)
 
     for ext in ("png", "jpg", "svg", "eps"):
@@ -127,13 +131,22 @@ def test_plot(tmp_path, monkeypatch):
     labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
     unique_labels = list(dict.fromkeys(labels))
     expected = [
-        'N=50, C=1',
-        'N=50, C=3',
-        'N=50, C=6',
-        'N=200, C=1',
-        'N=200, C=3',
+        f'N={int(n)}, C={int(c)}'
+        for n, c in df[['nodes', 'channels']].drop_duplicates().to_numpy()
     ]
     assert unique_labels == expected
+
+    # Filtering by allowed pairs should reduce the scenarios.
+    allowed = {(50, 1), (200, 3)}
+    plot_module.plot(str(csv_path), tmp_path, allowed=allowed)
+    labels = [tick.get_text() for tick in captured['ax'].get_xticklabels()]
+    unique_labels = list(dict.fromkeys(labels))
+    df_pairs = df[['nodes', 'channels']].drop_duplicates()
+    expected_allowed = [
+        f'N={int(n)}, C={int(c)}'
+        for n, c in df_pairs[df_pairs.apply(tuple, axis=1).isin(allowed)].to_numpy()
+    ]
+    assert unique_labels == expected_allowed
 
     legend = captured['ax'].get_legend()
     if legend is not None:
