@@ -67,7 +67,7 @@ def test_run_mobility_multichannel_script(tmp_path, monkeypatch):
     }
     assert expected_cols.issubset(df.columns)
 
-    row = df[df["scenario"] == "mobile_single_many_nodes"].iloc[0]
+    row = df[df["scenario"] == "n200_c1_mobile"].iloc[0]
     assert row["nodes"] == 200
     assert row["channels"] == 1
     assert row["pdr_mean"] == 80.0

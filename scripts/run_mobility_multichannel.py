@@ -1,26 +1,19 @@
-"""Run mobility and multi-channel simulation scenarios.
+"""Run the predefined mobility and multi-channel scenarios.
 
-This utility executes several predefined scenarios combining mobile or static
-nodes and mono/multi-channel operation.  In addition to the original four
-scenarios (``static_single``, ``static_multi``, ``mobile_single`` and
-``mobile_multi``) the following are provided:
+The script executes eight scenarios combining two node counts (50 and 200),
+mobility on or off, and one, three or six channels:
 
-* ``mobile_multi_fast`` – mobile nodes moving at 10 m/s
-* ``mobile_multi_many_channels`` – mobile nodes operating on six channels
-* ``mobile_multi_many_nodes`` – mobile nodes with 200 devices and multiple channels
-* ``static_multi_many_nodes`` – static nodes with 200 devices
-* ``mobile_single_many_nodes`` – mobile nodes with 200 devices
+* ``n50_c1_static``
+* ``n50_c1_mobile``
+* ``n50_c3_mobile``
+* ``n50_c6_static``
+* ``n200_c1_static``
+* ``n200_c1_mobile``
+* ``n200_c3_mobile``
+* ``n200_c6_static``
 
-The number of nodes, packet interval, mobility speed and number of channels can
-be customised for each scenario via command-line options.  Every scenario may be
-repeated using ``--replicates`` (default 5) and the mean/standard deviation of
-key metrics are written to ``results/mobility_multichannel.csv``.
-
-Usage::
-
-    python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
-    # or run a congested configuration
-    python scripts/run_mobility_multichannel.py --high-traffic --replicates 5
+Results are written to ``results/mobility_multichannel.csv`` with mean and
+standard deviation of key metrics for each scenario.
 """
 
 import os
@@ -154,32 +147,14 @@ def main() -> None:
         867500000.0,
     ]
     scenarios = {
-        "static_single": {"mobility": False, "channels": 1},
-        "static_multi": {"mobility": False, "channels": args.channels},
-        "mobile_single": {"mobility": True, "channels": 1},
-        "mobile_multi": {"mobility": True, "channels": args.channels},
-        "mobile_multi_fast": {"mobility": True, "channels": args.channels, "speed": 10.0},
-        "mobile_multi_many_channels": {"mobility": True, "channels": 6},
-        "mobile_multi_many_nodes": {
-            "mobility": True,
-            "channels": args.channels,
-            "nodes": 200,
-        },
-        "static_multi_many_nodes": {
-            "mobility": False,
-            "channels": args.channels,
-            "nodes": 200,
-        },
-        "static_single_many_nodes": {
-            "mobility": False,
-            "channels": 1,
-            "nodes": 200,
-        },
-        "mobile_single_many_nodes": {
-            "mobility": True,
-            "channels": 1,
-            "nodes": 200,
-        },
+        "n50_c1_static": {"mobility": False, "channels": 1, "nodes": 50, "speed": 0.0},
+        "n50_c1_mobile": {"mobility": True, "channels": 1, "nodes": 50, "speed": args.speed},
+        "n50_c3_mobile": {"mobility": True, "channels": 3, "nodes": 50, "speed": args.speed},
+        "n50_c6_static": {"mobility": False, "channels": 6, "nodes": 50, "speed": 0.0},
+        "n200_c1_static": {"mobility": False, "channels": 1, "nodes": 200, "speed": 0.0},
+        "n200_c1_mobile": {"mobility": True, "channels": 1, "nodes": 200, "speed": args.speed},
+        "n200_c3_mobile": {"mobility": True, "channels": 3, "nodes": 200, "speed": args.speed},
+        "n200_c6_static": {"mobility": False, "channels": 6, "nodes": 200, "speed": 0.0},
     }
 
     rows: List[dict] = []
@@ -220,6 +195,7 @@ def main() -> None:
             "area_size": args.area_size,
             "speed": speed,
             "channels": ch_count,
+            "mobility": params["mobility"],
             "adr_node": args.adr_node,
             "adr_server": args.adr_server,
         }
