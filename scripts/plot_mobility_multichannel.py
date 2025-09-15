@@ -66,7 +66,7 @@ def plot(
             continue
         yerr = df[std_col] if std_col in df.columns else None
         fig_width = max(16, 0.6 * len(df))
-        fig, ax = plt.subplots(figsize=(fig_width, 8))
+        fig, ax = plt.subplots(figsize=(fig_width, 8), constrained_layout=True)
         label = f"{name} ({unit})"
         bars = ax.bar(
             range(len(df)),
@@ -104,11 +104,11 @@ def plot(
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(
             loc="upper center",
-            bbox_to_anchor=(0.5, 1.6),
+            bbox_to_anchor=(0.5, 1.3),
             ncol=1,
             title="N: number of nodes, C: number of channels, speed: m/s",
+            framealpha=1.0,
         )
-        fig.tight_layout(rect=[0, 0, 1, 0.7])
         for ext in ("png", "jpg", "eps", "svg"):
             dpi = 300 if ext in ("png", "jpg") else None
             fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}", dpi=dpi)
