@@ -7,6 +7,7 @@ scenarios (``static_single``, ``static_multi``, ``mobile_single`` and
 
 * ``mobile_multi_fast`` – mobile nodes moving at 10 m/s
 * ``mobile_multi_many_channels`` – mobile nodes operating on six channels
+* ``mobile_multi_many_nodes`` – mobile nodes with 200 devices and multiple channels
 * ``static_multi_many_nodes`` – static nodes with 200 devices
 * ``mobile_single_many_nodes`` – mobile nodes with 200 devices
 
@@ -159,6 +160,11 @@ def main() -> None:
         "mobile_multi": {"mobility": True, "channels": args.channels},
         "mobile_multi_fast": {"mobility": True, "channels": args.channels, "speed": 10.0},
         "mobile_multi_many_channels": {"mobility": True, "channels": 6},
+        "mobile_multi_many_nodes": {
+            "mobility": True,
+            "channels": args.channels,
+            "nodes": 200,
+        },
         "static_multi_many_nodes": {
             "mobility": False,
             "channels": args.channels,
