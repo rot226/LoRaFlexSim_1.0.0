@@ -708,7 +708,7 @@ python examples/plot_energy.py metrics.csv            # total energy
 python examples/plot_energy.py --per-node metrics.csv # per node
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
-python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios static_single mobile_single
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios n50_c1_static n50_c1_mobile
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 ```
 
@@ -794,16 +794,27 @@ python scripts/run_mobility_multichannel.py --nodes 50 --packets 100 --seed 1
 python scripts/run_mobility_latency_energy.py --nodes 50 --packets 100 --seed 1
 ```
 
-Le script `run_mobility_multichannel.py` propose notamment le scénario
-`mobile_multi_fast`, où les nœuds se déplacent à 10 m/s.
-
-`run_mobility_latency_energy.py` produit `results/mobility_latency_energy.csv`
-que `plot_mobility_latency_energy.py` peut visualiser.
-
 L'option `--dump-intervals` active `dump_interval_logs` : un fichier Parquet est
 généré pour chaque nœud avec la date Poisson attendue et l'instant réel de
 transmission. Ces traces permettent de vérifier empiriquement la distribution
 des arrivées.
+
+Le script `run_mobility_multichannel.py` exécute huit scénarios prédéfinis
+combinant nombre de nœuds (`N`), canaux (`C`) et mobilité :
+
+| Scénario | N | C | Mobilité | Vitesse (m/s) |
+|---------|---|---|----------|---------------|
+| `n50_c1_static` | 50 | 1 | Non | 0 |
+| `n50_c1_mobile` | 50 | 1 | Oui | 5 |
+| `n50_c3_mobile` | 50 | 3 | Oui | 5 |
+| `n50_c6_static` | 50 | 6 | Non | 0 |
+| `n200_c1_static` | 200 | 1 | Non | 0 |
+| `n200_c1_mobile` | 200 | 1 | Oui | 5 |
+| `n200_c3_mobile` | 200 | 3 | Oui | 5 |
+| `n200_c6_static` | 200 | 6 | Non | 0 |
+
+`run_mobility_latency_energy.py` produit `results/mobility_latency_energy.csv`
+que `plot_mobility_latency_energy.py` peut visualiser.
 
 Les utilitaires `analyse_resultats.py` et `analyse_runs.py` aident à traiter les
 fichiers CSV produits par `run.py` ou par le tableau de bord.

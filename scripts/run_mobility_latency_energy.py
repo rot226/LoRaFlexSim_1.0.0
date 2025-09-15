@@ -1,15 +1,14 @@
-"""Run mobility/static and single/three-channel scenarios to collect latency, energy and PDR.
+"""Run predefined mobility and multi-channel scenarios and collect metrics.
 
-This utility executes four predefined scenarios combining mobile/static nodes
-and mono/multi-channel configurations.  The number of channels can be selected
-from 1, 3 or 6 with ``--channels`` and additional options expose node count,
-packet interval, mobility speed and area size.  Scenarios may be repeated via
-``--replicates`` and the mean/standard deviation of PDR, delay, collision rate
-and energy per node are written to ``results/mobility_latency_energy.csv``.
+The script executes **eight** scenarios combining two node counts (50 and 200),
+mobility on or off and one, three or six channels.  Each scenario records PDR,
+average delay, collision rate and energy per node, aggregating the mean and
+standard deviation over the requested number of replicates.  Results are stored
+in ``results/mobility_latency_energy.csv``.
 
 Usage::
 
-    python scripts/run_mobility_latency_energy.py --nodes 50 --packets 100 --seed 1
+    python scripts/run_mobility_latency_energy.py --packets 100 --seed 1
 """
 
 from __future__ import annotations
@@ -71,7 +70,7 @@ def run_scenario(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run mobility/static and mono/tri-channel scenarios",
+        description="Run mobility/static and multi-channel scenarios",
     )
     parser.add_argument("--nodes", type=int, default=50, help="Number of nodes")
     parser.add_argument("--packets", type=int, default=100, help="Packets per node")
@@ -138,51 +137,87 @@ def main() -> None:
         867500000.0,
     ]
     scenarios = {
-        "static_single": {
+        "n50_c1_static": {
             "mobility": False,
-            "channels": MultiChannel(freq_plan[:1]),
+            "channels": 1,
+            "nodes": 50,
+            "speed": 0.0,
         },
-        "static_multi": {
+        "n50_c1_mobile": {
+            "mobility": True,
+            "channels": 1,
+            "nodes": 50,
+            "speed": args.speed,
+        },
+        "n50_c3_mobile": {
+            "mobility": True,
+            "channels": 3,
+            "nodes": 50,
+            "speed": args.speed,
+        },
+        "n50_c6_static": {
             "mobility": False,
-            "channels": MultiChannel(freq_plan[: args.channels]),
+            "channels": 6,
+            "nodes": 50,
+            "speed": 0.0,
         },
-        "mobile_single": {
-            "mobility": True,
-            "channels": MultiChannel(freq_plan[:1]),
+        "n200_c1_static": {
+            "mobility": False,
+            "channels": 1,
+            "nodes": 200,
+            "speed": 0.0,
         },
-        "mobile_multi": {
+        "n200_c1_mobile": {
             "mobility": True,
-            "channels": MultiChannel(freq_plan[: args.channels]),
+            "channels": 1,
+            "nodes": 200,
+            "speed": args.speed,
+        },
+        "n200_c3_mobile": {
+            "mobility": True,
+            "channels": 3,
+            "nodes": 200,
+            "speed": args.speed,
+        },
+        "n200_c6_static": {
+            "mobility": False,
+            "channels": 6,
+            "nodes": 200,
+            "speed": 0.0,
         },
     }
 
     rows: list[dict] = []
     for name, params in scenarios.items():
+        nodes = params.get("nodes", args.nodes)
+        speed = params.get("speed", args.speed)
+        ch_count = params.get("channels", args.channels)
+        channels = MultiChannel(freq_plan[: ch_count])
         rep_rows = []
         for r in range(args.replicates):
             rep_rows.append(
                 run_scenario(
                     name,
                     params["mobility"],
-                    params["channels"],
-                    args.nodes,
+                    channels,
+                    nodes,
                     args.packets,
                     args.seed + r,
                     args.adr_node,
                     args.adr_server,
                     args.area_size,
                     args.interval,
-                    args.speed,
+                    speed,
                 )
             )
 
         agg = {
             "scenario": name,
-            "nodes": args.nodes,
+            "nodes": nodes,
             "interval": args.interval,
             "area_size": args.area_size,
-            "speed": args.speed,
-            "channels": len(params["channels"].channels),
+            "speed": speed,
+            "channels": ch_count,
         }
         for key in ["pdr", "avg_delay", "energy_per_node", "collision_rate"]:
             values = [row[key] for row in rep_rows]

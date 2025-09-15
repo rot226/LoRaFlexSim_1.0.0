@@ -9,8 +9,7 @@ sortie attendue.
 ## Scripts de simulation (`run_*`)
 
 ### `run_mobility_multichannel.py`
-- **Description** : exécute plusieurs scénarios combinant mobilité et mono/tri‑canal,
-  dont `mobile_multi_fast`, où les nœuds se déplacent à 10 m/s.
+- **Description** : exécute plusieurs scénarios combinant mobilité et mono/tri‑canal.
 - **Paramètres principaux**
   - `--nodes` (50) : nombre de nœuds simulés.
   - `--packets` (100) : paquets à émettre par nœud.
@@ -63,15 +62,19 @@ sortie attendue.
 
 ## Scénarios prédéfinis
 
-Les scénarios utilisés par les scripts `run_mobility_multichannel.py` et
-`run_mobility_latency_energy.py` sont :
+Les scripts `run_mobility_multichannel.py` et
+`run_mobility_latency_energy.py` exécutent huit scénarios prédéfinis :
 
-| Nom | Mobilité | Fréquences (MHz) |
-|-----|-----------|-------------------|
-| `static_single` | Non | 868.1 |
-| `static_three`  | Non | 868.1 / 868.3 / 868.5 |
-| `mobile_single` | Oui | 868.1 |
-| `mobile_three`  | Oui | 868.1 / 868.3 / 868.5 |
+| Scénario | N | C | Mobilité | Vitesse (m/s) |
+|---------|---|---|----------|---------------|
+| `n50_c1_static` | 50 | 1 | Non | 0 |
+| `n50_c1_mobile` | 50 | 1 | Oui | 5 |
+| `n50_c3_mobile` | 50 | 3 | Oui | 5 |
+| `n50_c6_static` | 50 | 6 | Non | 0 |
+| `n200_c1_static` | 200 | 1 | Non | 0 |
+| `n200_c1_mobile` | 200 | 1 | Oui | 5 |
+| `n200_c3_mobile` | 200 | 3 | Oui | 5 |
+| `n200_c6_static` | 200 | 6 | Non | 0 |
 
 ## Exemple complet
 
@@ -79,7 +82,7 @@ Les scénarios utilisés par les scripts `run_mobility_multichannel.py` et
 python scripts/run_mobility_multichannel.py --nodes 200 --interval 1 --replicates 5
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
-python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios static_single mobile_single
+python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios n50_c1_static n50_c1_mobile
 ```
 
 Le premier script génère `results/mobility_multichannel.csv`, puis le second
