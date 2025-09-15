@@ -124,8 +124,13 @@ def plot(
         fig.tight_layout(rect=[0, 0, 1, 0.85])
         stem = Path(filename).stem
         for ext in ("png", "jpg", "eps", "svg"):
-            dpi = 300 if ext in ("png", "jpg") else None
-            fig.savefig(out_dir / f"{stem}.{ext}", dpi=dpi)
+            dpi = 300 if ext in ("png", "jpg", "eps") else None
+            fig.savefig(
+                out_dir / f"{stem}.{ext}",
+                dpi=dpi,
+                bbox_inches="tight",
+                pad_inches=0,
+            )
         plt.close(fig)
 
 

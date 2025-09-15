@@ -46,10 +46,15 @@ def main(
         if basename is None:
             basename = "energy_total"
     plt.tight_layout()
-    for ext, params in {"png": {"dpi": 300}, "jpg": {"dpi": 300}, "eps": {}}.items():
+    for ext, params in {
+        "png": {"dpi": 300},
+        "jpg": {"dpi": 300},
+        "eps": {"dpi": 300},
+    }.items():
         path = output_dir / f"{basename}.{ext}"
-        plt.savefig(path, **params)
+        plt.savefig(path, bbox_inches="tight", pad_inches=0, **params)
         print(f"Figure saved to {path}")
+    plt.close()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

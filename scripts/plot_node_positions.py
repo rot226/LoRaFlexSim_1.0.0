@@ -87,8 +87,13 @@ def main(argv: list[str] | None = None) -> None:
     ax.set_ylabel("y")
     ax.set_title("Node positions")
     for ext in ("png", "jpg", "eps"):
-        dpi = 300 if ext in ("png", "jpg") else None
-        fig.savefig(output_path.with_suffix(f".{ext}"), dpi=dpi)
+        dpi = 300 if ext in ("png", "jpg", "eps") else None
+        fig.savefig(
+            output_path.with_suffix(f".{ext}"),
+            dpi=dpi,
+            bbox_inches="tight",
+            pad_inches=0,
+        )
     plt.close(fig)
 
 
