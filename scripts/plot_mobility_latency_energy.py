@@ -99,7 +99,7 @@ def plot(
         if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
-            ax.axhline(cap, linestyle="--", color="grey", label="100 %")
+            ax.axhline(cap, linestyle="--", color="grey")
         elif metric == "avg_delay":
             cap = max_delay or df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
@@ -110,10 +110,6 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        title = f"{name} by scenario (0 ≤ {name} ≤ {cap:g} {unit})"
-        if param_text:
-            title += f"\n{param_text}"
-        ax.set_title(title)
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(
             loc="upper center",

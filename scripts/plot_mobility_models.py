@@ -59,7 +59,7 @@ def plot(
         if metric == "pdr":
             cap = 100.0
             ax.set_ylim(0, cap)
-            ax.axhline(cap, linestyle="--", color="grey", label="100 %")
+            ax.axhline(cap, linestyle="--", color="grey")
         elif metric == "avg_delay":
             cap = max_delay or df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
@@ -70,7 +70,6 @@ def plot(
             cap = df[mean_col].max() * 1.1
             ax.set_ylim(0, cap)
 
-        ax.set_title(f"{name} by model (0 ≤ {name} ≤ {cap:g} {unit})")
         ax.bar_label(bars, fmt=fmt, label_type="center")
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.4), ncol=1)
         fig.tight_layout(rect=[0, 0, 1, 0.85])
