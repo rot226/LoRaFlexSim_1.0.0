@@ -20,7 +20,7 @@ def plot(
     output_dir: str = "figures",
     max_delay: float | None = None,
     max_energy: float | None = None,
-    formats: tuple[str, ...] = ("png", "jpg", "svg"),
+    formats: tuple[str, ...] = ("png", "jpg", "svg", "eps"),
 ) -> None:
     df = pd.read_csv(csv_path)
     if hasattr(plt, "rcParams"):
@@ -112,8 +112,12 @@ def plot(
             facecolor="white",
         )
         for ext in formats:
-            dpi = 300 if ext in ("png", "jpg") else None
-            fig.savefig(out_dir / f"{metric}_vs_scenario.{ext}", dpi=dpi)
+            fig.savefig(
+                out_dir / f"{metric}_vs_scenario.{ext}",
+                dpi=300,
+                bbox_inches="tight",
+                pad_inches=0,
+            )
         plt.close(fig)
 
 
@@ -141,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--formats",
         nargs="+",
-        default=("png", "jpg", "svg"),
+        default=("png", "jpg", "svg", "eps"),
         help="File formats for output figures",
     )
     args = parser.parse_args(argv)
