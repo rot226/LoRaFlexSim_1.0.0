@@ -350,13 +350,17 @@ class OmnetPHY:
         rssi += ch.rssi_offset_dB
         rssi -= ch._filter_attenuation_db(freq_offset_hz)
 
-        snr = rssi - self.noise_floor() + ch.snr_offset_dB
+        noise = self.noise_floor()
+        snr = rssi - noise + ch.snr_offset_dB
         penalty = self._alignment_penalty_db(freq_offset_hz, sync_offset_s, phase, sf)
         snr -= penalty
         snr -= abs(self._phase_noise.sample())
         snr -= abs(self._rx_fault.sample())
         if sf is not None and self.channel.processing_gain:
             snr += 10 * math.log10(2 ** sf)
+        # Persist the noise sample so higher layers (capture, validation
+        # metrics) can reuse the exact value employed for this reception.
+        self.channel.last_noise_dBm = noise
         return rssi, snr
 
     def _alignment_penalty_db(
