@@ -7,10 +7,17 @@ Ce document rassemble les formules de référence employées par LoRaFlexSim, d�
 Le module `flora_phy.py` reproduit la perte de parcours de FLoRa :
 
 ```python
-loss = PATH_LOSS_D0 + 10 * n * math.log10(distance / REFERENCE_DISTANCE)
+loss = PATH_LOSS_D0 + 10 * gamma * math.log10(distance / REFERENCE_DISTANCE)
 ```
 
-avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `n` vaut `2.7` pour le profil `flora`【F:README.md†L424-L433】【F:loraflexsim/launcher/flora_phy.py†L29-L61】.
+avec `PATH_LOSS_D0 = 127.41` dB et `REFERENCE_DISTANCE = 40` m. L'exposant `γ`
+correspond à `Channel.path_loss_exp` : le profil `flora` charge `γ = 2.08`, soit
+la même valeur que le paramètre `gamma` exposé par le module
+`LoRaLogNormalShadowing` de FLoRa【F:loraflexsim/launcher/flora_phy.py†L37-L58】【F:loraflexsim/launcher/channel.py†L69-L77】【F:flora-master/src/LoRaPhy/LoRaLogNormalShadowing.ned†L20-L28】.
+Ce module calcule exactement l'expression ci-dessus, en y ajoutant
+éventuellement un terme gaussien de variance `σ = 3.57` pour le shadowing, ce
+qui assure la cohérence directe avec LoRaFlexSim lorsque `flora` est
+sélectionné comme environnement【F:flora-master/src/LoRaPhy/LoRaLogNormalShadowing.cc†L40-L49】.
 
 ### Modèle Hata‑Okumura
 
