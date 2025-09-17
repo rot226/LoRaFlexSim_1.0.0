@@ -45,6 +45,7 @@ fournies dans l'INI de FLoRa.
    python run.py --nodes 5 --mode Periodic --interval 10
    python run.py --long-range-demo            # scénario longue portée (flora_hata)
    python run.py --long-range-demo flora --output long_range.csv
+   python run.py --long-range-demo rural_long_range --seed 3
    ```
     Ajoutez l'option `--seed` pour reproduire exactement le placement des nœuds
     et l'ordre statistique des intervalles.
@@ -584,6 +585,25 @@ le canal avec `phy_model="omnet_full"` ou `"omnet"` et laissez
 Pour le mode OMNeT++, le taux d'erreur binaire est déterminé grâce à la
 fonction `calculateBER` de `LoRaModulation` transposée telle quelle en
 Python afin de reproduire fidèlement les performances de décodage.
+
+### Débogage du bruit/SNR
+
+Les modèles `flora_full` et `flora_cpp` s'appuient désormais sur la table de
+bruit issue de `LoRaAnalogModel.cc`. Cela garantit que le SNR retourné par
+`Channel.compute_rssi` reste identique entre l'implémentation Python et la
+bibliothèque native. Pour inspecter une divergence de SNR :
+
+- vérifiez la valeur de `channel.last_noise_dBm`, mise à jour à chaque appel
+  à `compute_rssi` ;
+- forcez `processing_gain=True` si vous souhaitez retrouver le calcul
+  historique `rssi - bruit + 10·log10(2**sf)` ;
+- assurez-vous que le preset CLI sélectionné (ex. `--long-range-demo`) active
+  bien les courbes FLoRa (`use_flora_curves=True`) lorsque vous comparez les
+  résultats aux traces d'OMNeT++.
+
+Les tests `tests/test_flora_cpp.py` et
+`tests/test_flora_equivalence.py` peuvent être exécutés isolément afin de
+vérifier la cohérence entre les deux implémentations.
 
 Le paramètre ``flora_loss_model`` permet de choisir parmi plusieurs modèles
 d'atténuation : ``"lognorm"`` (par défaut), ``"oulu"`` correspondant à

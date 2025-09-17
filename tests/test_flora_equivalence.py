@@ -36,8 +36,8 @@ def test_flora_equivalence(distance, sf, bandwidth):
     assert rssi_py == pytest.approx(rssi_cpp, abs=0.01)
     noise_cpp = ch_cpp._flora_noise_dBm(sf)
     noise_py = ch_py._flora_noise_dBm(sf)
-    snr_cpp = rssi_cpp - noise_cpp + ch_cpp.snr_offset_dB + 10 * math.log10(2 ** sf)
-    snr_py = rssi_py - noise_py + ch_py.snr_offset_dB + 10 * math.log10(2 ** sf)
+    snr_cpp = rssi_cpp - noise_cpp + ch_cpp.snr_offset_dB
+    snr_py = rssi_py - noise_py + ch_py.snr_offset_dB
     assert snr_py == pytest.approx(snr_cpp, abs=0.01)
     per_cpp = ch_cpp.packet_error_rate(snr_cpp, sf)
     per_py = ch_py.packet_error_rate(snr_py, sf)

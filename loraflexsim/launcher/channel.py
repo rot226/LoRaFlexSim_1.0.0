@@ -696,7 +696,10 @@ class Channel:
         attenuation = self._filter_attenuation_db(freq_offset_hz)
         rssi -= attenuation
 
-        if self.phy_model == "flora_full" and sf is not None:
+        if sf is not None and (
+            self.phy_model in ("flora_full", "flora_cpp")
+            or self.use_flora_curves
+        ):
             noise = self._flora_noise_dBm(sf)
         elif self.phy_model == "omnet_full" and sf is not None:
             noise = self._omnet_noise_dBm(sf, freq_offset_hz)
