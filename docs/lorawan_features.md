@@ -31,6 +31,9 @@ Ce document résume les différences entre la simulation FLoRa d'origine
   deux cas.
 - Un mécanisme d’ADR est disponible de part et d’autre, bien que
   l’algorithme diffère légèrement.
+- Les conditions de réception (uplink comme downlink) reproduisent
+  désormais exactement celles de FLoRa, sans suppression aléatoire
+  supplémentaire.
 
 ## Fonctionnalités propres à la version Python
 
