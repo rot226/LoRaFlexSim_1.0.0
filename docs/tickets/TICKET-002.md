@@ -10,3 +10,8 @@ Avec plusieurs passerelles ou des environnements hétérogènes (bruits différe
 - Propager le SNIR calculé par la passerelle (`Gateway.end_reception`) au lieu de recalculer un SNR global côté serveur.
 - Stocker l’écart type du bruit par passerelle pour rapprocher l’algorithme de `NetworkServerApp::evaluateADR`.
 - Ajouter un test de non-régression comparant l’ADR LoRaFlexSim et FLoRa sur un scénario multi-passerelle.
+
+## Résolution
+- La passerelle transmet désormais le SNIR effectivement calculé lors des collisions et le serveur le programme avec `schedule_receive`.
+- `NetworkServer.receive` mémorise le SNIR par passerelle et l’intègre directement dans `node.snr_history`, ce qui aligne les décisions ADR `max`, `avg` et `adr-max` sur celles de FLoRa.
+- Le test d’intégration `test_multi_gateway_adr_alignment_matches_flora` vérifie que le SNIR moyen restitué par chaque passerelle dans le scénario multi-GW correspond aux traces FLoRa.

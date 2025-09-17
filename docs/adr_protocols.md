@@ -23,6 +23,11 @@ Lorsque ce SNR offre une marge suffisante, l'algorithme réduit d'abord le
 spreading factor puis la puissance d'émission afin d'augmenter le débit tout en
 restant compatible avec LoRaWAN.
 
+Dans LoRaFlexSim, la mesure utilisée correspond désormais au **SNIR remonté par
+la passerelle** ayant décodé l'uplink. Le serveur conserve un historique par
+passerelle, ce qui reproduit fidèlement le comportement de FLoRa dans les
+déploiements multi-gateways.
+
 **Avantages**
 
 - Optimise le débit et la consommation énergétique.

@@ -228,6 +228,7 @@ class Node:
         self.history: list[dict] = []
         self.rssi_history: list[float] = []
         self.snr_history: list[float] = []
+        self.gateway_snr_history: dict[int, list[float]] = {}
         self.in_transmission: bool = False
         self.current_end_time: float | None = None
         self.last_airtime: float = 0.0

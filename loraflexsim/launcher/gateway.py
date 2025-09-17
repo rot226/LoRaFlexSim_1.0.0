@@ -167,6 +167,10 @@ class Gateway:
 
         # Liste des transmissions en collision potentielles (y compris la nouvelle)
         colliders = interfering_transmissions.copy()
+        if noise_floor is not None:
+            for t in interfering_transmissions:
+                if t.get('snir') is None:
+                    t['snir'] = t['rssi'] - noise_floor
         # Ajouter la nouvelle transmission elle-même
         new_transmission = {
             'event_id': event_id,
@@ -181,7 +185,10 @@ class Gateway:
             'bandwidth': bandwidth,
             'symbol_duration': symbol_duration,
             'lost_flag': False,
+            'snir': None,
         }
+        if noise_floor is not None:
+            new_transmission['snir'] = rssi - noise_floor
         colliders.append(new_transmission)
 
         if not interfering_transmissions:
@@ -248,6 +255,8 @@ class Gateway:
                 return rssi_i - 10 * math.log10(total)
 
             snrs = [_snr(i) for i in range(len(colliders))]
+            for idx, snr_val in enumerate(snrs):
+                colliders[idx]['snir'] = snr_val
             metrics = snrs
             indices = sorted(range(len(colliders)), key=lambda i: snrs[i], reverse=True)
             strongest = colliders[indices[0]]
@@ -403,7 +412,12 @@ class Gateway:
                 pass
             if not t['lost_flag']:
                 network_server.schedule_receive(
-                    event_id, node_id, self.id, t['rssi'], at_time=t['end_time']
+                    event_id,
+                    node_id,
+                    self.id,
+                    t['rssi'],
+                    snir=t.get('snir'),
+                    at_time=t['end_time'],
                 )
                 logger.debug(
                     f"Gateway {self.id}: successfully received event {event_id} from node {node_id}."
