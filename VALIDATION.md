@@ -1,5 +1,44 @@
 # Validation fonctionnelle FLoRa
 
+## Matrice de validation LoRaFlexSim ↔ FLoRa
+
+Une matrice de cas reproductibles couvre désormais les variantes mono/multi-passerelle, la distribution multi-canaux, les modes ADR (nœud vs serveur), les classes A/B/C ainsi que la mobilité. Chaque scénario instancie directement `Simulator` avec la configuration FLoRa correspondante et un plan de fréquences assigné pour tester le comportement multicanal.【F:loraflexsim/validation/__init__.py†L1-L125】
+
+| Scénario | Topologie | ADR | Classe | Mobilité | Config FLoRa | Référence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `mono_gw_single_channel_class_a` | 1 passerelle / 1 canal | Nœud + serveur | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/mono_gw_single_channel_class_a.sca` |
+| `mono_gw_multichannel_node_adr` | 1 passerelle / 3 canaux | Nœud | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/mono_gw_multichannel_node_adr.sca` |
+| `multi_gw_multichannel_server_adr` | 2 passerelles / 3 canaux | Serveur | A | Non | `flora-master/simulations/examples/n1000-gw2.ini` | `tests/integration/data/multi_gw_multichannel_server_adr.sca` |
+| `class_b_beacon_scheduling` | 1 passerelle / 1 canal | Désactivé | B | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_b_beacon_scheduling.sca` |
+| `class_c_mobility_multichannel` | 1 passerelle / 3 canaux | Serveur | C | Oui | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_c_mobility_multichannel.sca` |
+
+Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le PDR, le nombre de collisions et le SNR moyen restent dans les tolérances fixées par scénario.【F:tests/integration/test_validation_matrix.py†L1-L32】 Les références FLoRa (fichiers `.sca`) sont conservées dans `tests/integration/data/` pour servir de base de comparaison.
+
+### Automatisation
+
+- `pytest tests/integration/test_validation_matrix.py` exécute la matrice pour l'intégration continue.
+- `python scripts/run_validation.py` génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
+
+### Guide de lecture des résultats
+
+Le script `run_validation.py` imprime une ligne par scénario résumant les métriques simulées, la valeur de référence et l'écart (`Δ`). Le même contenu est persisté dans `results/validation_matrix.csv` avec les colonnes suivantes :
+
+- `pdr_sim` / `pdr_ref` / `pdr_delta` : ratio de paquets délivrés contre transmis.
+- `collisions_sim` / `collisions_ref` / `collisions_delta` : collisions montantes.
+- `snr_sim` / `snr_ref` / `snr_delta` : SNR moyen en dB pour les transmissions reçues.
+- `status` : `ok` si toutes les deltas sont inférieures aux tolérances (`tolerance_*`).
+
+Pour visualiser l'évolution d'un indicateur sur la matrice, charger le CSV dans Pandas et tracer un graphe :
+
+```python
+import pandas as pd
+
+df = pd.read_csv("results/validation_matrix.csv")
+df.plot.bar(x="scenario", y=["pdr_sim", "pdr_ref"], rot=45)
+```
+
+Cette représentation permet d’identifier rapidement les scénarios qui s’écartent des métriques FLoRa et de suivre l’évolution au fil des versions.【F:results/validation_matrix.csv†L1-L6】
+
 ## Channel
 
 ### Fonctions clés
