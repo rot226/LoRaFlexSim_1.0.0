@@ -55,3 +55,18 @@ pytest loraflexsim/tests/test_flora_trace_alignment.py
 All tolerances default to ±0.6 dB. They can be relaxed for investigations by
 setting the `FLORA_TRACE_TOLERANCE` environment variable before running
 `pytest`, for example `FLORA_TRACE_TOLERANCE=1.0 pytest ...`.
+
+## Validation FLoRa
+
+The latest channel fixes are covered by dedicated tests to ensure the Python
+implementation stays aligned with the FLoRa reference:
+
+- `tests/test_channel_path_loss.py` checks that the `flora` preset reproduces
+  the log-normal path-loss curve of the OMNeT++ module for multiple distances
+  without numerical drift【F:tests/test_channel_path_loss.py†L1-L31】.
+- `tests/test_channel_path_loss_validation.py` rejects non-positive distances
+  for the Hata-Okumura and Oulu models, mirroring the constraints enforced in
+  FLoRa【F:tests/test_channel_path_loss_validation.py†L1-L15】.
+
+Both tests currently pass with `pytest`, confirming the regression coverage of
+the FLoRa alignment.
