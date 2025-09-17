@@ -76,6 +76,23 @@ Les scripts `run_mobility_multichannel.py` et
 | `n200_c3_mobile` | 200 | 3 | Oui | 5 |
 | `n200_c6_static` | 200 | 6 | Non | 0 |
 
+## Paramètres essentiels pour reproduire FLoRa
+
+Pour obtenir des résultats alignés sur les scénarios publiés par FLoRa, appliquez
+les réglages suivants dans vos scripts (ainsi que ceux détaillés dans la section
+« Reproduire FLoRa » du README) :
+
+- `flora_mode=True` configure automatiquement les seuils de détection, le
+  modèle radio `omnet_full` et les temporisations historiques FLoRa.【F:loraflexsim/launcher/simulator.py†L354-L457】
+- `environment="flora"` (ou `"flora_hata"`, `"flora_oulu"`) et
+  `flora_loss_model` sélectionnent les presets longue portée repris du projet
+  d’origine pour les canaux supplémentaires gérés par `MultiChannel`.【F:loraflexsim/launcher/channel.py†L68-L114】
+- Les démos longue portée (`run.py --long-range-demo flora_hata`, etc.)
+  exploitent ces presets et sont vérifiées par des tests dédiés (>5 km).【F:tests/test_long_range_presets.py†L1-L55】
+
+Ces paramètres peuvent être combinés avec les scénarios fournis plus haut pour
+recréer les figures du dépôt FLoRa ou exécuter la matrice de validation.
+
 ## Exemple complet
 
 ```bash

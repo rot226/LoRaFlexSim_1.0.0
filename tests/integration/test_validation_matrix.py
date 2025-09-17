@@ -11,6 +11,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - skip if pandas unusable
     pytest.skip("pandas is required for validation comparisons", allow_module_level=True)
 
+from loraflexsim.launcher import adr_ml, explora_at
 from loraflexsim.validation import (
     SCENARIOS,
     compare_to_reference,
@@ -64,3 +65,37 @@ def test_multi_gateway_adr_alignment_matches_flora():
     assert avg_snir == pytest.approx(
         reference["snr"], abs=scenario.tolerances.snr
     )
+
+
+def test_validation_matrix_covers_specialised_modules():
+    """Each advanced module is represented by at least one scenario."""
+
+    def _has(predicate):
+        return any(predicate(sc) for sc in SCENARIOS)
+
+    assert _has(
+        lambda sc: sc.sim_kwargs.get("duty_cycle") not in (None, 0)
+    ), "Duty-cycle scenario missing"
+    assert _has(
+        lambda sc: sc.sim_kwargs.get("channel_distribution") == "random"
+    ), "Dynamic multichannel scenario missing"
+    assert _has(
+        lambda sc: sc.sim_kwargs.get("node_class") == "B"
+        and (
+            sc.sim_kwargs.get("mobility")
+            or sc.sim_kwargs.get("mobility_model") is not None
+        )
+    ), "Class B mobility scenario missing"
+    assert _has(
+        lambda sc: sc.sim_kwargs.get("node_class") == "C"
+        and (
+            sc.sim_kwargs.get("mobility")
+            or sc.sim_kwargs.get("mobility_model") is not None
+        )
+    ), "Class C mobility scenario missing"
+    assert _has(
+        lambda sc: any(hook is explora_at.apply for hook in getattr(sc, "setup", ()))
+    ), "EXPLoRa scenario missing"
+    assert _has(
+        lambda sc: any(hook is adr_ml.apply for hook in getattr(sc, "setup", ()))
+    ), "ADR-ML scenario missing"

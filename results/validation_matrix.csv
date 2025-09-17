@@ -4,3 +4,8 @@ mono_gw_multichannel_node_adr,"Mono-passerelle, 3 canaux EU868, ADR côté nœud
 multi_gw_multichannel_server_adr,"Deux passerelles, multi-canaux, ADR serveur uniquement (classe A).",0.7,0.7,0.0,0.0,0.0,0.0,-8.823195465943469,-8.823195465943469,0.0,0.03,3,2.0,ok
 class_b_beacon_scheduling,"Classe B avec synchronisation beacon, canal unique, topologie statique.",0.1,0.1,0.0,0.0,0.0,0.0,-6.546101104315923,-6.546101104315923,0.0,0.05,2,2.5,ok
 class_c_mobility_multichannel,Classe C mobile avec 3 canaux et ADR serveur.,0.3,0.3,0.0,0.0,0.0,0.0,-4.571749503938942,-4.571749503938942,0.0,0.05,3,3.0,ok
+duty_cycle_enforcement_class_a,Duty cycle 1 % appliqué explicitement (classe A).,0.6,0.6,0.0,0.0,0.0,0.0,-9.604304281145177,-9.604304281145177,0.0,0.02,1,2.0,ok
+dynamic_multichannel_random_assignment,Multi-canaux avec répartition aléatoire et ADR combiné.,0.3,0.3,0.0,0.0,0.0,0.0,-7.14273730601496,-7.14273730601496,0.0,0.03,2,2.5,ok
+class_b_mobility_multichannel,Classe B mobile avec SmoothMobility et plan tri-canal.,0.2,0.2,0.0,0.0,0.0,0.0,-2.968889809456144,-2.968889809456144,0.0,0.05,3,3.0,ok
+explora_at_balanced_airtime,EXPLoRa-AT active l'équilibrage airtime ADR.,0.8,0.8,0.0,0.0,0.0,0.0,-15.252797504408383,-15.252797504408383,0.0,0.05,3,3.0,ok
+adr_ml_adaptive_strategy,ADR-ML appliqué aux nœuds tri-canaux (classe A).,0.8,0.8,0.0,0.0,0.0,0.0,-9.085200560296524,-9.085200560296524,0.0,0.05,3,3.0,ok

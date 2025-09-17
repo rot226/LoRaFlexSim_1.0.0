@@ -10,7 +10,12 @@ Une matrice de cas reproductibles couvre désormais les variantes mono/multi-pas
 | `mono_gw_multichannel_node_adr` | 1 passerelle / 3 canaux | Nœud | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/mono_gw_multichannel_node_adr.sca` |
 | `multi_gw_multichannel_server_adr` | 2 passerelles / 3 canaux | Serveur | A | Non | `flora-master/simulations/examples/n1000-gw2.ini` | `tests/integration/data/multi_gw_multichannel_server_adr.sca` |
 | `class_b_beacon_scheduling` | 1 passerelle / 1 canal | Désactivé | B | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_b_beacon_scheduling.sca` |
-| `class_c_mobility_multichannel` | 1 passerelle / 3 canaux | Serveur | C | Oui | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_c_mobility_multichannel.sca` |
+| `class_c_mobility_multichannel` | 1 passerelle / 3 canaux | Serveur | C | Oui (SmoothMobility) | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_c_mobility_multichannel.sca` |
+| `duty_cycle_enforcement_class_a` | 1 passerelle / 1 canal | Désactivé | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/duty_cycle_enforcement_class_a.sca` |
+| `dynamic_multichannel_random_assignment` | 1 passerelle / 3 canaux | Nœud + serveur | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/dynamic_multichannel_random_assignment.sca` |
+| `class_b_mobility_multichannel` | 1 passerelle / 3 canaux | Serveur | B | Oui (SmoothMobility) | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_b_mobility_multichannel.sca` |
+| `explora_at_balanced_airtime` | 1 passerelle / 3 canaux | EXPLoRa-AT | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/explora_at_balanced_airtime.sca` |
+| `adr_ml_adaptive_strategy` | 1 passerelle / 3 canaux | ADR-ML | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/adr_ml_adaptive_strategy.sca` |
 
 ### Correspondance des paramètres FLoRa ↔ LoRaFlexSim
 
@@ -21,7 +26,7 @@ Une matrice de cas reproductibles couvre désormais les variantes mono/multi-pas
 | `timeToFirstPacket = timeToNextPacket = exponential(1000s)` | `packet_interval = first_packet_interval = 1000` et tirages exponentiels identiques | Les tests comparent l'intervalle moyen issu de l'INI et celui mesuré dans LoRaFlexSim.【F:flora-master/simulations/examples/n100-gw1.ini†L33-L35】【F:loraflexsim/launcher/simulator.py†L251-L266】【F:tests/test_flora_packet_interval.py†L1-L21】 |
 | `NetworkServer.**.evaluateADRinServer = true`, `adrMethod = "avg"` | `Simulator(..., adr_method="avg")` déclenche la même agrégation SNR | Le scénario `test_flora_sca` utilise `adr_method="avg"` et compare les métriques aux fichiers `.sca` de référence.【F:flora-master/simulations/examples/n100-gw1.ini†L20-L27】【F:tests/test_flora_sca.py†L18-L39】 |
 
-Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le PDR, le nombre de collisions et le SNR moyen restent dans les tolérances fixées par scénario.【F:tests/integration/test_validation_matrix.py†L1-L32】 Les références FLoRa (fichiers `.sca`) sont conservées dans `tests/integration/data/` pour servir de base de comparaison.
+Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le PDR, le nombre de collisions et le SNR moyen restent dans les tolérances fixées par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】 Les références FLoRa (fichiers `.sca`) sont conservées dans `tests/integration/data/` pour servir de base de comparaison. Un test dédié garantit également que chaque module avancé (duty-cycle, multicanal dynamique, classes B/C mobiles, EXPLoRa, ADR-ML) dispose d'un scénario associé dans la matrice.【F:tests/integration/test_validation_matrix.py†L80-L113】
 
 ### Automatisation
 
