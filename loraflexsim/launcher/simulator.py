@@ -78,12 +78,19 @@ class _TxManager:
             {"rssi": rssi_dBm, "end": end_time, "id": event_id}
         )
 
-    def total_power(self, gateway_id: int, frequency: float, current_time: float) -> float:
+    def total_power(
+        self,
+        gateway_id: int,
+        frequency: float,
+        current_time: float,
+        *,
+        base_noise_mW: float = 0.0,
+    ) -> float:
         key = (gateway_id, frequency)
         transmissions = self.active.get(key)
+        total = base_noise_mW
         if not transmissions:
-            return 0.0
-        total = 0.0
+            return total
         remaining = []
         for t in transmissions:
             if t["end"] > current_time:
@@ -891,11 +898,17 @@ class Simulator:
                     sf,
                     **kwargs,
                 )
+                noise_dBm = node.channel.last_noise_dBm
+                noise_lin = 10 ** (noise_dBm / 10.0)
                 freq_hz = getattr(node.channel, "last_freq_hz", node.channel.frequency_hz)
-                interference = self._tx_manager.total_power(gw.id, freq_hz, time)
-                if interference > 0.0:
-                    noise_lin = 10 ** (node.channel.noise_floor_dBm() / 10.0)
-                    snr -= 10 * math.log10(1.0 + interference / noise_lin)
+                total_power = self._tx_manager.total_power(
+                    gw.id,
+                    freq_hz,
+                    time,
+                    base_noise_mW=noise_lin,
+                )
+                if total_power > noise_lin:
+                    snr -= 10 * math.log10(total_power / noise_lin)
                 rssi += getattr(gw, "rx_gain_dB", 0.0)
                 snr += getattr(gw, "rx_gain_dB", 0.0)
                 # Enregistrer la transmission pour l'interférence future
@@ -907,7 +920,7 @@ class Simulator:
                         continue  # trop faible pour être détecté
                     snr_threshold = (
                         node.channel.sensitivity_dBm.get(sf, -float("inf"))
-                        - node.channel.noise_floor_dBm()
+                        - noise_dBm
                     )
                     if snr < snr_threshold:
                         continue  # signal trop faible pour être reçu
@@ -930,7 +943,7 @@ class Simulator:
                     freq_offset=getattr(node, "current_freq_offset", 0.0),
                     sync_offset=getattr(node, "current_sync_offset", 0.0),
                     bandwidth=node.channel.bandwidth,
-                    noise_floor=node.channel.noise_floor_dBm(),
+                    noise_floor=noise_dBm,
                     capture_mode=(
                         "omnet"
                         if node.channel.phy_model == "omnet"
@@ -1229,13 +1242,14 @@ class Simulator:
                     node.sf,
                     **kwargs,
                 )
+                noise_dBm = node.channel.last_noise_dBm
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
                         node.downlink_pending = max(0, node.downlink_pending - 1)
                         continue
                     snr_threshold = (
                         node.channel.sensitivity_dBm.get(node.sf, -float("inf"))
-                        - node.channel.noise_floor_dBm()
+                        - noise_dBm
                     )
                     if snr >= snr_threshold:
                         node.handle_downlink(frame)
@@ -1368,13 +1382,14 @@ class Simulator:
                     sf,
                     **kwargs,
                 )
+                noise_dBm = node.channel.last_noise_dBm
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
                         node.downlink_pending = max(0, node.downlink_pending - 1)
                         continue
                     snr_threshold = (
                         node.channel.sensitivity_dBm.get(sf, -float("inf"))
-                        - node.channel.noise_floor_dBm()
+                        - noise_dBm
                     )
                     if snr >= snr_threshold:
                         node.handle_downlink(frame)

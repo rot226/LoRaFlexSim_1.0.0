@@ -101,6 +101,13 @@ snr = rssi - noise + snr_offset_dB
 ```
 
 où `noise` provient soit de la table FLoRa, soit du bruit thermique simulé.
+La valeur tirée est désormais mémorisée dans `Channel.last_noise_dBm` et
+réutilisée tout au long du traitement d'une transmission : atténuation par
+interférence, comparaison au seuil de sensibilité et capture par la passerelle
+partagent exactement le même échantillon de bruit. Cette mémorisation évite de
+ré-échantillonner `noise_floor_dBm()` lorsque `noise_floor_std` est non nul et
+stabilise ainsi les décisions « heard »/« collision » du simulateur
+évènementiel.【F:loraflexsim/launcher/simulator.py†L900-L936】【F:loraflexsim/launcher/channel.py†L467-L557】
 Par défaut, aucun « gain de traitement » n'est ajouté afin de reproduire les
 traces SNR issues de FLoRa. Un paramètre optionnel `processing_gain=True`
 permet toutefois de retrouver l'ancien comportement en ajoutant
