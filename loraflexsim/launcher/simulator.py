@@ -351,6 +351,22 @@ class Simulator:
         # Gestion du duty cycle (activé par défaut à 1 %)
         self.duty_cycle_manager = DutyCycleManager(duty_cycle) if duty_cycle else None
 
+        # Activer les courbes FLoRa lorsque la simulation est configurée en mode FLoRa.
+        force_flora_curves = flora_mode or phy_model.startswith("flora")
+        flora_phy_cls = None
+
+        def _apply_flora_curves(ch: Channel) -> None:
+            nonlocal flora_phy_cls
+            if not force_flora_curves:
+                return
+            ch.use_flora_curves = True
+            if getattr(ch, "flora_phy", None) is None:
+                if flora_phy_cls is None:
+                    from .flora_phy import FloraPHY as _FloraPHY
+
+                    flora_phy_cls = _FloraPHY
+                ch.flora_phy = flora_phy_cls(ch, loss_model=ch.flora_loss_model)
+
         # Initialiser la gestion multi-canaux
         if isinstance(channels, MultiChannel):
             self.multichannel = channels
@@ -360,6 +376,8 @@ class Simulator:
             if flora_mode:
                 for ch in self.multichannel.channels:
                     ch.phy_model = "omnet_full"
+            for ch in self.multichannel.channels:
+                _apply_flora_curves(ch)
             if flora_mode or phy_model.startswith("flora"):
                 for ch in self.multichannel.channels:
                     if getattr(ch, "environment", None) is None:
@@ -395,6 +413,7 @@ class Simulator:
                         phy_model=ch_phy_model,
                         environment=env,
                         flora_loss_model=flora_loss_model,
+                        use_flora_curves=force_flora_curves,
                         multipath_taps=3 if flora_mode else 1,
                         phase_noise_std_dB=phase_noise_std_dB,
                         clock_jitter_std_s=clock_jitter_std_s,
@@ -402,6 +421,8 @@ class Simulator:
                         pa_ramp_down_s=pa_ramp_down_s,
                     )
                 ]
+                for ch in ch_list:
+                    _apply_flora_curves(ch)
             else:
                 ch_list = []
                 for ch in channels:
@@ -410,6 +431,7 @@ class Simulator:
                             ch.detection_threshold_dBm = detection_threshold_dBm
                         if flora_mode:
                             ch.phy_model = "omnet_full"
+                        _apply_flora_curves(ch)
                         if (flora_mode or phy_model.startswith("flora")) and getattr(
                             ch, "environment", None
                         ) is None:
@@ -435,25 +457,29 @@ class Simulator:
                             ch.omnet_phy._phase_noise.std = phase_noise_std_dB
                         ch_list.append(ch)
                     else:
-                        ch_list.append(
-                            Channel(
-                                frequency_hz=float(ch),
-                                detection_threshold_dBm=detection_threshold_dBm,
-                                phy_model="omnet_full" if flora_mode else phy_model,
-                                environment=(
-                                    "flora"
-                                    if (flora_mode or phy_model.startswith("flora"))
-                                    else None
-                                ),
-                                flora_loss_model=flora_loss_model,
-                                multipath_taps=3 if flora_mode else 1,
-                                phase_noise_std_dB=phase_noise_std_dB,
-                                clock_jitter_std_s=clock_jitter_std_s,
-                                pa_ramp_up_s=pa_ramp_up_s,
-                                pa_ramp_down_s=pa_ramp_down_s,
-                            )
+                        channel_obj = Channel(
+                            frequency_hz=float(ch),
+                            detection_threshold_dBm=detection_threshold_dBm,
+                            phy_model="omnet_full" if flora_mode else phy_model,
+                            environment=(
+                                "flora"
+                                if (flora_mode or phy_model.startswith("flora"))
+                                else None
+                            ),
+                            flora_loss_model=flora_loss_model,
+                            use_flora_curves=force_flora_curves,
+                            multipath_taps=3 if flora_mode else 1,
+                            phase_noise_std_dB=phase_noise_std_dB,
+                            clock_jitter_std_s=clock_jitter_std_s,
+                            pa_ramp_up_s=pa_ramp_up_s,
+                            pa_ramp_down_s=pa_ramp_down_s,
                         )
+                        _apply_flora_curves(channel_obj)
+                        ch_list.append(channel_obj)
             self.multichannel = MultiChannel(ch_list, method=channel_distribution)
+            if force_flora_curves:
+                for ch in self.multichannel.channels:
+                    _apply_flora_curves(ch)
 
         # Compatibilité : premier canal par défaut
         self.channel = self.multichannel.channels[0]

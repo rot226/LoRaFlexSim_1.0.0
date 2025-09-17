@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import random
 import numpy as np
 
@@ -52,7 +53,30 @@ class LoRaPHY:
             freq_offset_hz=self.node.current_freq_offset,
             sync_offset_s=self.node.current_sync_offset,
         )
-        per = self.channel.packet_error_rate(snr, self.node.sf, payload_bytes=payload_size)
+        channel = self.channel
+        flora_phy = getattr(channel, "flora_phy", None)
+        per = None
+        if flora_phy is not None and (
+            getattr(channel, "use_flora_curves", False)
+            or getattr(channel, "phy_model", "").startswith("flora")
+        ):
+            per_kwargs = {}
+            try:
+                params = inspect.signature(flora_phy.packet_error_rate).parameters
+            except (TypeError, ValueError):
+                params = {}
+            if "per_model" in params:
+                per_kwargs["per_model"] = "logistic"
+            per = flora_phy.packet_error_rate(
+                snr,
+                self.node.sf,
+                payload_bytes=payload_size,
+                **per_kwargs,
+            )
+        if per is None:
+            per = channel.packet_error_rate(
+                snr, self.node.sf, payload_bytes=payload_size
+            )
         rand = rng.random() if rng is not None else random.random()
         success = per < 1.0 and rand >= per
         return rssi, snr, self.airtime(payload_size), success
