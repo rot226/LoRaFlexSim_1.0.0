@@ -58,6 +58,50 @@ fournies dans l'INI de FLoRa.
    Les métriques en temps réel sont diffusées sur le WebSocket `/ws` sous la
    forme `{"event": "metrics", "data": {...}}`.
 
+## Reproduire FLoRa
+
+Pour aligner strictement LoRaFlexSim sur les scénarios FLoRa, assurez-vous que
+les paramètres suivants sont appliqués lors de la création du `Simulator` ou du
+`Channel` :
+
+- `flora_mode=True` — active automatiquement les courbes logistiques de FLoRa,
+  impose le modèle physique `omnet_full`, applique le seuil de détection
+  historique et réutilise les presets de propagation « flora » sur l'ensemble
+  des canaux gérés par `MultiChannel`.【F:loraflexsim/launcher/simulator.py†L354-L457】
+- `use_flora_curves=True` — charge les équations de perte et de PER de FLoRa.
+  Ce paramètre est forcé par `flora_mode`, mais peut être activé manuellement
+  lorsque seul le canal doit reproduire les courbes historiques.【F:loraflexsim/launcher/simulator.py†L354-L384】
+- `detection_threshold_dBm=-110` — valeur par défaut des scénarios FLoRa ; elle
+  est propagée à tous les canaux lorsque `flora_mode` est actif, avec un
+  fallback de `-110` dBm si une combinaison SF/BW n'est pas définie par la table
+  d'origine.【F:loraflexsim/launcher/simulator.py†L373-L385】【F:loraflexsim/launcher/channel.py†L93-L114】
+- **Presets de propagation** — utilisez `environment="flora"`, `"flora_hata"`
+  ou `"flora_oulu"` pour sélectionner respectivement la perte log-normale, la
+  variante Hata-Okumura ou le modèle Oulu reproduits depuis FLoRa. Ces presets
+  partagent les constantes de référence et peuvent être combinés avec
+  `flora_loss_model` pour calquer exactement la variante choisie.【F:loraflexsim/launcher/channel.py†L68-L80】
+
+### Exemple complet (run.py)
+
+Une fois le projet installé (`pip install -e .`), le script console `run.py`
+expose le module `loraflexsim.run`. Depuis la racine du dépôt, vous pouvez
+exécuter la commande suivante pour obtenir une simulation alignée FLoRa :
+
+```bash
+python -m loraflexsim.run --nodes 5 --gateways 1 --channels 1 \
+  --mode random --interval 120 --steps 3600 --seed 42 --runs 1
+```
+
+Ce qui produit la sortie attendue ci-dessous (identique via `python run.py` une
+fois le script installé) :
+
+```
+Simulation d'un réseau LoRa : 5 nœuds, 1 gateways, 1 canaux, mode=random, intervalle=120.0, steps=3600, first_interval=10.0
+Run 1/1 : PDR=100.00% , Paquets livrés=165, Collisions=0, Énergie consommée=2.258 J, Délai moyen=0.00 unités de temps, Débit moyen=7.33 bps
+Moyenne : PDR=100.00% , Paquets livrés=165.00, Collisions=0.00, Énergie consommée=2.258 J, Délai moyen=0.00 unités de temps, Débit moyen=7.33 bps
+```
+【F:loraflexsim/run.py†L406-L503】【7e31c7†L1-L4】
+
 ## Exemples d'utilisation avancés
 
 Quelques commandes pour tester des scénarios plus complexes :

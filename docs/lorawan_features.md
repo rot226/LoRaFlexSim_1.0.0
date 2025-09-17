@@ -57,3 +57,9 @@ Ce document résume les différences entre la simulation FLoRa d'origine
 - Le compteur `adr_ack_cnt` est désormais remis à zéro à chaque downlink
   et la montée en SF ou puissance suit la logique LoRaWAN après
   `adr_ack_limit + adr_ack_delay` transmissions sans réponse.
+
+## Limitations connues et options longue portée
+
+- **Portée élevée :** les presets `flora`, `flora_hata` et `flora_oulu` reprennent fidèlement les constantes de perte FLoRa mais restent calibrés pour des distances de l'ordre de 10 km. Pour dépasser cette portée tout en conservant les sensibilités d'origine, sélectionnez `environment="rural_long_range"` ou `flora_loss_model` correspondant, qui abaissent l'exposant de perte et le shadowing selon les valeurs documentées dans `Channel.ENV_PRESETS`.【F:loraflexsim/launcher/channel.py†L68-L80】 Les tests de régression `test_long_range_presets` vérifient que ces presets maintiennent un PDR valide au-delà de 5 km en mode FLoRa.【F:tests/test_long_range_presets.py†L1-L55】
+- **Modèle de bruit :** la table `FLORA_SENSITIVITY` ne couvre que les combinaisons SF/BW utilisées par FLoRa et retombe sur `-110` dBm lorsque la paire demandée est absente. Les valeurs de bruit chargées via `parse_flora_noise_table` reproduisent fidèlement `LoRaAnalogModel.cc` mais ne modélisent pas d'évolution spatiale supplémentaire.【F:loraflexsim/launcher/channel.py†L93-L133】
+- **Alignement FLoRa :** les scénarios `flora_mode=True` demeurent vérifiés contre les traces `.sca` de référence afin de garantir la parité sur les métriques PDR/SNR lorsque les paramètres ci-dessus sont activés.【F:tests/test_flora_sca.py†L18-L39】
