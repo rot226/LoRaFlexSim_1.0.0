@@ -55,6 +55,29 @@ Ces variantes rejettent désormais explicitement les distances nulles ou
 négatives en levant une `ValueError`, ce qui évite des entrées non physiques et
 aligne les validations sur celles de FLoRa【F:loraflexsim/launcher/channel.py†L12-L41】【F:tests/test_channel_path_loss_validation.py†L1-L15】.
 
+### Profil rural longue portée
+
+Afin de couvrir des scénarios LoRaWAN au-delà de 5 km tout en conservant une
+réception proche des seuils de FLoRa, LoRaFlexSim fournit le preset
+``rural_long_range``. Celui-ci fixe ``γ = 1.7``, ``PATH_LOSS_D0 = 105`` dB et
+``REFERENCE_DISTANCE = 100`` m, avec un shadowing réduit à 1.5 dB pour refléter
+des zones ouvertes à antennes renforcées【F:loraflexsim/launcher/channel.py†L69-L78】.
+Le tableau suivant illustre les RSSI obtenus avec une puissance d'émission de
+14 dBm (cas FLoRa classique) et la marge restante vis-à-vis du seuil SF12
+``-137`` dBm fourni par ``Channel.FLORA_SENSITIVITY``【F:loraflexsim/launcher/channel.py†L52-L65】 :
+
+| Distance (km) | RSSI (dBm) | Marge vs seuil SF12 (dB) |
+|---------------|------------|--------------------------|
+| 1             | −108.0     | 29.0                     |
+| 5             | −119.9     | 17.1                     |
+| 10            | −125.0     | 12.0                     |
+| 12            | −126.4     | 10.6                     |
+| 15            | −128.0     | 9.0                      |
+
+Ces valeurs montrent que, autour de 10–15 km, le RSSI reste dans la fenêtre
+``−130…−120`` dBm suggérée par FLoRa, offrant une marge confortable pour des
+spreading factors élevés tout en conservant une modélisation réaliste.【F:loraflexsim/launcher/channel.py†L69-L78】
+
 ### Obstacles avec le PHY OMNeT++
 
 Lorsque `Channel` utilise le PHY inspiré d'OMNeT++, le calcul `compute_rssi`
