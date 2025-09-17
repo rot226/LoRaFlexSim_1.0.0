@@ -70,7 +70,7 @@ class Channel:
         "suburban": (2.32, 7.08, 128.95, 1000.0),
         "rural": (2.0, 2.0, 113.0, 1.0),
         # Parameters matching the FLoRa log-normal shadowing model
-        "flora": (2.7, 3.57, 127.41, 40.0),
+        "flora": (2.08, 3.57, 127.41, 40.0),
         "flora_oulu": (2.32, 7.08, 128.95, 1000.0),
         "flora_hata": (2.08, 3.57, 127.5, 40.0),
         # Additional presets for denser or indoor environments
@@ -134,7 +134,7 @@ class Channel:
     def __init__(
         self,
         frequency_hz: float = 868e6,
-        path_loss_exp: float = 2.7,
+        path_loss_exp: float = 2.08,
         shadowing_std: float = 6.0,
         path_loss_d0: float | None = None,
         reference_distance: float = 1.0,
