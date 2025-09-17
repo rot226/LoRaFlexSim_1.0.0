@@ -104,6 +104,24 @@ Moyenne : PDR=100.00% , Paquets livrés=165.00, Collisions=0.00, Énergie consom
 ```
 【F:loraflexsim/run.py†L406-L503】【7e31c7†L1-L4】
 
+## Plan de vérification
+
+Deux commandes permettent de rejouer la matrice de validation et de suivre les
+écarts par rapport aux références FLoRa décrites dans `VALIDATION.md` :
+
+1. `pytest tests/integration/test_validation_matrix.py` exécute chaque scénario
+   et vérifie que les écarts de PDR, de collisions et de SNR restent dans les
+   tolérances définies par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】
+2. `python scripts/run_validation.py --output results/validation_matrix.csv`
+   génère un rapport synthétique et retourne un code de sortie non nul si une
+   dérive dépasse une tolérance.【F:scripts/run_validation.py†L1-L112】
+
+Le fichier `results/validation_matrix.csv` regroupe pour chaque scénario les
+valeurs simulées (`*_sim`), les références FLoRa (`*_ref`), les écarts (`*_delta`)
+et un statut `ok/fail`. Les colonnes `tolerance_*` rappellent les seuils
+utilisés par les tests ; le fichier `VALIDATION.md` décrit le contexte de chaque
+scénario et la façon d’interpréter les écarts en cas d’échec.【F:results/validation_matrix.csv†L1-L11】【F:VALIDATION.md†L1-L67】
+
 ## Exemples d'utilisation avancés
 
 Quelques commandes pour tester des scénarios plus complexes :

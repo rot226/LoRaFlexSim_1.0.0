@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
 from loraflexsim.launcher import Simulator, MultiChannel
+from loraflexsim.launcher import adr_ml, explora_at
 from loraflexsim.launcher.compare_flora import (
     load_flora_metrics,
     load_flora_rx_stats,
@@ -37,6 +38,7 @@ class ValidationScenario:
     channel_plan: Iterable[float] | None = None
     run_steps: int | None = None
     tolerances: ScenarioTolerance = field(default_factory=ScenarioTolerance)
+    setup: Sequence[Callable[[Simulator], None]] = field(default_factory=tuple)
 
     def build_simulator(self) -> Simulator:
         """Instantiate :class:`Simulator` for the scenario."""
@@ -44,7 +46,10 @@ class ValidationScenario:
         kwargs = dict(self.sim_kwargs)
         if self.channel_plan is not None:
             kwargs["channels"] = MultiChannel(list(self.channel_plan))
-        return Simulator(**kwargs)
+        sim = Simulator(**kwargs)
+        for hook in self.setup:
+            hook(sim)
+        return sim
 
 
 def compute_average_snr(sim: Simulator) -> float:
@@ -200,6 +205,112 @@ SCENARIOS: list[ValidationScenario] = [
         channel_plan=[868.1e6, 868.3e6, 868.5e6],
         run_steps=None,
         tolerances=ScenarioTolerance(pdr=0.05, collisions=3, snr=3.0),
+    ),
+    ValidationScenario(
+        name="duty_cycle_enforcement_class_a",
+        description="Duty cycle 1 % appliqué explicitement (classe A).",
+        flora_config=FLORA_DIR / "n100-gw1.ini",
+        flora_reference=DATA_DIR / "duty_cycle_enforcement_class_a.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "n100-gw1.ini"),
+            seed=6,
+            packets_to_send=1,
+            mobility=False,
+            adr_node=False,
+            adr_server=False,
+            adr_method="avg",
+            duty_cycle=0.01,
+        ),
+        channel_plan=[868.1e6],
+        run_steps=None,
+        tolerances=ScenarioTolerance(pdr=0.02, collisions=1, snr=2.0),
+    ),
+    ValidationScenario(
+        name="dynamic_multichannel_random_assignment",
+        description="Multi-canaux avec répartition aléatoire et ADR combiné.",
+        flora_config=FLORA_DIR / "n100-gw1.ini",
+        flora_reference=DATA_DIR / "dynamic_multichannel_random_assignment.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "n100-gw1.ini"),
+            seed=7,
+            packets_to_send=1,
+            mobility=False,
+            adr_node=True,
+            adr_server=True,
+            adr_method="avg",
+            channel_distribution="random",
+        ),
+        channel_plan=[868.1e6, 868.3e6, 868.5e6],
+        run_steps=None,
+        tolerances=ScenarioTolerance(pdr=0.03, collisions=2, snr=2.5),
+    ),
+    ValidationScenario(
+        name="class_b_mobility_multichannel",
+        description="Classe B mobile avec SmoothMobility et plan tri-canal.",
+        flora_config=FLORA_DIR / "n100-gw1.ini",
+        flora_reference=DATA_DIR / "class_b_mobility_multichannel.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "n100-gw1.ini"),
+            seed=8,
+            packets_to_send=1,
+            mobility=True,
+            adr_node=False,
+            adr_server=True,
+            node_class="B",
+            adr_method="avg",
+            mobility_model=SmoothMobility(
+                2376.0,
+                1.0,
+                3.0,
+                rng=np.random.Generator(np.random.MT19937(8)),
+            ),
+        ),
+        channel_plan=[868.1e6, 868.3e6, 868.5e6],
+        run_steps=None,
+        tolerances=ScenarioTolerance(pdr=0.05, collisions=3, snr=3.0),
+    ),
+    ValidationScenario(
+        name="explora_at_balanced_airtime",
+        description="EXPLoRa-AT active l'équilibrage airtime ADR.",
+        flora_config=FLORA_DIR / "n100-gw1.ini",
+        flora_reference=DATA_DIR / "explora_at_balanced_airtime.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "n100-gw1.ini"),
+            seed=9,
+            packets_to_send=1,
+            mobility=False,
+            adr_node=False,
+            adr_server=False,
+            adr_method="avg",
+        ),
+        channel_plan=[868.1e6, 868.3e6, 868.5e6],
+        run_steps=None,
+        tolerances=ScenarioTolerance(pdr=0.05, collisions=3, snr=3.0),
+        setup=(explora_at.apply,),
+    ),
+    ValidationScenario(
+        name="adr_ml_adaptive_strategy",
+        description="ADR-ML appliqué aux nœuds tri-canaux (classe A).",
+        flora_config=FLORA_DIR / "n100-gw1.ini",
+        flora_reference=DATA_DIR / "adr_ml_adaptive_strategy.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "n100-gw1.ini"),
+            seed=10,
+            packets_to_send=1,
+            mobility=False,
+            adr_node=False,
+            adr_server=False,
+            adr_method="avg",
+        ),
+        channel_plan=[868.1e6, 868.3e6, 868.5e6],
+        run_steps=None,
+        tolerances=ScenarioTolerance(pdr=0.05, collisions=3, snr=3.0),
+        setup=(adr_ml.apply,),
     ),
 ]
 
