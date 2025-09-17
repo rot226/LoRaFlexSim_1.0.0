@@ -37,3 +37,21 @@ pytest tests/test_flora_equivalence.py
 ```
 
 The test checks several distances, spreading factors and bandwidths against the FLoRa binary.
+
+## FLoRa reference trace comparison
+
+LoRaFlexSim also embeds a lightweight suite that replays reference traces
+derived from the original FLoRa formulas (RSSI/SNR, capture effect and ADR
+decisions). The traces are defined in `loraflexsim/tests/reference_traces.py`
+and are compared against the simulator through parameterised tests located in
+`loraflexsim/tests/test_flora_trace_alignment.py`.
+
+To execute the comparison locally:
+
+```bash
+pytest loraflexsim/tests/test_flora_trace_alignment.py
+```
+
+All tolerances default to ±0.6 dB. They can be relaxed for investigations by
+setting the `FLORA_TRACE_TOLERANCE` environment variable before running
+`pytest`, for example `FLORA_TRACE_TOLERANCE=1.0 pytest ...`.
