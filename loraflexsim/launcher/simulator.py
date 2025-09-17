@@ -862,9 +862,6 @@ class Simulator:
             # Propagation du paquet vers chaque passerelle
             best_snr = None
             for gw in self.gateways:
-                interference = self._tx_manager.total_power(
-                    gw.id, node.channel.frequency_hz, time
-                )
                 distance = node.distance_to(gw)
                 kwargs = {
                     "freq_offset_hz": getattr(node, "current_freq_offset", 0.0),
@@ -894,6 +891,8 @@ class Simulator:
                     sf,
                     **kwargs,
                 )
+                freq_hz = getattr(node.channel, "last_freq_hz", node.channel.frequency_hz)
+                interference = self._tx_manager.total_power(gw.id, freq_hz, time)
                 if interference > 0.0:
                     noise_lin = 10 ** (node.channel.noise_floor_dBm() / 10.0)
                     snr -= 10 * math.log10(1.0 + interference / noise_lin)
@@ -901,7 +900,7 @@ class Simulator:
                 snr += getattr(gw, "rx_gain_dB", 0.0)
                 # Enregistrer la transmission pour l'interférence future
                 self._tx_manager.add(
-                    gw.id, node.channel.frequency_hz, rssi, end_time, event_id
+                    gw.id, freq_hz, rssi, end_time, event_id
                 )
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
@@ -926,7 +925,7 @@ class Simulator:
                     end_time,
                     node.channel.capture_threshold_dB,
                     self.current_time,
-                    node.channel.frequency_hz,
+                    freq_hz,
                     self.min_interference_time,
                     freq_offset=getattr(node, "current_freq_offset", 0.0),
                     sync_offset=getattr(node, "current_sync_offset", 0.0),

@@ -318,6 +318,7 @@ class OmnetPHY:
         # Include time-varying frequency drift
         freq_offset_hz += self.model.frequency_drift()
         freq_offset_hz += self._dev_freq.sample()
+        self.channel.last_freq_hz = self.channel.frequency_hz + freq_offset_hz
         if sync_offset_s is None:
             sync_offset_s = self._sync_offset.sample()
         # Include short-term clock jitter
@@ -375,19 +376,42 @@ class OmnetPHY:
         penalty = 1.5 * (freq_factor ** 2 + time_factor ** 2 + phase_factor ** 2)
         return 10 * math.log10(1.0 + penalty)
 
+    @staticmethod
+    def _same_band(freq_a: float, bw_a: float, freq_b: float, bw_b: float) -> bool:
+        """Return ``True`` if two narrowband signals share the same band."""
+
+        return (
+            math.isclose(freq_a, freq_b, rel_tol=0.0, abs_tol=1.0)
+            and math.isclose(bw_a, bw_b, rel_tol=1e-9, abs_tol=1.0)
+        )
+
+    @staticmethod
+    def _bands_overlap(freq_a: float, bw_a: float, freq_b: float, bw_b: float) -> bool:
+        """Return ``True`` when two bands overlap in frequency."""
+
+        half = (bw_a + bw_b) / 2.0
+        if half <= 0.0:
+            return False
+        return abs(freq_a - freq_b) < half
+
     def compute_snrs(
         self,
         rssi_list: list[float],
         start_list: list[float],
         end_list: list[float],
         noise_dBm: float | None = None,
+        *,
+        freq_list: list[float] | None = None,
+        bandwidth_list: list[float] | None = None,
     ) -> list[float]:
         """Return the SNIR for each signal accounting for partial overlaps.
 
         The implementation mirrors the integration performed by FLoRa's
         ``LoRaAnalogModel::computeNoise``.  The total noise power over the
         packet duration is obtained by accumulating the power of all
-        overlapping transmissions weighted by their overlap time.
+        overlapping transmissions weighted by their overlap time.  Only
+        transmissions occupying the same carrier frequency and bandwidth
+        contribute to the equivalent noise, matching FLoRa's behaviour.
         """
 
         if noise_dBm is None:
@@ -397,15 +421,30 @@ class OmnetPHY:
         snrs: list[float] = []
         n = len(rssi_list)
 
+        if freq_list is None:
+            freq_list = [self.channel.frequency_hz] * n
+        if bandwidth_list is None:
+            bandwidth_list = [self.channel.bandwidth] * n
+        if len(freq_list) != n or len(bandwidth_list) != n:
+            raise ValueError("freq_list and bandwidth_list must match rssi_list length")
+
         for i in range(n):
             start_i = start_list[i]
             end_i = end_list[i]
             dur_i = max(end_i - start_i, 1e-9)
+            freq_i = freq_list[i]
+            bw_i = bandwidth_list[i]
 
             # Build the "power change" map as done in LoRaAnalogModel
             events: dict[float, float] = {start_i: noise_lin, end_i: -noise_lin}
             for j in range(n):
                 if j == i:
+                    continue
+                freq_j = freq_list[j]
+                bw_j = bandwidth_list[j]
+                if not self._same_band(freq_i, bw_i, freq_j, bw_j):
+                    if self._bands_overlap(freq_i, bw_i, freq_j, bw_j):
+                        raise ValueError("Overlapping bands are not supported")
                     continue
                 o_start = max(start_i, start_list[j])
                 o_end = min(end_i, end_list[j])
@@ -435,6 +474,7 @@ class OmnetPHY:
         end_list: list[float] | None = None,
         sf_list: list[int] | None = None,
         freq_list: list[float] | None = None,
+        bandwidth_list: list[float] | None = None,
     ) -> list[bool]:
         """Return capture decision with optional partial overlap weighting."""
         if not rssi_list:
@@ -497,7 +537,18 @@ class OmnetPHY:
             return winners
 
         noise = self.noise_floor()
-        snrs = self.compute_snrs(rssi_list, start_list, end_list, noise)
+        if freq_list is None:
+            freq_list = [self.channel.frequency_hz] * n
+        if bandwidth_list is None:
+            bandwidth_list = [self.channel.bandwidth] * n
+        snrs = self.compute_snrs(
+            rssi_list,
+            start_list,
+            end_list,
+            noise,
+            freq_list=freq_list,
+            bandwidth_list=bandwidth_list,
+        )
 
         order = sorted(range(n), key=lambda i: snrs[i], reverse=True)
         if n == 1:
