@@ -69,6 +69,7 @@ class Channel:
         "urban": (2.08, 3.57, 127.41, 40.0),
         "suburban": (2.32, 7.08, 128.95, 1000.0),
         "rural": (2.0, 2.0, 113.0, 1.0),
+        "rural_long_range": (1.7, 1.5, 105.0, 100.0),
         # Parameters matching the FLoRa log-normal shadowing model
         "flora": (2.08, 3.57, 127.41, 40.0),
         "flora_oulu": (2.32, 7.08, 128.95, 1000.0),
@@ -294,7 +295,8 @@ class Channel:
         :param adjacent_interference_dB: Pénalité appliquée aux brouilleurs sur
             un canal adjacent (dB).
         :param environment: Chaîne optionnelle pour charger un preset
-            ("urban", "suburban" ou "rural").
+            ("urban", "suburban", "rural", "rural_long_range", "flora",
+            "flora_hata" ou "flora_oulu").
         :param region: Nom d'un plan de fréquences prédéfini ("EU868", "US915",
             etc.). S'il est fourni, ``frequency_hz`` est ignoré et remplacé par
             la fréquence correspondante du canal ``channel_index``.

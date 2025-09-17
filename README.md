@@ -298,7 +298,8 @@ réception :
  `(freq, bw, dB)` appliqués au calcul du bruit. Chaque entrée définit
  un niveau de bruit spécifique pour la bande concernée.
 - `environment` : preset rapide pour le modèle de propagation
-  (`urban`, `urban_dense`, `suburban`, `rural`, `indoor` ou `flora`).
+  (`urban`, `urban_dense`, `suburban`, `rural`, `rural_long_range`, `indoor`,
+  `flora`, `flora_hata` ou `flora_oulu`).
 - `phy_model` : "omnet", `"omnet_full"`, "flora", "flora_full" ou `"flora_cpp"` pour utiliser un modèle physique avancé reprenant les formules de FLoRa. Le mode `omnet_full` applique directement les équations du `LoRaAnalogModel` d'OMNeT++ avec bruit variable, sélectivité de canal et une gestion précise des collisions partielles. Le mode `flora_cpp` charge la bibliothèque C++ compilée depuis FLoRa pour une précision accrue.
 - `use_flora_curves` : applique directement les équations FLoRa pour la
   puissance reçue et le taux d'erreur.
@@ -310,6 +311,23 @@ canal = Channel(environment="urban")
 
 Ces valeurs influencent le calcul du RSSI et du SNR retournés par
 `Channel.compute_rssi`.
+
+Le preset `rural_long_range` a été ajouté pour couvrir les scénarios LoRaWAN où
+les capteurs se situent à 10–15 km des passerelles. Il abaisse l'exposant de
+perte à `γ = 1.7` et allonge la distance de référence à 100 m afin de maintenir
+le RSSI proche des seuils FLoRa (−130…−120 dBm) tout en conservant une marge de
+sécurité pour le SF12.【F:loraflexsim/launcher/channel.py†L69-L78】  Le tableau
+ci-dessous indique les RSSI attendus pour une puissance d'émission de 14 dBm,
+calculés sans shadowing pour illustrer la tendance de ce preset.
+
+| Distance (km) | RSSI `rural_long_range` (dBm) |
+|---------------|-------------------------------|
+| 1             | −108.0                        |
+| 5             | −119.9                        |
+| 10            | −125.0                        |
+| 12            | −126.4                        |
+| 15            | −128.0                        |
+
 Un module **`propagation_models.py`** regroupe désormais plusieurs modèles :
 `LogDistanceShadowing` pour la perte de parcours classique, `multipath_fading_db`
 pour générer un fading Rayleigh, et la nouvelle classe `CompletePropagation`
