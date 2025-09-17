@@ -1,72 +1,105 @@
-# Validation
+# Validation fonctionnelle FLoRa
 
-The LoRaFlexSim project includes a Dockerfile to reproduce the test environment.
+## Channel
 
-## Build the image
+### Fonctions clés
+| Fonction LoRaFlexSim | Rôle | Référence FLoRa |
+| --- | --- | --- |
+| `flora_detection_threshold` | Calque les sensibilités par SF/BW pour aligner la détection sur FLoRa. | `LoRaAnalogModel::getBackgroundNoisePower` fournit les mêmes seuils de bruit de fond. |
+| `noise_floor_dBm` | Reproduit le calcul du bruit thermique et des interférences accumulées. | `LoRaAnalogModel::computeNoise` additionne les puissances des réceptions superposées sur la même bande. |
+| `path_loss` | Implémente la loi log-normale (et variantes Hata/Oulu) utilisée par l’analog model OMNeT++. | `LoRaLogNormalShadowing::computePathLoss` applique la formule issue de FLoRa. |
+| `compute_rssi` | Recompose RSSI/SNR en tenant compte du gain d’antenne, du fading et des pertes d’obstacles. | `LoRaAnalogModel::computeReceptionPower` multiplie puissance, gains d’antennes et pertes de propagation. |
+| `airtime` | Reproduit la durée préambule + payload selon la modulation LoRa. | `LoRaTransmitter::createTransmission` dérive la durée du préambule et du payload à partir du SF et du BW. |
 
-```bash
-docker build -t loraflexsim:test -f docker/Dockerfile .
-```
+### Parité fonctionnelle
+- ✅ Formules de perte en espace libre/log-normale et sensibilités alignées sur les constantes FLoRa (mêmes paramètres `K1`, `γ`, seuils de détection).
+- ✅ Gestion du bruit basée sur la somme pondérée des puissances et l’ajout du bruit thermique comme dans l’`AnalogModel`.
+- ✅ Calcul d’airtime cohérent avec la durée générée par le transmetteur OMNeT++.
 
-## Run the test suite
+### Écarts
+#### Bloquant
+- `OmnetPHY.compute_snrs` additionne toutes les transmissions concurrentes sans filtrer la fréquence, ce qui pénalise à tort les liaisons multicanaux. FLoRa ne cumule que les signaux partageant exactement la même porteuse et largeur de bande. ➜ Ticket TICKET-001.
 
-```bash
-docker run --rm loraflexsim:test
-```
+#### Améliorations futures
+- Aucun écart supplémentaire identifié.
 
-Expected output:
+## omnet_phy
 
-```
-136 passed, 13 skipped in 33.47s
-```
+### Fonctions clés
+| Fonction LoRaFlexSim | Rôle | Référence FLoRa |
+| --- | --- | --- |
+| `noise_floor` | Calcule le bruit instantané avec variations de température et de corrélation. | `LoRaAnalogModel::computeNoise` et `LoRaReceiver::isPacketCollided` évaluent le bruit d’arrière-plan et les collisions. |
+| `compute_rssi` | Applique pertes, offsets de fréquence/synchronisation et fading corrélé comme la chaîne OMNeT++. | `LoRaAnalogModel::computeReceptionPower` et `LoRaReceiver` intègrent ces contributions lors de la réception. |
+| `capture` | Reproduit la matrice `NON_ORTH_DELTA` et la fenêtre de capture des préambules. | `LoRaReceiver::isPacketCollided` compare la puissance reçue et la fenêtre de capture de 6 symboles. |
+| `update` | Suit l’énergie consommée par état TX/RX/IDLE, équivalent au module énergétique FLoRa. | `LoRaEnergyConsumer::receiveSignal` convertit les courants de mode radio en énergie accumulée. |
+| `compute_snrs` | Approxime l’intégration temporelle du bruit pour chaque message. | `LoRaAnalogModel::computeNoise` construit une carte des variations de puissance sur la durée de la trame. |
 
-In the current environment Docker is unavailable, so the LoRaFlexSim image could not be built. Running `pytest -q` directly produced the above results.
+### Parité fonctionnelle
+- ✅ Gestion de la capture LoRa (matrice non-orthogonale et fenêtre préambule) conforme à FLoRa.
+- ✅ Modélisation des offsets fréquence/horloge et du bruit variable reprenant les corrélations OMNeT++.
+- ✅ Comptabilisation énergétique alignée sur le consommateur FLoRa (courants dépendant du mode radio).
 
-## FLoRa equivalence test
+### Écarts
+#### Bloquant
+- Hérite du même problème de filtrage fréquentiel que la couche Channel via `compute_snrs`. (Voir TICKET-001.)
 
-To compare LoRaFlexSim with the native FLoRa implementation for path loss, RSSI and PER, first build the C++ library:
+#### Améliorations futures
+- Aucun autre écart identifié.
 
-```bash
-scripts/build_flora_cpp.sh
-```
+## server
 
-Then run the dedicated test:
+### Fonctions clés
+| Fonction LoRaFlexSim | Rôle | Référence FLoRa |
+| --- | --- | --- |
+| `NetworkServer.receive` | Dé-duplication, gestion join OTAA et déclenchement ADR. | `NetworkServerApp::processScheduledPacket` et `evaluateADR` orchestrent la même logique serveur. |
+| `send_downlink` | Planifie les fenêtres RX A/B/C et encode les commandes ADR. | `NetworkServerApp::evaluateADR` et `createTxPacket` produisent les réponses TXCONFIG et gèrent les délais. |
+| `schedule_receive` | Ajoute la latence réseau/traitement via la file d’événements du simulateur. | `NetworkServerApp::handleMessage` et `processLoraMACPacket` utilisent des self-messages pour simuler délais et file d’attente. |
+| `assign_explora_at_groups` | Algorithme d’équilibrage airtime inspiré d’EXPLoRa-AT pour configurer SF/puissance. | `NetworkServerApp::evaluateADR` applique une logique similaire de SNR margin et ajustement SF/TP. |
+| `_activate` | Derive les clés de session et envoie le `JoinAccept`. | `SimpleLoRaApp::sendJoinRequest` / `NetworkServerApp` gèrent l’OTAA et la réponse de join. |
 
-```bash
-pytest tests/test_flora_equivalence.py
-```
+### Parité fonctionnelle
+- ✅ Détection des doublons et association passerelle/événement identique à la table de traitement FLoRa.
+- ✅ Gestion des fenêtres RX et des classes A/B/C via un ordonnanceur, comme dans les self-messages OMNeT++.
+- ✅ Implémentation ADR (méthodes max/avg) alignée sur la logique `evaluateADR` (marge SNR et pas de 3 dB).
 
-The test checks several distances, spreading factors and bandwidths against the FLoRa binary.
+### Écarts
+#### Bloquant
+- Aucun.
 
-## FLoRa reference trace comparison
+#### Améliorations futures
+- L’ADR serveur dérive le SNR à partir d’un bruit moyen global (`Channel.noise_floor_dBm`) au lieu d’utiliser la mesure SNIR spécifique à la passerelle comme dans FLoRa. Cela peut biaiser l’agrégation lorsque plusieurs passerelles ont des environnements radio différents. ➜ Ticket TICKET-002.
 
-LoRaFlexSim also embeds a lightweight suite that replays reference traces
-derived from the original FLoRa formulas (RSSI/SNR, capture effect and ADR
-decisions). The traces are defined in `loraflexsim/tests/reference_traces.py`
-and are compared against the simulator through parameterised tests located in
-`loraflexsim/tests/test_flora_trace_alignment.py`.
+## mac
 
-To execute the comparison locally:
+### Fonctions clés
+| Fonction LoRaFlexSim | Rôle | Référence FLoRa |
+| --- | --- | --- |
+| `LoRaMAC.send` | Délègue la construction des trames montantes à l’objet `Node`. | `LoRaMac::handleUpperPacket` encapsule les paquets applicatifs dans une trame MAC avant transmission. |
+| `LoRaMAC.process_downlink` | Transmet les trames descendantes au nœud pour traitement. | `LoRaMac::handleLowerPacket` remet les paquets reçus à la couche supérieure lorsqu’ils sont valides. |
 
-```bash
-pytest loraflexsim/tests/test_flora_trace_alignment.py
-```
+### Parité fonctionnelle
+- ✅ Interface minimale pour les scénarios de test équivalente au couplage MAC ↔ application FLoRa.
 
-All tolerances default to ±0.6 dB. They can be relaxed for investigations by
-setting the `FLORA_TRACE_TOLERANCE` environment variable before running
-`pytest`, for example `FLORA_TRACE_TOLERANCE=1.0 pytest ...`.
+### Écarts
+- Aucun écart identifié.
 
-## Validation FLoRa
+## lorawan
 
-The latest channel fixes are covered by dedicated tests to ensure the Python
-implementation stays aligned with the FLoRa reference:
+### Fonctions clés
+| Fonction LoRaFlexSim | Rôle | Référence FLoRa |
+| --- | --- | --- |
+| `LoRaWANFrame` | Représente l’entête MAC/MIC utilisé par les échanges OTAA/ADR. | `LoRaMacFrame` définit les champs adresse, SF, BW et séquence transmis dans FLoRa. |
+| `LinkADRReq/Ans` | Sérialise les commandes ADR utilisées par le serveur. | `NetworkServerApp::evaluateADR` émet des paquets `TXCONFIG` pour modifier SF/TP. |
+| `LinkCheckReq/Ans`, `DevStatus`, `DutyCycle`, `RXParamSetup` | Implémente les commandes MAC supportées par les tests de conformité. | `LoRaAppPacket` transporte les options de configuration (ADRACKReq, SF, TP) dans l’équivalent FLoRa. |
+| `JoinAccept` (via `_activate`) | Chiffre et signe les messages d’activation OTAA. | `SimpleLoRaApp::sendJoinRequest` déclenche la procédure et FLoRa encode la réponse join. |
 
-- `tests/test_channel_path_loss.py` checks that the `flora` preset reproduces
-  the log-normal path-loss curve of the OMNeT++ module for multiple distances
-  without numerical drift【F:tests/test_channel_path_loss.py†L1-L31】.
-- `tests/test_channel_path_loss_validation.py` rejects non-positive distances
-  for the Hata-Okumura and Oulu models, mirroring the constraints enforced in
-  FLoRa【F:tests/test_channel_path_loss_validation.py†L1-L15】.
+### Parité fonctionnelle
+- ✅ Couverture des commandes MAC nécessaires aux scénarios ADR, duty-cycle et classes B/C.
+- ✅ Traitement OTAA (cryptographie AES/MIC) aligné sur le comportement attendu.
 
-Both tests currently pass with `pytest`, confirming the regression coverage of
-the FLoRa alignment.
+### Écarts
+- Aucun écart identifié.
+
+## Tickets ouverts
+- [TICKET-001](docs/tickets/TICKET-001.md) – Corriger `OmnetPHY.compute_snrs` pour ignorer les transmissions hors bande lors du calcul du bruit équivalent.
+- [TICKET-002](docs/tickets/TICKET-002.md) – Exposer le SNIR mesuré par chaque passerelle au serveur ADR pour refléter la logique FLoRa.
