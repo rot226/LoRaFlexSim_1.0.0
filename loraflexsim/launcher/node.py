@@ -119,7 +119,9 @@ class Node:
 
             self.profile = get_profile(energy_profile)
         else:
-            self.profile = energy_profile or DEFAULT_ENERGY_PROFILE
+            self.profile = (
+                DEFAULT_ENERGY_PROFILE if energy_profile is None else energy_profile
+            )
 
         # Énergie et compteurs de paquets
         self.energy_consumed = 0.0
