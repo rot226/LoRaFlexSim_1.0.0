@@ -332,6 +332,16 @@ def main(argv=None):
         help="Exécute un exemple LoRaWAN",
     )
     parser.add_argument(
+        "--long-range-demo",
+        nargs="?",
+        const="flora_hata",
+        choices=["flora", "flora_hata", "rural_long_range"],
+        help=(
+            "Exécute un scénario longue portée reproductible. "
+            "Optionnellement, préciser le preset (flora, flora_hata, rural_long_range)."
+        ),
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         help="Graine aléatoire pour reproduire les résultats",
@@ -410,6 +420,101 @@ def main(argv=None):
 
     if args.runs < 1:
         parser.error("--runs must be >= 1")
+
+    if args.long_range_demo:
+        from .scenarios import (
+            LONG_RANGE_RECOMMENDATIONS,
+            build_long_range_simulator,
+        )
+
+        preset = args.long_range_demo
+        params = LONG_RANGE_RECOMMENDATIONS[preset]
+        seed = args.seed if args.seed is not None else 2
+        simulator = build_long_range_simulator(preset, seed=seed)
+        simulator.run()
+        metrics = simulator.get_metrics()
+
+        sf = metrics["pdr_by_sf"]
+
+        def _percent(value: float) -> float:
+            return value * 100.0
+
+        area_km2 = simulator.area_size ** 2 / 1_000_000.0
+        sf12_distances = [
+            math.hypot(node.x - simulator.gateways[0].x, node.y - simulator.gateways[0].y)
+            for node in simulator.nodes
+            if node.sf == 12
+        ]
+        max_rssi = float("nan")
+        max_snr = float("nan")
+        successful_sf12 = [
+            ev
+            for ev in simulator.events_log
+            if ev.get("result") == "Success" and ev["sf"] == 12 and ev["rssi_dBm"] is not None
+        ]
+        if successful_sf12:
+            max_rssi = max(ev["rssi_dBm"] for ev in successful_sf12)
+            max_snr = max(ev["snr_dB"] for ev in successful_sf12)
+
+        logging.info(
+            "Scénario longue portée (%s) : %d nœuds sur %.1f km², TX=%.1f dBm, "
+            "gains TX/RX=%.1f/%.1f dBi",
+            preset,
+            len(simulator.nodes),
+            area_km2,
+            params.tx_power_dBm,
+            params.tx_antenna_gain_dB,
+            params.rx_antenna_gain_dB,
+        )
+        logging.info(
+            "PDR global %.1f %% | SF12 %.1f %% | SF11 %.1f %% | SF10 %.1f %% | SF9 %.1f %%",
+            _percent(metrics["PDR"]),
+            _percent(sf[12]),
+            _percent(sf[11]),
+            _percent(sf[10]),
+            _percent(sf[9]),
+        )
+        logging.info(
+            "Distances SF12: %s km | RSSI max SF12 %.1f dBm | SNR max %.1f dB",
+            ", ".join(f"{d/1000:.1f}" for d in sf12_distances),
+            max_rssi,
+            max_snr,
+        )
+
+        if args.output:
+            with open(args.output, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    [
+                        "preset",
+                        "area_km2",
+                        "nodes",
+                        "packets_per_node",
+                        "pdr_total_pct",
+                        "pdr_sf12_pct",
+                        "pdr_sf11_pct",
+                        "pdr_sf10_pct",
+                        "pdr_sf9_pct",
+                        "max_rssi_sf12_dBm",
+                        "max_snr_sf12_dB",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        preset,
+                        f"{area_km2:.3f}",
+                        len(simulator.nodes),
+                        params.packets_per_node,
+                        f"{_percent(metrics['PDR']):.2f}",
+                        f"{_percent(sf[12]):.2f}",
+                        f"{_percent(sf[11]):.2f}",
+                        f"{_percent(sf[10]):.2f}",
+                        f"{_percent(sf[9]):.2f}",
+                        f"{max_rssi:.2f}" if successful_sf12 else "",
+                        f"{max_snr:.2f}" if successful_sf12 else "",
+                    ]
+                )
+        return
 
     logging.info(
         f"Simulation d'un réseau LoRa : {args.nodes} nœuds, {args.gateways} gateways, "

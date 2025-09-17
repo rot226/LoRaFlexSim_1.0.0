@@ -43,6 +43,8 @@ fournies dans l'INI de FLoRa.
    python run.py --nodes 30 --gateways 1 --mode Random --interval 10 --steps 100 --output résultats.csv
    python run.py --nodes 20 --mode Random --interval 15 --first-interval 5
    python run.py --nodes 5 --mode Periodic --interval 10
+   python run.py --long-range-demo            # scénario longue portée (flora_hata)
+   python run.py --long-range-demo flora --output long_range.csv
    ```
     Ajoutez l'option `--seed` pour reproduire exactement le placement des nœuds
     et l'ordre statistique des intervalles.
@@ -604,6 +606,11 @@ Lancer l'exemple minimal :
 ```bash
 python run.py --lorawan-demo
 ```
+
+L'option `--long-range-demo` prépare quant à elle une topologie de grande aire
+avec les gains d'antennes recommandés pour les presets `flora`, `flora_hata` ou
+`rural_long_range`. Les métriques produites (PDR par SF, RSSI/SNR SF12) sont
+documentées dans [`docs/long_range.md`](docs/long_range.md).
 
 Le tableau de bord inclut désormais un sélecteur **Classe LoRaWAN** permettant de choisir entre les modes A, B ou C pour l'ensemble des nœuds, ainsi qu'un champ **Taille payload (o)** afin de définir la longueur utilisée pour calculer l'airtime. Ces réglages facilitent la reproduction fidèle des scénarios FLoRa.
 
