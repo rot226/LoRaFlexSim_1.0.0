@@ -468,6 +468,12 @@ PER = 1 / (1 + exp(2 * (snr - (th + 2))))
 où `th` est le seuil SNR par Spreading Factor ({7: -7.5, 8: -10, 9: -12.5,
 10: -15, 11: -17.5, 12: -20} dB). Ces équations sont activées en passant
 `phy_model="omnet_full"` ou `use_flora_curves=True` au constructeur du `Channel`.
+Lorsque `flora_mode=True`, qu'un modèle physique `phy_model` commençant par
+`"flora"` est sélectionné ou que `use_flora_curves=True` est activé, LoRaFlexSim
+applique automatiquement cette approximation logistique via `FloraPHY`.
+Pour revenir explicitement au modèle analytique de Croce et al. (2018), créez
+le canal avec `phy_model="omnet_full"` ou `"omnet"` et laissez
+`use_flora_curves=False`.
 Pour le mode OMNeT++, le taux d'erreur binaire est déterminé grâce à la
 fonction `calculateBER` de `LoRaModulation` transposée telle quelle en
 Python afin de reproduire fidèlement les performances de décodage.
