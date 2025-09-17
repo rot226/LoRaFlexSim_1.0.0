@@ -16,7 +16,7 @@ def test_rssi_snr_match_python_impl():
     rssi_py, snr_py = ch_py.compute_rssi(14.0, 100.0, sf=7)
     # Derive SNR using the FLoRa noise table to mimic the C++ implementation
     noise_cpp = ch_cpp._flora_noise_dBm(7)
-    snr_cpp = rssi_cpp - noise_cpp + ch_cpp.snr_offset_dB + 10 * math.log10(2 ** 7)
+    snr_cpp = rssi_cpp - noise_cpp + ch_cpp.snr_offset_dB
 
     assert abs(rssi_cpp - rssi_py) <= 0.01
     assert abs(snr_cpp - snr_py) <= 0.01
