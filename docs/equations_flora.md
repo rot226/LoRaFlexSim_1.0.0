@@ -63,6 +63,22 @@ par `ObstacleLoss` si les positions sont connues. Les obstacles sont donc pris
 en compte quel que soit le modèle de PHY actif, y compris avec les optimisations
 `omnet_phy` introduites pour reproduire le comportement FLoRa【F:loraflexsim/launcher/channel.py†L579-L616】.
 
+### Rapport signal sur bruit (SNR)
+
+Le rapport signal sur bruit renvoyé par `Channel.compute_rssi` suit l'expression
+
+```python
+snr = rssi - noise + snr_offset_dB
+```
+
+où `noise` provient soit de la table FLoRa, soit du bruit thermique simulé.
+Par défaut, aucun « gain de traitement » n'est ajouté afin de reproduire les
+traces SNR issues de FLoRa. Un paramètre optionnel `processing_gain=True`
+permet toutefois de retrouver l'ancien comportement en ajoutant
+`10 * log10(2 ** sf)` lorsque le spreading factor est connu, tant pour le
+canal de base que pour les variantes OMNeT++ et avancées
+【F:loraflexsim/launcher/channel.py†L683-L707】【F:loraflexsim/launcher/omnet_phy.py†L349-L365】【F:loraflexsim/launcher/advanced_channel.py†L668-L692】.
+
 ## Taux d'erreur paquet (PER)
 
 La fonction `FloraPHY.packet_error_rate` accepte un paramètre `per_model`

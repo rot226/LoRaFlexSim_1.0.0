@@ -197,6 +197,7 @@ class Channel:
         obstacle_map: str | os.PathLike | None = None,
         obstacle_loss: ObstacleLoss | None = None,
         *,
+        processing_gain: bool = False,
         bandwidth: float = 125e3,
         coding_rate: int = 1,
         capture_threshold_dB: float = 6.0,
@@ -446,6 +447,7 @@ class Channel:
         self.system_loss_dB = system_loss_dB
         self.rssi_offset_dB = rssi_offset_dB
         self.snr_offset_dB = snr_offset_dB
+        self.processing_gain = bool(processing_gain)
 
         # Paramètres LoRa (BW 125 kHz, CR 4/5, préambule 8, CRC activé)
         self.bandwidth = bandwidth
@@ -702,7 +704,7 @@ class Channel:
         penalty = self._alignment_penalty_db(freq_offset_hz, sync_offset_s, sf)
         snr -= penalty
         snr -= abs(self._phase_noise.sample())
-        if sf is not None:
+        if sf is not None and self.processing_gain:
             snr += 10 * math.log10(2 ** sf)
         self.last_rssi_dBm = rssi
         self.last_filter_att_dB = attenuation
