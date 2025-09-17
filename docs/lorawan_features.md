@@ -34,6 +34,10 @@ Ce document résume les différences entre la simulation FLoRa d'origine
 - Les conditions de réception (uplink comme downlink) reproduisent
   désormais exactement celles de FLoRa, sans suppression aléatoire
   supplémentaire.
+- Les modèles de canal appliquent les mêmes courbes de perte, rejettent les
+  distances non physiques et tiennent compte des obstacles même avec le PHY
+  OMNeT++, des comportements vérifiés par les tests de validation
+  dédiés【F:loraflexsim/launcher/channel.py†L12-L41】【F:loraflexsim/launcher/channel.py†L579-L616】【F:tests/test_channel_path_loss.py†L1-L31】【F:tests/test_channel_path_loss_validation.py†L1-L15】.
 
 ## Fonctionnalités propres à la version Python
 

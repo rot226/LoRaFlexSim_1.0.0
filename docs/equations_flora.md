@@ -44,12 +44,24 @@ loss = B + 10 * n * log10(distance / d0) - antenna_gain
 ```
 
 Les paramètres par défaut sont `B = 128.95` dB, `n = 2.32`, `d0 = 1000` m et
-`antenna_gain = 0` dBi【F:loraflexsim/launcher/channel.py†L26-L42】. Pour une
+`antenna_gain = 0` dBi【F:loraflexsim/launcher/channel.py†L26-L41】. Pour une
 distance de `2` km :
 
 ```text
 loss = 128.95 + 23.2 * log10(2) ≈ 135.9 dB
 ```
+
+Ces variantes rejettent désormais explicitement les distances nulles ou
+négatives en levant une `ValueError`, ce qui évite des entrées non physiques et
+aligne les validations sur celles de FLoRa【F:loraflexsim/launcher/channel.py†L12-L41】【F:tests/test_channel_path_loss_validation.py†L1-L15】.
+
+### Obstacles avec le PHY OMNeT++
+
+Lorsque `Channel` utilise le PHY inspiré d'OMNeT++, le calcul `compute_rssi`
+appelle d'abord `OmnetPHY` puis retranche l'atténuation supplémentaire fournie
+par `ObstacleLoss` si les positions sont connues. Les obstacles sont donc pris
+en compte quel que soit le modèle de PHY actif, y compris avec les optimisations
+`omnet_phy` introduites pour reproduire le comportement FLoRa【F:loraflexsim/launcher/channel.py†L579-L616】.
 
 ## Taux d'erreur paquet (PER)
 

@@ -185,8 +185,10 @@ scénarios FLoRa. Voici la liste complète des options :
 
 - `num_nodes` : nombre de nœuds à créer lorsque aucun fichier INI n'est fourni.
 - `num_gateways` : nombre de passerelles générées automatiquement.
-- `area_size` : dimension (m) du carré dans lequel sont placés nœuds et
-  passerelles.
+- `area_size` : longueur du côté (m) du carré dans lequel sont placés nœuds et
+  passerelles. Pour estimer rapidement la surface couverte : `area_size = 1000`
+  représente `1 km²`, `area_size = 2000` correspond à `4 km²` et `area_size =
+  5000` couvre `25 km²`.
 - `transmission_mode` : `Random` (émissions Poisson) ou `Periodic`.
 - `packet_interval` : moyenne ou période fixe entre transmissions (s).
   La valeur par défaut est `100` s.
