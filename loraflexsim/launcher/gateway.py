@@ -277,12 +277,14 @@ class Gateway:
             start_list = [t['start_time'] for t in colliders]
             end_list = [t['end_time'] for t in colliders]
             freq_list = [t['frequency'] for t in colliders]
+            bandwidth_list = [t.get('bandwidth', bandwidth) for t in colliders]
             winners = self.omnet_phy.capture(
                 rssi_list,
                 start_list=start_list,
                 end_list=end_list,
                 sf_list=sf_list,
                 freq_list=freq_list,
+                bandwidth_list=bandwidth_list,
             )
             capture = any(winners)
             if capture:

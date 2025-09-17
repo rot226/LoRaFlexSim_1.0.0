@@ -10,3 +10,10 @@ Cette approximation provoque des faux positifs de collision/capture et fausse le
 - Ajouter `freq_list` comme paramètre obligatoire de `compute_snrs` et ignorer les transmissions dont la fréquence diffère de celle du signal étudié.
 - Aligner la logique sur `LoRaAnalogModel::computeNoise` en levant une exception si des bandes se recouvrent partiellement.
 - Étendre la couverture de tests pour valider le cas de collisions sur fréquences distinctes (cf. `tests/test_flora_capture.py`).
+
+## Résolution
+- `OmnetPHY.compute_snrs` filtre désormais les transmissions dont la porteuse ou la bande ne correspondent pas avant d'intégrer l'énergie de bruit, et aligne son comportement sur `LoRaAnalogModel::computeNoise` en signalant les bandes partiellement superposées.
+- Le simulateur propage la fréquence effective de chaque paquet aux calculs de capture OMNeT++/FLoRa afin que les collisions inter-canaux ne dégradent plus le SNR.
+- Le test `test_compute_snrs_ignores_other_channels` couvre deux paquets EU868 sur des fréquences distinctes pour prévenir toute régression.
+
+Cette entrée peut être retirée des notes de tickets une fois la correction fusionnée.
