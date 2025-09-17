@@ -5,8 +5,14 @@ import random
 import secrets
 # Use a regular set instead of WeakSet because numpy.random.Generator
 # does not support weak references in some numpy versions.
+import importlib
 import numpy as np
 from typing import Dict, Tuple
+
+try:
+    _np_generator_module = importlib.import_module("numpy.random._generator")
+except Exception:  # pragma: no cover - optional dependency
+    _np_generator_module = None
 
 
 class UncontrolledRandomError(RuntimeError):
@@ -38,8 +44,8 @@ class RngManager:
 _allowed_generators: "set[np.random.Generator]" = set()
 _hook_enabled = False
 _orig_random_funcs: dict[str, object] = {}
-_orig_numpy_methods: dict[str, object] = {}
 _orig_secret_funcs: dict[str, object] = {}
+_orig_numpy_generator: type[np.random.Generator] | None = None
 
 
 def register_stream(gen: np.random.Generator) -> None:
@@ -57,7 +63,7 @@ def _reject(*_: object, **__: object) -> None:
 def activate_global_hooks() -> None:
     """Globally reject uncontrolled RNG usage."""
 
-    global _hook_enabled
+    global _hook_enabled, _orig_numpy_generator
     if _hook_enabled:
         return
     _hook_enabled = True
@@ -84,19 +90,40 @@ def activate_global_hooks() -> None:
             _orig_random_funcs[name] = getattr(random, name)
             setattr(random, name, _reject)
 
-    def wrap(method):
-        def wrapper(self, *a, **k):
+    _orig_numpy_generator = np.random.Generator
+
+    class _HookedGenerator(_orig_numpy_generator):  # type: ignore[misc]
+        def _check(self) -> None:
             if self not in _allowed_generators:
                 _reject()
-            return method(self, *a, **k)
 
-        return wrapper
+        def random(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().random(*a, **k)
 
-    for name in ["random", "normal", "choice", "integers", "shuffle"]:
-        if hasattr(np.random.Generator, name):
-            orig = getattr(np.random.Generator, name)
-            _orig_numpy_methods[name] = orig
-            setattr(np.random.Generator, name, wrap(orig))
+        def normal(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().normal(*a, **k)
+
+        def choice(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().choice(*a, **k)
+
+        def integers(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().integers(*a, **k)
+
+        def shuffle(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().shuffle(*a, **k)
+
+        def standard_normal(self, *a, **k):  # type: ignore[override]
+            self._check()
+            return super().standard_normal(*a, **k)
+
+    np.random.Generator = _HookedGenerator  # type: ignore[assignment]
+    if _np_generator_module is not None:
+        _np_generator_module.Generator = _HookedGenerator  # type: ignore[attr-defined]
 
     for name in [
         "choice",
@@ -114,7 +141,7 @@ def activate_global_hooks() -> None:
 def deactivate_global_hooks() -> None:
     """Restore modules to their original state."""
 
-    global _hook_enabled
+    global _hook_enabled, _orig_numpy_generator
     if not _hook_enabled:
         return
 
@@ -122,12 +149,14 @@ def deactivate_global_hooks() -> None:
         setattr(random, name, func)
     _orig_random_funcs.clear()
 
-    for name, method in _orig_numpy_methods.items():
-        setattr(np.random.Generator, name, method)
-    _orig_numpy_methods.clear()
-
     for name, func in _orig_secret_funcs.items():
         setattr(secrets, name, func)
     _orig_secret_funcs.clear()
+
+    if _orig_numpy_generator is not None:
+        np.random.Generator = _orig_numpy_generator
+        if _np_generator_module is not None:
+            _np_generator_module.Generator = _orig_numpy_generator  # type: ignore[attr-defined]
+        _orig_numpy_generator = None
 
     _hook_enabled = False
