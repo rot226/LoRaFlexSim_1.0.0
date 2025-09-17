@@ -702,6 +702,12 @@ class Channel:
             noise = self._omnet_noise_dBm(sf, freq_offset_hz)
         else:
             noise = self.noise_floor_dBm(freq_offset_hz)
+        # Store the effective noise floor so that downstream components (e.g.
+        # capture logic or server metrics) reuse the same value.  Without this
+        # update the attribute stayed at its default ``0.0`` whenever the
+        # OMNeT++/FLoRa helpers were used, leading to grossly underestimated
+        # SNRs in the validation matrix.
+        self.last_noise_dBm = noise
         snr = rssi - noise + self.snr_offset_dB
         penalty = self._alignment_penalty_db(freq_offset_hz, sync_offset_s, sf)
         snr -= penalty
