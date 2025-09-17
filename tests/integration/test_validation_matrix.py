@@ -42,3 +42,25 @@ def test_scenario_matches_flora_reference(scenario):
     assert deltas["snr"] <= scenario.tolerances.snr, (
         f"SNR delta {deltas['snr']:.3f} exceeds tolerance {scenario.tolerances.snr:.3f}"
     )
+
+
+def test_multi_gateway_adr_alignment_matches_flora():
+    """Average SNIR from each gateway matches FLoRa for the multi-GW scenario."""
+
+    scenario = next(
+        sc for sc in SCENARIOS if sc.name == "multi_gw_multichannel_server_adr"
+    )
+    sim = scenario.build_simulator()
+    run_validation(sim, scenario.run_steps)
+    reference = load_flora_reference(scenario.flora_reference)
+
+    ns = sim.network_server
+    snir_samples: list[float] = []
+    for per_event in ns.gateway_snr_samples.values():
+        snir_samples.extend(per_event.values())
+
+    assert snir_samples, "No SNIR samples recorded for gateways"
+    avg_snir = sum(snir_samples) / len(snir_samples)
+    assert avg_snir == pytest.approx(
+        reference["snr"], abs=scenario.tolerances.snr
+    )

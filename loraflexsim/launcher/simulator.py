@@ -1033,6 +1033,11 @@ class Simulator:
                 if delivered
                 else None
             )
+            if delivered:
+                if event_id in self.network_server.event_rssi:
+                    entry["rssi_dBm"] = self.network_server.event_rssi[event_id]
+                if event_id in self.network_server.event_snir:
+                    entry["snr_dB"] = self.network_server.event_snir[event_id]
 
             if self.debug_rx:
                 if delivered:
