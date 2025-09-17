@@ -684,7 +684,7 @@ class AdvancedChannel:
         noise += penalty
 
         snr = rssi - noise - abs(self._phase_noise.sample())
-        if sf is not None:
+        if sf is not None and self.base.processing_gain:
             snr += 10 * math.log10(2 ** sf)
         if modem and modem in self.modem_snr_offsets:
             snr += self.modem_snr_offsets[modem]

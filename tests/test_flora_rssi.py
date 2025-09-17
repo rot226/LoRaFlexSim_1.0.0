@@ -18,7 +18,9 @@ def flora_equations(tx_power: float, distance: float, sf: int, ch: Channel):
         + ch.rssi_offset_dB
     )
     noise = ch.FLORA_SENSITIVITY[sf][int(ch.bandwidth)]
-    snr = rssi - noise + ch.snr_offset_dB + 10 * math.log10(2 ** sf)
+    snr = rssi - noise + ch.snr_offset_dB
+    if ch.processing_gain:
+        snr += 10 * math.log10(2 ** sf)
     return rssi, snr
 
 
@@ -38,7 +40,9 @@ def oulu_equations(tx_power: float, distance: float, sf: int, ch: Channel):
         + ch.rssi_offset_dB
     )
     noise = ch.FLORA_SENSITIVITY[sf][int(ch.bandwidth)]
-    snr = rssi - noise + ch.snr_offset_dB + 10 * math.log10(2 ** sf)
+    snr = rssi - noise + ch.snr_offset_dB
+    if ch.processing_gain:
+        snr += 10 * math.log10(2 ** sf)
     return rssi, snr
 
 
@@ -54,7 +58,9 @@ def hata_equations(tx_power: float, distance: float, sf: int, ch: Channel):
         + ch.rssi_offset_dB
     )
     noise = ch.FLORA_SENSITIVITY[sf][int(ch.bandwidth)]
-    snr = rssi - noise + ch.snr_offset_dB + 10 * math.log10(2 ** sf)
+    snr = rssi - noise + ch.snr_offset_dB
+    if ch.processing_gain:
+        snr += 10 * math.log10(2 ** sf)
     return rssi, snr
 
 
@@ -89,6 +95,18 @@ def test_hata_path_loss_model():
     ch = Channel(phy_model="flora_full", flora_loss_model="hata")
     ch.shadowing_std = 0.0
     expected_rssi, expected_snr = hata_equations(tx_power, distance, sf, ch)
+    rssi, snr = ch.compute_rssi(tx_power, distance, sf=sf)
+    assert abs(rssi - expected_rssi) <= 0.01
+    assert abs(snr - expected_snr) <= 0.01
+
+
+def test_processing_gain_flag_adds_expected_offset():
+    tx_power = 14.0
+    distance = 100.0
+    sf = 9
+    ch = Channel(environment="flora", phy_model="flora_full", processing_gain=True)
+    ch.shadowing_std = 0.0
+    expected_rssi, expected_snr = flora_equations(tx_power, distance, sf, ch)
     rssi, snr = ch.compute_rssi(tx_power, distance, sf=sf)
     assert abs(rssi - expected_rssi) <= 0.01
     assert abs(snr - expected_snr) <= 0.01

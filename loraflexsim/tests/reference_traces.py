@@ -82,7 +82,9 @@ def _flora_rssi_snr(channel: Channel, tx_power_dBm: float, distance_m: float, sf
         + channel.rssi_offset_dB
     )
     noise = channel.FLORA_SENSITIVITY[sf][int(channel.bandwidth)]
-    snr = rssi - noise + channel.snr_offset_dB + 10 * math.log10(2 ** sf)
+    snr = rssi - noise + channel.snr_offset_dB
+    if channel.processing_gain:
+        snr += 10 * math.log10(2 ** sf)
     return rssi, snr
 
 

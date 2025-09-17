@@ -354,7 +354,7 @@ class OmnetPHY:
         snr -= penalty
         snr -= abs(self._phase_noise.sample())
         snr -= abs(self._rx_fault.sample())
-        if sf is not None:
+        if sf is not None and self.channel.processing_gain:
             snr += 10 * math.log10(2 ** sf)
         return rssi, snr
 
