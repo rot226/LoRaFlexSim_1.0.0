@@ -104,6 +104,31 @@ Moyenne : PDR=100.00% , Paquets livrés=165.00, Collisions=0.00, Énergie consom
 ```
 【F:loraflexsim/run.py†L406-L503】【7e31c7†L1-L4】
 
+## Grandes distances
+
+Le module `loraflexsim.scenarios.long_range` fournit un scénario « grandes distances »
+reproductible basé sur les recommandations `LongRangeParameters`. Chaque preset
+choisi via `--long-range-demo` configure automatiquement la puissance d'émission et
+les gains d'antenne du couple passerelle/nœud pour garantir des liaisons de 10 à
+12 km avec des SF9–12.【F:loraflexsim/scenarios/long_range.py†L9-L74】 Les profils
+disponibles sont résumés ci-dessous :
+
+| Preset CLI (`--long-range-demo <preset>`) | P<sub>TX</sub> (dBm) | Gains TX/RX (dBi) | Perte câble (dB) | Effet observé sur la PDR SF12 |
+|-------------------------------------------|---------------------:|------------------:|-----------------:|--------------------------------|
+| `flora` / `flora_hata`                    |                 23.0 |             16/16 |              0.5 | ≈ 75 % : PDR limitée par la marge de sensibilité pour reproduire les mesures historiques.【F:docs/long_range.md†L15-L21】|
+| `rural_long_range`                        |                 16.0 |              6/6  |              0.5 | ≈ 96 % : combinaison adaptée aux déploiements ruraux avec une marge RSSI/SNR confortable.【F:docs/long_range.md†L15-L22】|
+
+Exécutez `python -m loraflexsim.run --long-range-demo` pour lancer le preset
+par défaut `flora_hata` (identique à `python run.py --long-range-demo`). Ajoutez
+`rural_long_range` pour les essais de très grande portée avec un PDR SF12 plus
+élevé. Les métriques détaillées et des exemples de configuration CLI sont
+présentés dans `docs/long_range.md`.
+
+Le comportement attendu est verrouillé par le test d'intégration
+`pytest tests/integration/test_long_range_large_area.py`, qui s'assure que chaque
+preset conserve une PDR SF12 ≥ 70 % tout en vérifiant les marges de
+sensibilité.【F:tests/integration/test_long_range_large_area.py†L1-L63】
+
 ## Plan de vérification
 
 Deux commandes permettent de rejouer la matrice de validation et de suivre les

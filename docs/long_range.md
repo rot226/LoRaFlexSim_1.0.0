@@ -37,5 +37,19 @@ python -m loraflexsim.run --long-range-demo        # preset par défaut : flora_
 python -m loraflexsim.run --long-range-demo flora  # forcé sur le preset log-normal
 ```
 
+### Exemple de configuration CLI
+
+```bash
+python -m loraflexsim.run \
+  --long-range-demo rural_long_range \
+  --seed 3 \
+  --runs 2 \
+  --output results/long_range_rural.csv
+```
+
+Cette configuration reproduit les hypothèses `LongRangeParameters` du preset
+`rural_long_range`, exécute deux runs consécutifs avec la graine utilisée par les tests
+d'intégration et enregistre un récapitulatif des PDR et marges RSSI/SNR dans `results/`.
+
 Le script affiche la PDR agrégée, les métriques par SF et la marge RSSI/SNR maximale
 mesurée sur les paquets SF12.
