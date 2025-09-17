@@ -3,6 +3,8 @@ import json
 import re
 from pathlib import Path
 
+YamlData = dict[str, object]
+
 def load_config(
     path: str | Path,
 ) -> tuple[list[dict], list[dict], float | None, float | None]:
@@ -28,8 +30,27 @@ def load_config(
     next_interval = None
     first_interval = None
 
-    if path.suffix.lower() == ".json":
-        data = json.loads(path.read_text())
+    suffix = path.suffix.lower()
+    if suffix in {".json", ".yaml", ".yml"}:
+        text = path.read_text()
+        data: YamlData | None = None
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            if suffix == ".json":
+                raise
+        if data is None:
+            try:  # pragma: no cover - optional dependency
+                import yaml  # type: ignore
+            except Exception as exc:  # pragma: no cover - handled via message
+                raise RuntimeError(
+                    "PyYAML is required to load YAML scenario files"
+                ) from exc
+            data = yaml.safe_load(text)
+            if data is None:
+                data = {}
+        if not isinstance(data, dict):
+            raise ValueError("YAML/JSON configuration must be a mapping at the top level")
         for gw in data.get("gateways", []):
             gateways.append({
                 "x": float(gw.get("x", 0)),
