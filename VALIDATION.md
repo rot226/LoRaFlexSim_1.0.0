@@ -12,6 +12,15 @@ Une matrice de cas reproductibles couvre désormais les variantes mono/multi-pas
 | `class_b_beacon_scheduling` | 1 passerelle / 1 canal | Désactivé | B | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_b_beacon_scheduling.sca` |
 | `class_c_mobility_multichannel` | 1 passerelle / 3 canaux | Serveur | C | Oui | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/class_c_mobility_multichannel.sca` |
 
+### Correspondance des paramètres FLoRa ↔ LoRaFlexSim
+
+| Paramètres FLoRa | Équivalent LoRaFlexSim | Vérification |
+| --- | --- | --- |
+| `**.energyDetection = -110dBm` (INI) | `detection_threshold_dBm = -110` appliqué automatiquement en mode FLoRa | `Simulator(flora_mode=True)` fixe le seuil et les tests vérifient la valeur par défaut.【F:flora-master/simulations/examples/n100-gw1.ini†L1-L35】【F:loraflexsim/launcher/simulator.py†L251-L295】【F:tests/test_flora_defaults.py†L1-L11】 |
+| `**.LoRaMedium.pathLossType = "LoRaLogNormalShadowing"`, `**.sigma = 3.57` | `environment = "flora"` et shadowing repris depuis `Channel.ENV_PRESETS` | Le preset est appliqué par défaut en mode FLoRa et validé par les scénarios d'intégration alignés sur les traces `.sca`.【F:flora-master/simulations/examples/n100-gw1.ini†L54-L69】【F:loraflexsim/launcher/channel.py†L68-L80】【F:tests/test_flora_sca.py†L18-L39】 |
+| `timeToFirstPacket = timeToNextPacket = exponential(1000s)` | `packet_interval = first_packet_interval = 1000` et tirages exponentiels identiques | Les tests comparent l'intervalle moyen issu de l'INI et celui mesuré dans LoRaFlexSim.【F:flora-master/simulations/examples/n100-gw1.ini†L33-L35】【F:loraflexsim/launcher/simulator.py†L251-L266】【F:tests/test_flora_packet_interval.py†L1-L21】 |
+| `NetworkServer.**.evaluateADRinServer = true`, `adrMethod = "avg"` | `Simulator(..., adr_method="avg")` déclenche la même agrégation SNR | Le scénario `test_flora_sca` utilise `adr_method="avg"` et compare les métriques aux fichiers `.sca` de référence.【F:flora-master/simulations/examples/n100-gw1.ini†L20-L27】【F:tests/test_flora_sca.py†L18-L39】 |
+
 Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le PDR, le nombre de collisions et le SNR moyen restent dans les tolérances fixées par scénario.【F:tests/integration/test_validation_matrix.py†L1-L32】 Les références FLoRa (fichiers `.sca`) sont conservées dans `tests/integration/data/` pour servir de base de comparaison.
 
 ### Automatisation

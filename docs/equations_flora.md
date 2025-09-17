@@ -19,6 +19,12 @@ Ce module calcule exactement l'expression ci-dessus, en y ajoutant
 qui assure la cohérence directe avec LoRaFlexSim lorsque `flora` est
 sélectionné comme environnement【F:flora-master/src/LoRaPhy/LoRaLogNormalShadowing.cc†L40-L49】.
 
+### Limites de portée et bruit FLoRa
+
+Le preset `flora` reproduit le profil log-normal de FLoRa (`γ = 2.08`, `σ = 3.57`), ce qui correspond à des liens fiables sur 10 à 12 km avant que le RSSI n'approche les sensibilités de la table `FLORA_SENSITIVITY`. Pour étendre la portée sans rompre la parité, le preset `rural_long_range` ajuste simultanément l'exposant, le point de référence et le shadowing suivant `Channel.ENV_PRESETS`, et il peut être sélectionné en conjonction avec `flora_mode` ou `flora_loss_model` pour des scénarios > 10 km validés par les tests longue distance.【F:loraflexsim/launcher/channel.py†L68-L80】【F:tests/test_long_range_presets.py†L1-L55】
+Le bruit reste issu de la table statique de FLoRa : seules les combinaisons SF/BW définies héritent de valeurs spécifiques, les autres retombant sur le seuil `-110` dBm. Le parseur `parse_flora_noise_table` charge exactement `LoRaAnalogModel.cc`, ce qui garantit l'identité du bruit moyen tout en laissant à l'utilisateur la possibilité de fournir un autre fichier via `flora_noise_path`.【F:loraflexsim/launcher/channel.py†L93-L133】
+
+
 ### Modèle Hata‑Okumura
 
 La variante Hata‑Okumura introduite dans `Channel` suit :
