@@ -13,33 +13,47 @@ from loraflexsim.scenarios import (
     LONG_RANGE_DISTANCES,
     LONG_RANGE_RECOMMENDATIONS,
     LONG_RANGE_SPREADING_FACTORS,
+    LongRangeParameters,
     build_long_range_simulator,
 )
 
 
-@pytest.mark.parametrize(
-    "preset",
-    ["flora", "flora_hata", "rural_long_range"],
-)
+def _expected_distances(params: LongRangeParameters) -> list[float]:
+    return list(params.distances or tuple(LONG_RANGE_DISTANCES))
+
+
+def _expected_spreading_factors(params: LongRangeParameters) -> list[int]:
+    return list(params.spreading_factors or tuple(LONG_RANGE_SPREADING_FACTORS))
+
+
+def _expected_area_size(params: LongRangeParameters) -> float:
+    return params.area_size_m or LONG_RANGE_AREA_SIZE
+
+
+@pytest.mark.parametrize("preset", list(LONG_RANGE_RECOMMENDATIONS))
 def test_long_range_large_area_meets_pdr_and_sensitivity(preset: str) -> None:
     """Ensure the long range scenario preserves coverage at 10–12 km."""
 
     params = LONG_RANGE_RECOMMENDATIONS[preset]
+    distances_cfg = _expected_distances(params)
+    spreading_cfg = _expected_spreading_factors(params)
+    area_size = _expected_area_size(params)
     simulator = build_long_range_simulator(preset, seed=3, packets_per_node=params.packets_per_node)
     simulator.run()
     metrics = simulator.get_metrics()
 
     # Area check (square side length squared) expressed in square metres.
-    assert pytest.approx(simulator.area_size, rel=1e-6) == LONG_RANGE_AREA_SIZE
-    assert simulator.area_size ** 2 >= 10_000_000.0
+    assert pytest.approx(simulator.area_size, rel=1e-6) == area_size
+    assert simulator.area_size / 2.0 >= max(distances_cfg)
 
     gateway = simulator.gateways[0]
     distances = [
         math.hypot(node.x - gateway.x, node.y - gateway.y) for node in simulator.nodes
     ]
-    assert any(10_000.0 <= d <= 12_000.0 for d in distances)
-    assert distances[0] == pytest.approx(LONG_RANGE_DISTANCES[0])
-    assert sorted(node.sf for node in simulator.nodes) == sorted(LONG_RANGE_SPREADING_FACTORS)
+    assert len(distances) == len(distances_cfg)
+    for expected, observed in zip(distances_cfg, distances):
+        assert observed == pytest.approx(expected)
+    assert sorted(node.sf for node in simulator.nodes) == sorted(spreading_cfg)
 
     sf12_pdr = metrics["pdr_by_sf"][12]
     assert sf12_pdr >= 0.7
@@ -67,3 +81,18 @@ def test_long_range_large_area_meets_pdr_and_sensitivity(preset: str) -> None:
         sensitivity = Channel.FLORA_SENSITIVITY[12][bandwidth]
         assert stats["rssi"] >= sensitivity - 0.1
         assert stats["snr"] >= Simulator.REQUIRED_SNR[12]
+
+
+def test_very_long_range_extends_distance() -> None:
+    """The dedicated preset must include nodes beyond 13 km."""
+
+    params = LONG_RANGE_RECOMMENDATIONS["very_long_range"]
+    simulator = build_long_range_simulator("very_long_range", seed=3, packets_per_node=params.packets_per_node)
+    simulator.run()
+
+    gateway = simulator.gateways[0]
+    distances = [
+        math.hypot(node.x - gateway.x, node.y - gateway.y) for node in simulator.nodes
+    ]
+    assert max(distances) >= 15_000.0
+    assert len([d for d in distances if d >= 13_000.0]) >= 2

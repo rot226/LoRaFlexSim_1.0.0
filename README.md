@@ -46,6 +46,7 @@ fournies dans l'INI de FLoRa.
    python run.py --long-range-demo            # scénario longue portée (flora_hata)
    python run.py --long-range-demo flora --output long_range.csv
    python run.py --long-range-demo rural_long_range --seed 3
+   python run.py --long-range-demo very_long_range --seed 3
    ```
     Ajoutez l'option `--seed` pour reproduire exactement le placement des nœuds
     et l'ordre statistique des intervalles.
@@ -116,14 +117,16 @@ disponibles sont résumés ci-dessous :
 
 | Preset CLI (`--long-range-demo <preset>`) | P<sub>TX</sub> (dBm) | Gains TX/RX (dBi) | Perte câble (dB) | Effet observé sur la PDR SF12 |
 |-------------------------------------------|---------------------:|------------------:|-----------------:|--------------------------------|
-| `flora` / `flora_hata`                    |                 23.0 |             16/16 |              0.5 | ≈ 75 % : PDR limitée par la marge de sensibilité pour reproduire les mesures historiques.【F:docs/long_range.md†L15-L21】|
-| `rural_long_range`                        |                 16.0 |              6/6  |              0.5 | ≈ 96 % : combinaison adaptée aux déploiements ruraux avec une marge RSSI/SNR confortable.【F:docs/long_range.md†L15-L22】|
+| `flora` / `flora_hata`                    |                 23.0 |             16/16 |              0.5 | ≈ 75 % : PDR limitée par la marge de sensibilité pour reproduire les mesures historiques.【F:docs/long_range.md†L15-L25】|
+| `rural_long_range`                        |                 16.0 |              6/6  |              0.5 | ≈ 96 % : combinaison adaptée aux déploiements ruraux avec une marge RSSI/SNR confortable.【F:docs/long_range.md†L15-L29】|
+| `very_long_range`                         |                 27.0 |             19/19 |              0.5 | 100 % : ajoute deux nœuds à 13,5–15 km tout en conservant la marge SF12 au-dessus des sensibilités `FLORA_SENSITIVITY`.【F:docs/long_range.md†L15-L38】|
 
 Exécutez `python -m loraflexsim.run --long-range-demo` pour lancer le preset
 par défaut `flora_hata` (identique à `python run.py --long-range-demo`). Ajoutez
 `rural_long_range` pour les essais de très grande portée avec un PDR SF12 plus
-élevé. Les métriques détaillées et des exemples de configuration CLI sont
-présentés dans `docs/long_range.md`.
+élevé ou `very_long_range` pour valider des liens jusqu'à 15 km. Les métriques
+détaillées, un tableau des marges RSSI pour 10/12/15 km et un utilitaire CLI
+(`scripts/long_range_margin.py`) sont présentés dans `docs/long_range.md`.
 
 Le comportement attendu est verrouillé par le test d'intégration
 `pytest tests/integration/test_long_range_large_area.py`, qui s'assure que chaque

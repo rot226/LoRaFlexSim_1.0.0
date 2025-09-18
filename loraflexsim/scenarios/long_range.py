@@ -35,6 +35,9 @@ class LongRangeParameters:
     packet_interval_s: float = 1200.0
     packets_per_node: int = 8
     shadowing_std_dB: float = 0.0
+    distances: tuple[float, ...] | None = None
+    spreading_factors: tuple[int, ...] | None = None
+    area_size_m: float | None = None
 
 
 LONG_RANGE_RECOMMENDATIONS: Dict[str, LongRangeParameters] = {
@@ -56,11 +59,44 @@ LONG_RANGE_RECOMMENDATIONS: Dict[str, LongRangeParameters] = {
         rx_antenna_gain_dB=6.0,
         cable_loss_dB=0.5,
     ),
+    "very_long_range": LongRangeParameters(
+        tx_power_dBm=27.0,
+        tx_antenna_gain_dB=19.0,
+        rx_antenna_gain_dB=19.0,
+        cable_loss_dB=0.5,
+        distances=(
+            15_000.0,
+            13_500.0,
+            12_000.0,
+            10_800.0,
+            10_000.0,
+            9_000.0,
+            8_000.0,
+            7_000.0,
+            6_000.0,
+            5_000.0,
+            4_000.0,
+        ),
+        spreading_factors=(12, 12, 12, 12, 11, 11, 10, 10, 9, 9, 9),
+        area_size_m=32_000.0,
+    ),
 }
 
 
 def _loss_model(preset: str) -> str:
     return "hata" if preset == "flora_hata" else "lognorm"
+
+
+def _preset_distances(params: LongRangeParameters) -> tuple[float, ...]:
+    return params.distances or tuple(LONG_RANGE_DISTANCES)
+
+
+def _preset_spreading_factors(params: LongRangeParameters) -> tuple[int, ...]:
+    return params.spreading_factors or tuple(LONG_RANGE_SPREADING_FACTORS)
+
+
+def _preset_area_size(params: LongRangeParameters) -> float:
+    return params.area_size_m or LONG_RANGE_AREA_SIZE
 
 
 def create_long_range_channels(preset: str) -> List[Channel]:
@@ -81,23 +117,27 @@ def create_long_range_channels(preset: str) -> List[Channel]:
     return channels
 
 
-def configure_long_range_nodes(sim: Simulator, tx_power_dBm: float) -> None:
+def configure_long_range_nodes(sim: Simulator, params: LongRangeParameters) -> None:
     """Deterministically place nodes on the x axis and assign SF/BW pairs."""
 
-    if len(sim.nodes) != len(LONG_RANGE_DISTANCES):
+    distances = _preset_distances(params)
+    spreading_factors = _preset_spreading_factors(params)
+    if len(distances) != len(spreading_factors):
+        raise ValueError("Distances and spreading factors must have matching lengths")
+    if len(sim.nodes) != len(distances):
         raise ValueError(
             "Long range scenario expects exactly"
-            f" {len(LONG_RANGE_DISTANCES)} nodes"
+            f" {len(distances)} nodes"
         )
     gateway = sim.gateways[0]
     center_x = gateway.x
     center_y = gateway.y
     channels = sim.multichannel.channels
     for idx, node in enumerate(sim.nodes):
-        node.x = center_x + LONG_RANGE_DISTANCES[idx]
+        node.x = center_x + distances[idx]
         node.y = center_y
-        node.sf = LONG_RANGE_SPREADING_FACTORS[idx]
-        node.tx_power = tx_power_dBm
+        node.sf = spreading_factors[idx]
+        node.tx_power = params.tx_power_dBm
         node.channel = channels[idx % len(channels)]
         node.chmask = 1 << (idx % len(channels))
 
@@ -113,11 +153,15 @@ def build_long_range_simulator(
     if preset not in LONG_RANGE_RECOMMENDATIONS:
         raise ValueError(f"Unknown long range preset: {preset}")
     params = LONG_RANGE_RECOMMENDATIONS[preset]
+    distances = _preset_distances(params)
+    spreading_factors = _preset_spreading_factors(params)
+    if len(distances) != len(spreading_factors):
+        raise ValueError("Distances and spreading factors must have matching lengths")
     channels = create_long_range_channels(preset)
     simulator = Simulator(
-        num_nodes=len(LONG_RANGE_DISTANCES),
+        num_nodes=len(distances),
         num_gateways=1,
-        area_size=LONG_RANGE_AREA_SIZE,
+        area_size=_preset_area_size(params),
         transmission_mode="Periodic",
         packet_interval=params.packet_interval_s,
         packets_to_send=packets_per_node or params.packets_per_node,
@@ -126,5 +170,5 @@ def build_long_range_simulator(
         flora_mode=True,
         channels=channels,
     )
-    configure_long_range_nodes(simulator, params.tx_power_dBm)
+    configure_long_range_nodes(simulator, params)
     return simulator
