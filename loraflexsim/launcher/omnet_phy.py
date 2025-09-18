@@ -509,7 +509,8 @@ class OmnetPHY:
             end0 = end_list[idx0]
             symbol_time = (2 ** sf0) / self.channel.bandwidth
             cs_begin = start0 + symbol_time * (
-                self.channel.preamble_symbols - self.capture_window_symbols
+                self.channel.preamble_symbols
+                - self.channel.capture_window_symbols
             )
 
             captured = True

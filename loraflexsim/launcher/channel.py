@@ -392,7 +392,7 @@ class Channel:
         self.impulsive_noise_prob = float(impulsive_noise_prob)
         self.impulsive_noise_dB = float(impulsive_noise_dB)
         self.adjacent_interference_dB = float(adjacent_interference_dB)
-        self.use_flora_curves = use_flora_curves
+        self._use_flora_curves = False
         self.tx_current_a = float(tx_current_a)
         self.rx_current_a = float(rx_current_a)
         self.idle_current_a = float(idle_current_a)
@@ -469,6 +469,9 @@ class Channel:
         # Track the effective carrier after oscillator drift.
         self.last_freq_hz = self.frequency_hz
 
+        # Activer la logique FLoRa peut ajuster la fenêtre de capture.
+        self.use_flora_curves = bool(use_flora_curves)
+
         if self.phy_model in ("omnet", "omnet_full"):
             from .omnet_phy import OmnetPHY
             self.omnet_phy = OmnetPHY(
@@ -511,6 +514,40 @@ class Channel:
         else:
             self.omnet_phy = None
             self.flora_phy = None
+
+        self._maybe_enforce_capture_window()
+
+    @property
+    def use_flora_curves(self) -> bool:
+        return self._use_flora_curves
+
+    @use_flora_curves.setter
+    def use_flora_curves(self, value: bool) -> None:
+        self._use_flora_curves = bool(value)
+        self._maybe_enforce_capture_window()
+
+    @property
+    def capture_window_symbols(self) -> int:
+        return self._capture_window_symbols
+
+    @capture_window_symbols.setter
+    def capture_window_symbols(self, value: int) -> None:
+        self._capture_window_symbols = int(value)
+        omnet_phy = getattr(self, "omnet_phy", None)
+        if omnet_phy is not None:
+            omnet_phy.capture_window_symbols = self._capture_window_symbols
+
+    def _uses_flora_behaviour(self) -> bool:
+        phy = getattr(self, "phy_model", "") or ""
+        return (
+            self._use_flora_curves
+            or phy.startswith("flora")
+            or getattr(self, "flora_capture", False)
+        )
+
+    def _maybe_enforce_capture_window(self) -> None:
+        if self._uses_flora_behaviour() and self.capture_window_symbols < 6:
+            self.capture_window_symbols = 6
 
     def noise_floor_dBm(self, freq_offset_hz: float = 0.0) -> float:
         """Retourne le niveau de bruit (dBm) pour la bande passante configurée.
