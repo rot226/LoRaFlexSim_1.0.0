@@ -25,7 +25,7 @@ except Exception:  # pragma: no cover - pandas optional
     pd = None
 
 from .node import Node
-from .gateway import Gateway
+from .gateway import Gateway, FLORA_NON_ORTH_DELTA
 from .channel import Channel
 from .multichannel import MultiChannel
 from .server import NetworkServer
@@ -487,6 +487,14 @@ class Simulator:
             if force_flora_curves:
                 for ch in self.multichannel.channels:
                     _apply_flora_curves(ch)
+
+        non_orth_required = flora_mode or phy_model.startswith("flora")
+        if not non_orth_required:
+            non_orth_required = any(
+                getattr(ch, "use_flora_curves", False) for ch in self.multichannel.channels
+            )
+        if non_orth_required:
+            self.multichannel.force_non_orthogonal(FLORA_NON_ORTH_DELTA)
 
         # Compatibilité : premier canal par défaut
         self.channel = self.multichannel.channels[0]

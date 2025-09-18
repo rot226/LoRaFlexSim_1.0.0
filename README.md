@@ -721,9 +721,14 @@ Pour des résultats plus proches du terrain, activez `fast_fading_std` et
 Le canal `Channel` applique par défaut un seuil de capture de **6 dB** : un
 signal plus fort peut être décodé en présence d'interférences s'il dépasse le
 plus faible d'au moins 6 dB et si ce signal domine pendant **cinq symboles de
-preambule** au minimum. Lorsque `phy_model` vaut `"flora"`, `"flora_full"` ou `"flora_cpp"`, la
-décision reprend la matrice `nonOrthDelta` du simulateur FLoRa original ; la
-différence de puissance exigée dépend alors des Spreading Factors en présence.
+preambule** au minimum. Dès que vous activez le mode FLoRa (`flora_mode=True`),
+choisissez un modèle physique FLoRa (`phy_model` commençant par `"flora"`) ou
+demandez les courbes FLoRa (`use_flora_curves=True`), LoRaFlexSim bascule
+automatiquement en capture non orthogonale : le simulateur force
+`orthogonal_sf=False` et charge la matrice `nonOrthDelta` issue de FLoRa pour
+tous les canaux et nœuds, sans recourir à un script ADR externe.【F:loraflexsim/launcher/simulator.py†L392-L470】【F:loraflexsim/launcher/multichannel.py†L8-L51】
+La différence de puissance exigée dépend alors des Spreading Factors en
+présence.
 
 | SF\Interf. | 7  | 8   | 9   | 10  | 11  | 12  |
 |------------|----|-----|-----|-----|-----|-----|

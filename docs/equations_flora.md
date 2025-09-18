@@ -25,6 +25,20 @@ Le preset `flora` reproduit le profil log-normal de FLoRa (`γ = 2.08`, `σ = 3.
 Le bruit reste issu de la table statique de FLoRa : seules les combinaisons SF/BW définies héritent de valeurs spécifiques, les autres retombant sur le seuil `-110` dBm. Le parseur `parse_flora_noise_table` charge exactement `LoRaAnalogModel.cc`, ce qui garantit l'identité du bruit moyen tout en laissant à l'utilisateur la possibilité de fournir un autre fichier via `flora_noise_path`.【F:loraflexsim/launcher/channel.py†L93-L133】
 
 
+### Capture inter-SF FLoRa
+
+FLoRa impose une matrice de capture non orthogonale (`nonOrthDelta`) pour
+reproduire l'interférence entre Spreading Factors. LoRaFlexSim applique
+désormais cette matrice automatiquement dès que le scénario se cale sur FLoRa :
+activer `flora_mode`, sélectionner un modèle physique dont le nom commence par
+`"flora"` ou demander explicitement les courbes FLoRa suffit à forcer
+`orthogonal_sf=False` et à injecter `FLORA_NON_ORTH_DELTA` sur tous les canaux
+et nœuds.【F:loraflexsim/launcher/simulator.py†L392-L470】 Le gestionnaire
+multi-canaux propage ce réglage à chaque attribution, garantissant que la
+matrice reste attachée aux nœuds même lorsque le masque de canaux varie en
+cours de simulation.【F:loraflexsim/launcher/multichannel.py†L8-L51】
+
+
 ### Modèle Hata‑Okumura
 
 La variante Hata‑Okumura introduite dans `Channel` suit :
