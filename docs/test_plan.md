@@ -48,13 +48,14 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
 
 ### API (`loraflexsim/launcher/web_api.py`)
 - **Rôle :** façade FastAPI pour piloter le simulateur et diffuser les métriques en WebSocket.
-- **Tests existants :** aucun scénario automatique ne couvre l'API REST/WebSocket à ce jour.
+- **Tests existants :** `tests/test_rest_api_gap.py` vérifie la disponibilité de
+  l'endpoint `/simulations/status` et le cycle de vie complet (repos → en cours
+  → arrêté).
 
 ## Lacunes identifiées et scénarios `pytest`
 
 | Lacune | Description | Nouveau test |
 | --- | --- | --- |
-| Couverture REST | L'API n'expose pas encore d'endpoint de statut pour suivre une simulation en cours. | `tests/test_rest_api_gap.py` (marqué `xfail` tant que `/simulations/status` n'est pas implémenté). |
 | Calcul d'énergie détaillé | L'énergie de rampe PA est agrégée dans la clé `"tx"` au lieu d'être isolée. | `tests/test_energy_breakdown_gap.py` (`xfail` tant que la composante `"ramp"` n'est pas rapportée). |
 | Duty-cycle dynamique | Le `DutyCycleReq` LoRaWAN ne propage pas sa valeur vers le `DutyCycleManager`. | `tests/test_duty_cycle_gap.py` (`xfail` en attendant la mise à jour dynamique). |
 

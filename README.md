@@ -57,10 +57,13 @@ fournies dans l'INI de FLoRa.
    ```bash
    uvicorn launcher.web_api:app --reload
    ```
-   L'endpoint `POST /simulations/start` accepte un JSON
-   `{"command": "start_sim", "params": {...}}` pour lancer une simulation.
-   Les métriques en temps réel sont diffusées sur le WebSocket `/ws` sous la
-   forme `{"event": "metrics", "data": {...}}`.
+   - L'endpoint `POST /simulations/start` accepte un JSON
+     `{"command": "start_sim", "params": {...}}` pour lancer une simulation.
+   - `GET /simulations/status` retourne `{"status": "idle|running|stopped", "metrics": {...}}`
+     afin de consulter l'état courant (au repos, en cours ou arrêté) et les
+     métriques cumulées.
+   - Les métriques en temps réel sont diffusées sur le WebSocket `/ws` sous la
+     forme `{"event": "metrics", "data": {...}}`.
 
 ## Reproduire FLoRa
 
