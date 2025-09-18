@@ -71,6 +71,22 @@ async def stop_simulation() -> Dict[str, Any]:
     return {"status": "stopped"}
 
 
+@app.get("/simulations/status")
+async def simulation_status() -> Dict[str, Any]:
+    """Return the current simulation status and the latest metrics."""
+    task = _sim_task
+    if task is not None and not task.done():
+        status = "running"
+    else:
+        status = "idle" if _sim is None else "stopped"
+    metrics: Dict[str, Any]
+    if _sim is not None:
+        metrics = _sim.get_metrics()
+    else:
+        metrics = {}
+    return {"status": status, "metrics": metrics}
+
+
 @app.websocket("/ws")
 async def metrics_stream(websocket: WebSocket) -> None:
     """Send real-time metrics over WebSocket."""
