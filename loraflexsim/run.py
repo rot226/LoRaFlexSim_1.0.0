@@ -335,10 +335,10 @@ def main(argv=None):
         "--long-range-demo",
         nargs="?",
         const="flora_hata",
-        choices=["flora", "flora_hata", "rural_long_range"],
+        choices=["flora", "flora_hata", "rural_long_range", "very_long_range"],
         help=(
             "Exécute un scénario longue portée reproductible. "
-            "Optionnellement, préciser le preset (flora, flora_hata, rural_long_range)."
+            "Optionnellement, préciser le preset (flora, flora_hata, rural_long_range, very_long_range)."
         ),
     )
     parser.add_argument(

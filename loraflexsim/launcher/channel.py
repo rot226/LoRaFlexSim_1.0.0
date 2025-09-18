@@ -74,6 +74,7 @@ class Channel:
         "flora": (2.08, 3.57, 127.41, 40.0),
         "flora_oulu": (2.32, 7.08, 128.95, 1000.0),
         "flora_hata": (2.08, 3.57, 127.5, 40.0),
+        "very_long_range": (2.08, 3.57, 127.41, 40.0),
         # Additional presets for denser or indoor environments
         "urban_dense": (3.0, 8.0, 127.41, 40.0),
         "indoor": (3.5, 7.0, 127.41, 40.0),
