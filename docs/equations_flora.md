@@ -33,7 +33,8 @@ désormais cette matrice automatiquement dès que le scénario se cale sur FLoRa
 activer `flora_mode`, sélectionner un modèle physique dont le nom commence par
 `"flora"` ou demander explicitement les courbes FLoRa suffit à forcer
 `orthogonal_sf=False` et à injecter `FLORA_NON_ORTH_DELTA` sur tous les canaux
-et nœuds.【F:loraflexsim/launcher/simulator.py†L392-L470】 Le gestionnaire
+et nœuds, sans qu'il soit nécessaire de manipuler `non_orth_delta` ou
+`orthogonal_sf` manuellement.【F:loraflexsim/launcher/simulator.py†L392-L470】 Le gestionnaire
 multi-canaux propage ce réglage à chaque attribution, garantissant que la
 matrice reste attachée aux nœuds même lorsque le masque de canaux varie en
 cours de simulation.【F:loraflexsim/launcher/multichannel.py†L8-L51】
@@ -93,7 +94,7 @@ Afin de couvrir des scénarios LoRaWAN au-delà de 5 km tout en conservant une
 réception proche des seuils de FLoRa, LoRaFlexSim fournit le preset
 ``rural_long_range``. Celui-ci fixe ``γ = 1.7``, ``PATH_LOSS_D0 = 105`` dB et
 ``REFERENCE_DISTANCE = 100`` m, avec un shadowing réduit à 1.5 dB pour refléter
-des zones ouvertes à antennes renforcées【F:loraflexsim/launcher/channel.py†L69-L78】.
+des zones ouvertes à antennes renforcées.【F:loraflexsim/launcher/channel.py†L69-L78】
 Le tableau suivant illustre les RSSI obtenus avec une puissance d'émission de
 14 dBm (cas FLoRa classique) et la marge restante vis-à-vis du seuil SF12
 ``-137`` dBm fourni par ``Channel.FLORA_SENSITIVITY``【F:loraflexsim/launcher/channel.py†L52-L65】 :
@@ -109,6 +110,12 @@ Le tableau suivant illustre les RSSI obtenus avec une puissance d'émission de
 Ces valeurs montrent que, autour de 10–15 km, le RSSI reste dans la fenêtre
 ``−130…−120`` dBm suggérée par FLoRa, offrant une marge confortable pour des
 spreading factors élevés tout en conservant une modélisation réaliste.【F:loraflexsim/launcher/channel.py†L69-L78】
+
+Un preset supplémentaire ``very_long_range`` reprend ces hypothèses en
+augmentant la puissance d'émission et les gains d'antennes afin d'étendre la
+portée validée jusqu'à 15 km. Il charge automatiquement `flora_mode`, la matrice
+inter-SF historique et la fenêtre de capture FLoRa tout en gardant les courbes
+de perte originales pour comparer les scénarios extrêmes de couverture.【F:loraflexsim/scenarios/long_range.py†L9-L182】
 
 ### Obstacles avec le PHY OMNeT++
 
