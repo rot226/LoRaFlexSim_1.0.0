@@ -32,6 +32,8 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 - `pytest tests/integration/test_validation_matrix.py` exécute la matrice pour l'intégration continue.
 - `python scripts/run_validation.py` génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
+- `docs/test_plan.md` récapitule la couverture par module et liste les tests marqués `xfail` pour les fonctionnalités manquantes.
+- `pytest tests/test_rest_api_gap.py tests/test_energy_breakdown_gap.py tests/test_duty_cycle_gap.py` vérifie que les scénarios décrivant les lacunes identifiées restent exécutables avant une livraison.
 
 ### Guide de lecture des résultats
 
