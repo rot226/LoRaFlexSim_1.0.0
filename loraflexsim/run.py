@@ -278,7 +278,18 @@ def simulate(
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="LoRaFlexSim – Mode CLI")
+    parser = argparse.ArgumentParser(
+        description="LoRaFlexSim – Mode CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Exemples :\n"
+            "  # Scénario urbain calé sur FLoRa\n"
+            "  python run.py --nodes 100 --gateways 1 --channels 3 --mode random \\\n"
+            "    --interval 100 --first-interval 100 --steps 7200 --phy-model flora --seed 42\n\n"
+            "  # Scénario 15 km avec le preset longue portée\n"
+            "  python run.py --long-range-demo very_long_range --seed 3\n"
+        ),
+    )
     parser.add_argument(
         "--config",
         type=str,

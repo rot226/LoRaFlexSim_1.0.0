@@ -84,6 +84,23 @@ les paramètres suivants sont appliqués lors de la création du `Simulator` ou 
   variante Hata-Okumura ou le modèle Oulu reproduits depuis FLoRa. Ces presets
   partagent les constantes de référence et peuvent être combinés avec
   `flora_loss_model` pour calquer exactement la variante choisie.【F:loraflexsim/launcher/channel.py†L68-L80】
+- **Collisions inter-SF et capture** — dès qu'un scénario active `flora_mode`,
+  un `phy_model` commençant par `"flora"` ou `use_flora_curves`, LoRaFlexSim
+  force `orthogonal_sf=False`, charge `FLORA_NON_ORTH_DELTA` et verrouille la
+  fenêtre de capture à 6 symboles comme dans le `LoRaReceiver` C++. Aucun
+  paramètre supplémentaire n'est nécessaire pour retrouver les collisions
+  inter-SF et l'effet capture historiques.【F:loraflexsim/launcher/simulator.py†L392-L470】【F:loraflexsim/launcher/channel.py†L454-L520】
+
+Pour étendre fidèlement les scénarios FLoRa au-delà de 10 km, utilisez les
+presets longue portée fournis par `run.py`. Par exemple :
+
+```bash
+python run.py --long-range-demo very_long_range --seed 3  # couverture 15 km
+python run.py --long-range-demo flora_hata --seed 1        # reproduction terrain FLoRa (10-12 km)
+```
+
+Ces commandes activent automatiquement la matrice inter-SF historique, la
+fenêtre de capture FLoRa et les réglages d'émission adaptés au preset choisi.
 
 ### Exemple complet (run.py)
 
