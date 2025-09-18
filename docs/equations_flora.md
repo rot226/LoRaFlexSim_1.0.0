@@ -38,6 +38,18 @@ multi-canaux propage ce réglage à chaque attribution, garantissant que la
 matrice reste attachée aux nœuds même lorsque le masque de canaux varie en
 cours de simulation.【F:loraflexsim/launcher/multichannel.py†L8-L51】
 
+En parallèle, le récepteur FLoRa considère qu'une collision subsiste tant que
+les six derniers symboles de préambule ne sont pas reçus sans interférence
+(``nPreamble - 6``).【F:flora-master/src/LoRaPhy/LoRaReceiver.cc†L109-L170】
+LoRaFlexSim applique désormais exactement la même fenêtre : dès qu'un canal
+active les équations ou le PHY FLoRa (via `flora_mode`, un `phy_model`
+commençant par `"flora"`, `use_flora_curves` ou `flora_capture`),
+`capture_window_symbols` est forcé à 6 et cette valeur est relayée vers les
+méthodes de capture des PHY Python et OMNeT++.【F:loraflexsim/launcher/channel.py†L454-L520】【F:loraflexsim/launcher/flora_phy.py†L69-L110】【F:loraflexsim/launcher/omnet_phy.py†L474-L520】
+Les passerelles en mode `capture_mode="flora"` reproduisent ainsi la logique du
+`LoRaReceiver` original, garantissant la parité avec les traces FLoRa lors des
+collisions entre signaux de même SF.
+
 
 ### Modèle Hata‑Okumura
 

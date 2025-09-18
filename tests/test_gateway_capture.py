@@ -1,3 +1,4 @@
+from loraflexsim.launcher.channel import Channel
 from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
 from loraflexsim.launcher.server import NetworkServer
 
@@ -146,4 +147,56 @@ def test_non_orth_same_sf_uses_capture_threshold():
     gw.end_reception(2, server, 2)
 
     # RSSI difference (5 dB) is below capture threshold (6 dB) so none captured
+    assert server.packets_received == 0
+
+
+def test_flora_capture_requires_six_symbols():
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    channel = Channel(phy_model="flora", shadowing_std=0.0, use_flora_curves=True)
+    flora_phy = channel.flora_phy
+    assert flora_phy is not None
+    assert channel.capture_window_symbols == 6
+
+    sf = 7
+    symbol_time = (2 ** sf) / channel.bandwidth
+    strong_start = 0.0
+    strong_end = strong_start + symbol_time * 10
+    weak_start = strong_start + 1.5 * symbol_time
+    weak_end = weak_start + symbol_time  # ends between the 5th and 6th symbols
+
+    gw.start_reception(
+        1,
+        1,
+        sf,
+        -50,
+        strong_end,
+        channel.capture_threshold_dB,
+        strong_start,
+        868e6,
+        capture_mode="flora",
+        flora_phy=flora_phy,
+        capture_window_symbols=channel.capture_window_symbols,
+    )
+    gw.start_reception(
+        2,
+        2,
+        sf,
+        -50,
+        weak_end,
+        channel.capture_threshold_dB,
+        weak_start,
+        868e6,
+        capture_mode="flora",
+        flora_phy=flora_phy,
+        capture_window_symbols=channel.capture_window_symbols,
+    )
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    # The weaker packet still overlaps when only five symbols were clean, so
+    # FLoRa's receiver (which requires six symbols) reports a collision.
     assert server.packets_received == 0
