@@ -28,6 +28,14 @@ la passerelle** ayant décodé l'uplink. Le serveur conserve un historique par
 passerelle, ce qui reproduit fidèlement le comportement de FLoRa dans les
 déploiements multi-gateways.
 
+Une trace FLoRa multi-passerelles de 25 uplinks (fichier
+``flora_multi_gateway_txconfig.json``) a été rejouée dans le test
+``tests/integration/test_adr_standard_alignment.py``. Chaque décision TXCONFIG
+(SF, puissance et passerelle utilisée) est comparée à la référence et les
+fenêtres RX planifiées doivent coïncider à 1 µs près. Ce test valide que les
+commandes ADR générées par ``adr_standard_1`` correspondent aux décisions
+observées dans FLoRa pour ce scénario.
+
 **Avantages**
 
 - Optimise le débit et la consommation énergétique.
