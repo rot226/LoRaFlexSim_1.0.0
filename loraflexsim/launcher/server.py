@@ -262,6 +262,8 @@ class NetworkServer:
             dr = SF_TO_DR.get(sf, 5)
             p_idx = DBM_TO_TX_POWER_INDEX.get(int(power), 0)
             frame.payload = LinkADRReq(dr, p_idx, chmask, nbtrans).to_bytes()
+        if adr_command and hasattr(node, "frames_since_last_adr_command"):
+            node.frames_since_last_adr_command = 0
         if node.security_enabled and isinstance(frame, LoRaWANFrame):
             from .lorawan import encrypt_payload, compute_mic
 
@@ -669,6 +671,10 @@ class NetworkServer:
                 selected_gateway_id,
             )
 
+        if node is not None and not already_processed:
+            if hasattr(node, "frames_since_last_adr_command"):
+                node.frames_since_last_adr_command += 1
+
         if node is not None:
             node.last_uplink_end_time = end_time
             if rssi is not None:
@@ -703,6 +709,8 @@ class NetworkServer:
 
         if node and not getattr(node, "activated", True):
             self._activate(node, gateway=gw)
+
+        adr_ack_req = bool(node and getattr(node, "last_adr_ack_req", False))
 
         if node and node.last_adr_ack_req:
             # Device requested an ADR acknowledgement -> reply with current parameters
@@ -817,44 +825,52 @@ class NetworkServer:
                 node.snr_history.append(snr_value)
                 if len(node.snr_history) > 20:
                     node.snr_history.pop(0)
-                if len(node.snr_history) >= 20:
-                    if self.adr_method == "avg":
-                        snr_m = sum(node.snr_history) / len(node.snr_history)
-                    else:
-                        snr_m = max(node.snr_history)
-                    required = REQUIRED_SNR.get(node.sf, -20.0)
-                    margin = snr_m - required - MARGIN_DB
-                    nstep = round(margin / 3.0)
+                if len(node.snr_history) < 20:
+                    return
 
-                    sf = node.sf
-                    p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
-                    max_power_index = max(TX_POWER_INDEX_TO_DBM.keys())
+                if (
+                    getattr(node, "frames_since_last_adr_command", 0) < 20
+                    and not adr_ack_req
+                ):
+                    return
 
-                    if nstep > 0:
-                        while nstep > 0 and sf > 7:
-                            sf -= 1
-                            nstep -= 1
-                        while nstep > 0 and p_idx < max_power_index:
-                            p_idx += 1
-                            nstep -= 1
-                    elif nstep < 0:
-                        while nstep < 0 and p_idx > 0:
-                            p_idx -= 1
-                            nstep += 1
-                        while nstep < 0 and sf < 12:
-                            sf += 1
-                            nstep += 1
+                if self.adr_method == "avg":
+                    snr_m = sum(node.snr_history) / len(node.snr_history)
+                else:
+                    snr_m = max(node.snr_history)
+                required = REQUIRED_SNR.get(node.sf, -20.0)
+                margin = snr_m - required - MARGIN_DB
+                nstep = round(margin / 3.0)
 
-                    power = TX_POWER_INDEX_TO_DBM.get(p_idx, node.tx_power)
+                sf = node.sf
+                p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
+                max_power_index = max(TX_POWER_INDEX_TO_DBM.keys())
 
-                    if sf != node.sf or power != node.tx_power:
-                        node.sf = sf
-                        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-                            node.sf, node.channel.bandwidth
-                        ) + node.channel.sensitivity_margin_dB
-                        node.tx_power = power
-                        self.send_downlink(
-                            node,
-                            adr_command=(sf, power, node.chmask, node.nb_trans),
-                            gateway=gw,
-                        )
+                if nstep > 0:
+                    while nstep > 0 and sf > 7:
+                        sf -= 1
+                        nstep -= 1
+                    while nstep > 0 and p_idx < max_power_index:
+                        p_idx += 1
+                        nstep -= 1
+                elif nstep < 0:
+                    while nstep < 0 and p_idx > 0:
+                        p_idx -= 1
+                        nstep += 1
+                    while nstep < 0 and sf < 12:
+                        sf += 1
+                        nstep += 1
+
+                power = TX_POWER_INDEX_TO_DBM.get(p_idx, node.tx_power)
+
+                if sf != node.sf or power != node.tx_power:
+                    node.sf = sf
+                    node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
+                        node.sf, node.channel.bandwidth
+                    ) + node.channel.sensitivity_margin_dB
+                    node.tx_power = power
+                    self.send_downlink(
+                        node,
+                        adr_command=(sf, power, node.chmask, node.nb_trans),
+                        gateway=gw,
+                    )

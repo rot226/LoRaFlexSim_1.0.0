@@ -247,6 +247,7 @@ class Node:
 
         # ADR helper flags
         self.last_adr_ack_req: bool = False
+        self.frames_since_last_adr_command: int = 0
         self._nb_trans_left: int = 0
 
         # Poisson arrival process tracking

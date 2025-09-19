@@ -107,3 +107,77 @@ def test_adr_decision_matches_flora_reference(trace):
         assert last_cmd[3] == exp_nbtrans
         assert node.sf == exp_sf
         assert node.tx_power == pytest.approx(exp_power, abs=1e-6)
+
+
+def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
+    """Ensure LinkADRReq is not emitted before 20 uplinks without ADRACKReq."""
+
+    sim = Simulator(num_nodes=1, num_gateways=1, flora_mode=True, mobility=False)
+    server = sim.network_server
+    server.adr_enabled = True
+    server.adr_method = "max"
+
+    node = sim.nodes[0]
+    node.sf = 12
+    node.tx_power = 14.0
+    node.channel.detection_threshold_dBm = (
+        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+        + node.channel.sensitivity_margin_dB
+    )
+    server.channel = node.channel
+
+    # Simulate a history of SNR samples as would be available after a previous command.
+    node.snr_history = [30.0] * 20
+    node.frames_since_last_adr_command = 0
+
+    commands: list[tuple[int, float, int, int]] = []
+
+    def record_command(target_node, payload=b"", confirmed=False, adr_command=None, **kwargs):
+        if adr_command:
+            commands.append(adr_command)
+            target_node.frames_since_last_adr_command = 0
+
+    server.send_downlink = record_command  # type: ignore[assignment]
+
+    noise_floor = node.channel.noise_floor_dBm()
+    gateway_id = sim.gateways[0].id
+    rssi = noise_floor + 30.0
+
+    for event_id in range(19):
+        node.sf = 12
+        node.tx_power = 14.0
+        node.channel.detection_threshold_dBm = (
+            Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+            + node.channel.sensitivity_margin_dB
+        )
+        server.receive(event_id, node.id, gateway_id, rssi=rssi)
+
+    assert commands == []
+
+    node.sf = 12
+    node.tx_power = 14.0
+    node.channel.detection_threshold_dBm = (
+        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+        + node.channel.sensitivity_margin_dB
+    )
+    server.receive(19, node.id, gateway_id, rssi=rssi)
+    assert len(commands) == 1
+
+    for event_id in range(20, 39):
+        node.sf = 12
+        node.tx_power = 14.0
+        node.channel.detection_threshold_dBm = (
+            Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+            + node.channel.sensitivity_margin_dB
+        )
+        server.receive(event_id, node.id, gateway_id, rssi=rssi)
+        assert len(commands) == 1
+
+    node.sf = 12
+    node.tx_power = 14.0
+    node.channel.detection_threshold_dBm = (
+        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+        + node.channel.sensitivity_margin_dB
+    )
+    server.receive(39, node.id, gateway_id, rssi=rssi)
+    assert len(commands) == 2
