@@ -607,6 +607,7 @@ class Simulator:
                     else 0.0
                 ),
             )
+            node.simulator = self
             node._warmup_remaining = self.warm_up_intervals
             node._log_after = self.log_mean_after
             # Enregistrer les états initiaux du nœud pour rapport ultérieur
@@ -788,6 +789,47 @@ class Simulator:
             f"Scheduled transmission {event_id} for node {node.id} at t={time:.2f}s"
 
         )
+
+    def update_duty_cycle(self, node_id: int, max_duty_cycle: int) -> None:
+        """Update the duty-cycle configuration following a LoRaWAN command."""
+        if self.duty_cycle_manager is None:
+            return
+
+        exponent = max(0, int(max_duty_cycle))
+        duty = 2.0 ** (-exponent)
+        if duty <= 0.0:
+            duty = float.fromhex("0x1p-1022")
+
+        self.duty_cycle_manager.duty_cycle = duty
+
+        node = self.node_map.get(node_id)
+        if node is None:
+            return
+
+        duration = getattr(node, "last_airtime", 0.0)
+        start_time = getattr(node, "last_tx_time", None)
+        if duration <= 0.0 or start_time is None:
+            return
+
+        earliest = max(self.current_time, start_time + duration / duty)
+        self.duty_cycle_manager.next_tx_time[node_id] = earliest
+
+        rescheduled = False
+        tick_deadline = self._seconds_to_ticks(earliest)
+        deadline_seconds = self._ticks_to_seconds(tick_deadline)
+        for event in self.event_queue:
+            if event.node_id == node_id and event.type == EventType.TX_START:
+                if event.time < tick_deadline:
+                    event.time = tick_deadline
+                    rescheduled = True
+
+        if rescheduled:
+            heapq.heapify(self.event_queue)
+            if node.interval_log:
+                node.interval_log[-1]["reason"] = "duty_cycle"
+                node.interval_log[-1]["tx_time"] = deadline_seconds
+        elif node.interval_log:
+            node.interval_log[-1]["tx_time"] = deadline_seconds
 
     def schedule_mobility(self, node: Node, time: float):
         """Planifie un événement de mobilité (déplacement aléatoire) pour un nœud à l'instant donné."""
