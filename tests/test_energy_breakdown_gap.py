@@ -3,7 +3,6 @@ import pytest
 from loraflexsim.launcher.simulator import Simulator
 
 
-@pytest.mark.xfail(reason="L'énergie de rampe n'est pas exposée séparément", strict=True)
 def test_energy_breakdown_reports_pa_ramp_component():
     sim = Simulator(
         num_nodes=1,
@@ -15,5 +14,7 @@ def test_energy_breakdown_reports_pa_ramp_component():
         seed=0,
     )
     sim.run()
-    breakdown = sim.nodes[0].get_energy_breakdown()
+    node = sim.nodes[0]
+    breakdown = node.get_energy_breakdown()
     assert "ramp" in breakdown
+    assert breakdown["ramp"] == pytest.approx(node.energy_ramp)

@@ -147,11 +147,12 @@ class OmnetPHY:
         self._tx_level = 1.0 if self.tx_state == "on" else 0.0
         # Energy accumulated in Joules for each radio state.  The same
         # elementary relationship ``E = V * I * t`` is applied to
-        # transmission, reception, idle and start-up phases.
+        # transmission, reception, idle, ramp and start-up phases.
         self.energy_tx = 0.0
         self.energy_rx = 0.0
         self.energy_idle = 0.0
         self.energy_start = 0.0
+        self.energy_ramp = 0.0
 
     # ------------------------------------------------------------------
     # Transceiver state helpers
@@ -199,7 +200,11 @@ class OmnetPHY:
                 else self.tx_current_a
             )
             self.energy_start += self.voltage_v * current * dt
-        elif self.tx_state != "off":
+        elif self.tx_state in {"ramping_up", "ramping_down"}:
+            self.energy_ramp += (
+                self.voltage_v * self.tx_current_a * self._tx_level * dt
+            )
+        elif self.tx_state == "on":
             self.energy_tx += (
                 self.voltage_v * self.tx_current_a * self._tx_level * dt
             )

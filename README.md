@@ -1000,6 +1000,7 @@ Les points suivants ont été intégrés à LoRaFlexSim :
 - **PDR par nœud et par type de trafic.** Chaque nœud maintient l'historique de ses vingt dernières transmissions afin de calculer un taux de livraison global et récent. Ces valeurs sont visibles dans le tableau de bord et exportées dans un fichier `metrics_*.csv`.
 - **Historique glissant et indicateurs QoS.** LoRaFlexSim calcule désormais le délai moyen de livraison ainsi que le nombre de retransmissions sur la période récente.
 - **Indicateurs supplémentaires.** La méthode `get_metrics()` retourne le PDR par SF, passerelle, classe et nœud. Le tableau de bord affiche un récapitulatif et l'export produit deux fichiers CSV : un pour les événements détaillés et un pour les métriques agrégées.
+  Les décompositions d'énergie exposent également une clé `"ramp"` dédiée aux phases de montée/descente du PA, exportée dans les CSV (`energy_ramp_J_node`) et visible dans le tableau de bord.
  - **Moteur d'événements précis.** La file de priorité gère désormais un délai réseau de 10 ms et un traitement serveur de 1,2 s, reproduisant ainsi fidèlement l'ordonnancement d'OMNeT++.
 - **Suivi détaillé des ACK.** Chaque nœud mémorise les confirmations reçues pour appliquer fidèlement la logique ADR de FLoRa.
 - **Scheduler de downlinks prioritaire.** Le module `downlink_scheduler.py` organise les transmissions B/C en donnant la priorité aux commandes et accusés de réception.

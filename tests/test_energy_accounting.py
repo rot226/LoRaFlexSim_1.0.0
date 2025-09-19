@@ -18,10 +18,22 @@ def test_tx_energy_accounted_once():
     node = sim.nodes[0]
     current = node.profile.get_tx_current(node.tx_power)
     airtime = node.channel.airtime(node.sf, payload_size=sim.payload_size_bytes)
-    expected_tx = current * node.profile.voltage_v * (
-        airtime + node.profile.ramp_up_s + node.profile.ramp_down_s
-    )
+    expected_tx = current * node.profile.voltage_v * airtime
     assert node.energy_tx == pytest.approx(expected_tx)
+    expected_ramp_tx = current * node.profile.voltage_v * (
+        node.profile.ramp_up_s + node.profile.ramp_down_s
+    )
+    rx_current = (
+        node.profile.listen_current_a
+        if node.profile.listen_current_a > 0.0
+        else node.profile.rx_current_a
+    )
+    expected_ramp_rx = rx_current * node.profile.voltage_v * (
+        node.profile.ramp_up_s + node.profile.ramp_down_s
+    )
+    assert node.energy_ramp == pytest.approx(
+        expected_ramp_tx + 2 * expected_ramp_rx
+    )
     expected_startup = (
         node.profile.startup_current_a
         * node.profile.voltage_v

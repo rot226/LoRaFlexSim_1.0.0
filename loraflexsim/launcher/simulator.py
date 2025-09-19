@@ -1208,7 +1208,9 @@ class Simulator:
                 total_tx = energy_tx + ramp
                 self.energy_gateways_J += total_tx
                 self.total_energy_J += total_tx
-                gw.add_energy(total_tx, "tx")
+                gw.add_energy(energy_tx, "tx")
+                if ramp > 0.0:
+                    gw.add_energy(ramp, "ramp")
                 preamble_J = (
                     gw.profile.preamble_current_a
                     * gw.profile.voltage_v
@@ -1363,7 +1365,9 @@ class Simulator:
                 total_tx = energy_tx + ramp
                 self.energy_gateways_J += total_tx
                 self.total_energy_J += total_tx
-                gw.add_energy(total_tx, "tx")
+                gw.add_energy(energy_tx, "tx")
+                if ramp > 0.0:
+                    gw.add_energy(ramp, "ramp")
                 preamble_J = (
                     gw.profile.preamble_current_a
                     * gw.profile.voltage_v
@@ -1630,6 +1634,9 @@ class Simulator:
         df["energy_processing_J_node"] = df["node_id"].apply(
             lambda nid: node_dict[nid].energy_processing
         )
+        df["energy_ramp_J_node"] = df["node_id"].apply(
+            lambda nid: node_dict[nid].energy_ramp
+        )
         df["energy_consumed_J_node"] = df["node_id"].apply(
             lambda nid: node_dict[nid].energy_consumed
         )
@@ -1666,6 +1673,7 @@ class Simulator:
             "energy_rx_J_node",
             "energy_sleep_J_node",
             "energy_processing_J_node",
+            "energy_ramp_J_node",
             "energy_consumed_J_node",
             "battery_capacity_J",
             "battery_remaining_J",

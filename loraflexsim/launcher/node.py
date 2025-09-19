@@ -132,6 +132,7 @@ class Node:
         self.energy_startup = 0.0
         self.energy_listen = 0.0
         self.energy_preamble = 0.0
+        self.energy_ramp = 0.0
         # Accumulateur d'énergie par état
         self.energy = EnergyAccumulator()
         # Transmission counters
@@ -329,6 +330,7 @@ class Node:
             "energy_rx_J": self.energy_rx,
             "energy_sleep_J": self.energy_sleep,
             "energy_processing_J": self.energy_processing,
+            "energy_ramp_J": self.energy_ramp,
             "energy_startup_J": self.energy_startup,
             "energy_listen_J": self.energy_listen,
             "energy_preamble_J": self.energy_preamble,
@@ -388,12 +390,12 @@ class Node:
 
     def add_energy(self, energy_joules: float, state: str = "tx"):
         """Ajoute de l'énergie consommée pour un état donné."""
-        extra = 0.0
+        ramp = 0.0
         startup = 0.0
         preamble = 0.0
         if state == "tx":
             current = self.profile.get_tx_current(self.tx_power)
-            extra = (
+            ramp = (
                 current
                 * self.profile.voltage_v
                 * (self.profile.ramp_up_s + self.profile.ramp_down_s)
@@ -424,16 +426,16 @@ class Node:
                 if self.profile.listen_current_a > 0.0
                 else self.profile.rx_current_a
             )
-            extra = (
+            ramp = (
                 current
                 * self.profile.voltage_v
                 * (self.profile.ramp_up_s + self.profile.ramp_down_s)
             )
 
-        total = energy_joules + extra + startup + preamble
+        total = energy_joules + ramp + startup + preamble
         if state == "tx":
-            self.energy.add("tx", energy_joules + extra)
-            self.energy_tx += energy_joules + extra
+            self.energy.add("tx", energy_joules)
+            self.energy_tx += energy_joules
             if startup > 0.0:
                 self.energy.add("startup", startup)
                 self.energy_startup += startup
@@ -441,8 +443,8 @@ class Node:
                 self.energy.add("preamble", preamble)
                 self.energy_preamble += preamble
         elif state == "rx":
-            self.energy.add("rx", energy_joules + extra)
-            self.energy_rx += energy_joules + extra
+            self.energy.add("rx", energy_joules)
+            self.energy_rx += energy_joules
         elif state == "sleep":
             self.energy.add("sleep", total)
             self.energy_sleep += total
@@ -453,11 +455,14 @@ class Node:
             self.energy.add("startup", total)
             self.energy_startup += total
         elif state == "listen":
-            self.energy.add("listen", total)
-            self.energy_listen += total
+            self.energy.add("listen", energy_joules)
+            self.energy_listen += energy_joules
         elif state == "preamble":
             self.energy.add("preamble", total)
             self.energy_preamble += total
+        if ramp > 0.0:
+            self.energy.add("ramp", ramp)
+            self.energy_ramp += ramp
         self.energy_consumed += total
         
         if self.battery_remaining_j != float("inf"):
