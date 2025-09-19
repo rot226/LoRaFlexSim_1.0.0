@@ -1,4 +1,5 @@
 scenario,description,pdr_sim,pdr_ref,pdr_delta,collisions_sim,collisions_ref,collisions_delta,snr_sim,snr_ref,snr_delta,tolerance_pdr,tolerance_collisions,tolerance_snr,status
+long_range,"Scénario longue portée 12 km dérivé du preset FLoRa.",0.9027777778,0.9027777778,0.0,0.0,0.0,0.0,-1.94136915110207,-1.94136915110207,0.0,0.01,0,0.2,ok
 mono_gw_single_channel_class_a,"Mono-passerelle, canal unique EU868, classes A statiques avec ADR nœud+serveur.",0.45,0.45,0.0,0.0,0.0,0.0,-8.383328480741046,-8.383328480741046,0.0,0.02,2,1.5,ok
 mono_gw_multichannel_node_adr,"Mono-passerelle, 3 canaux EU868, ADR côté nœud uniquement (classe A).",0.45,0.45,0.0,0.0,0.0,0.0,-7.772168715320888,-7.772168715320888,0.0,0.02,2,1.5,ok
 multi_gw_multichannel_server_adr,"Deux passerelles, multi-canaux, ADR serveur uniquement (classe A).",0.7,0.7,0.0,0.0,0.0,0.0,-8.823195465943469,-8.823195465943469,0.0,0.03,3,2.0,ok

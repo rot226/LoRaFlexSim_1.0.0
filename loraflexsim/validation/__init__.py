@@ -8,13 +8,19 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from loraflexsim.launcher import Simulator, MultiChannel
+from functools import partial
+
+from loraflexsim.launcher import Simulator, MultiChannel, Channel
 from loraflexsim.launcher import adr_ml, explora_at
 from loraflexsim.launcher.compare_flora import (
     load_flora_metrics,
     load_flora_rx_stats,
 )
 from loraflexsim.launcher.smooth_mobility import SmoothMobility
+from loraflexsim.scenarios.long_range import (
+    LONG_RANGE_RECOMMENDATIONS,
+    create_long_range_channels,
+)
 
 
 @dataclass(frozen=True)
@@ -39,12 +45,15 @@ class ValidationScenario:
     run_steps: int | None = None
     tolerances: ScenarioTolerance = field(default_factory=ScenarioTolerance)
     setup: Sequence[Callable[[Simulator], None]] = field(default_factory=tuple)
+    channels_factory: Callable[[], list[Channel]] | None = None
 
     def build_simulator(self) -> Simulator:
         """Instantiate :class:`Simulator` for the scenario."""
 
         kwargs = dict(self.sim_kwargs)
-        if self.channel_plan is not None:
+        if self.channels_factory is not None:
+            kwargs["channels"] = self.channels_factory()
+        elif self.channel_plan is not None:
             kwargs["channels"] = MultiChannel(list(self.channel_plan))
         sim = Simulator(**kwargs)
         for hook in self.setup:
@@ -103,6 +112,22 @@ DATA_DIR = BASE_DIR / "tests" / "integration" / "data"
 FLORA_DIR = BASE_DIR / "flora-master" / "simulations" / "examples"
 
 SCENARIOS: list[ValidationScenario] = [
+    ValidationScenario(
+        name="long_range",
+        description="Scénario longue portée 12 km dérivé du preset FLoRa.",
+        flora_config=FLORA_DIR / "long_range_flora.ini",
+        flora_reference=DATA_DIR / "long_range_flora.sca",
+        sim_kwargs=dict(
+            flora_mode=True,
+            config_file=str(FLORA_DIR / "long_range_flora.ini"),
+            seed=3,
+            packets_to_send=LONG_RANGE_RECOMMENDATIONS["flora"].packets_per_node,
+            mobility=False,
+            transmission_mode="Periodic",
+        ),
+        channels_factory=partial(create_long_range_channels, "flora"),
+        tolerances=ScenarioTolerance(pdr=0.01, collisions=0, snr=0.2),
+    ),
     ValidationScenario(
         name="mono_gw_single_channel_class_a",
         description="Mono-passerelle, canal unique EU868, classes A statiques avec ADR nœud+serveur.",
