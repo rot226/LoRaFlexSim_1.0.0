@@ -175,5 +175,5 @@ Cette représentation permet d’identifier rapidement les scénarios qui s’é
 - Aucun écart identifié.
 
 ## Tickets ouverts
-- [TICKET-001](docs/tickets/TICKET-001.md) – Corriger `OmnetPHY.compute_snrs` pour ignorer les transmissions hors bande lors du calcul du bruit équivalent.
-- [TICKET-002](docs/tickets/TICKET-002.md) – Exposer le SNIR mesuré par chaque passerelle au serveur ADR pour refléter la logique FLoRa.
+
+Aucun ticket ouvert actuellement. Les tickets historiques [TICKET-001](docs/tickets/closed/TICKET-001.md) et [TICKET-002](docs/tickets/closed/TICKET-002.md) ont été résolus et archivés.
