@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+import math
+from typing import Dict, List, Tuple
 
 from ..launcher import Channel, Simulator
 
@@ -23,6 +24,15 @@ LONG_RANGE_DISTANCES: List[float] = [
 LONG_RANGE_SPREADING_FACTORS: List[int] = [12, 12, 12, 11, 11, 10, 10, 9, 9]
 LONG_RANGE_BANDWIDTHS: tuple[int, int, int] = (125_000, 250_000, 500_000)
 
+# Distances (km) used as reference to interpolate new link budgets. The values
+# align with the documentation summary produced from empirical presets.
+_REFERENCE_DISTANCE_KM: Dict[str, float] = {
+    "rural_long_range": 10.0,
+    "flora": 12.0,
+    "flora_hata": 12.0,
+    "very_long_range": 15.0,
+}
+
 
 @dataclass(frozen=True)
 class LongRangeParameters:
@@ -38,6 +48,18 @@ class LongRangeParameters:
     distances: tuple[float, ...] | None = None
     spreading_factors: tuple[int, ...] | None = None
     area_size_m: float | None = None
+
+
+@dataclass(frozen=True)
+class SuggestedLongRange:
+    """Result container returned by :func:`suggest_parameters`."""
+
+    parameters: LongRangeParameters
+    environment: str
+    reference_presets: Tuple[str, str]
+    interpolation_factor: float
+    max_distance_km: float
+    area_km2: float
 
 
 LONG_RANGE_RECOMMENDATIONS: Dict[str, LongRangeParameters] = {
@@ -99,6 +121,112 @@ def _preset_area_size(params: LongRangeParameters) -> float:
     return params.area_size_m or LONG_RANGE_AREA_SIZE
 
 
+def _reference_points() -> List[tuple[float, str, LongRangeParameters]]:
+    """Return unique interpolation anchors sorted by reference distance."""
+
+    points: Dict[float, tuple[str, LongRangeParameters]] = {}
+    for name, params in LONG_RANGE_RECOMMENDATIONS.items():
+        distance = _REFERENCE_DISTANCE_KM.get(name)
+        if distance is None:
+            continue
+        # Preserve the first preset registered for a given distance (flora_hata
+        # for 12 km, rural_long_range for 10 km, very_long_range for 15 km).
+        points.setdefault(distance, (name, params))
+    return sorted(((dist, preset, params) for dist, (preset, params) in points.items()), key=lambda item: item[0])
+
+
+def _interpolate(value: float, lo: float, hi: float, lo_val: float, hi_val: float) -> float:
+    if math.isclose(hi, lo):
+        return lo_val
+    ratio = (value - lo) / (hi - lo)
+    return lo_val + ratio * (hi_val - lo_val)
+
+
+def suggest_parameters(area_km2: float, max_distance_km: float | None = None) -> SuggestedLongRange:
+    """Suggest :class:`LongRangeParameters` for the requested coverage.
+
+    The recommendation linearly interpolates the presets declared in
+    :data:`LONG_RANGE_RECOMMENDATIONS` using ``_REFERENCE_DISTANCE_KM`` as
+    anchors. When the target distance sits outside of the known bounds, the
+    closest preset is returned. Distances are scaled from
+    :data:`LONG_RANGE_DISTANCES` to maintain the original node layout.
+    """
+
+    if area_km2 <= 0:
+        raise ValueError("area_km2 must be positive")
+    if max_distance_km is not None and max_distance_km <= 0:
+        raise ValueError("max_distance_km must be positive when provided")
+
+    side_km = math.sqrt(area_km2)
+    if max_distance_km is None:
+        # Use half the side length so that the farthest node remains within the
+        # target square area.
+        max_distance_km = side_km / 2.0
+
+    anchors = _reference_points()
+    if not anchors:
+        raise RuntimeError("No reference presets defined for long range suggestions")
+
+    lo_dist, lo_name, lo_params = anchors[0]
+    hi_dist, hi_name, hi_params = anchors[-1]
+
+    for dist, name, params in anchors:
+        if max_distance_km <= dist:
+            hi_dist, hi_name, hi_params = dist, name, params
+            break
+        lo_dist, lo_name, lo_params = dist, name, params
+
+    if max_distance_km <= anchors[0][0]:
+        factor = 0.0
+        ref_pair = (lo_name, lo_name)
+    elif max_distance_km >= anchors[-1][0]:
+        factor = 1.0
+        ref_pair = (hi_name, hi_name)
+    else:
+        factor = (max_distance_km - lo_dist) / (hi_dist - lo_dist)
+        ref_pair = (lo_name, hi_name)
+
+    tx_power = _interpolate(max_distance_km, lo_dist, hi_dist, lo_params.tx_power_dBm, hi_params.tx_power_dBm)
+    tx_gain = _interpolate(max_distance_km, lo_dist, hi_dist, lo_params.tx_antenna_gain_dB, hi_params.tx_antenna_gain_dB)
+    rx_gain = _interpolate(max_distance_km, lo_dist, hi_dist, lo_params.rx_antenna_gain_dB, hi_params.rx_antenna_gain_dB)
+    cable_loss = _interpolate(max_distance_km, lo_dist, hi_dist, lo_params.cable_loss_dB, hi_params.cable_loss_dB)
+
+    base_distances = tuple(LONG_RANGE_DISTANCES)
+    max_base_distance = max(base_distances)
+    if max_base_distance <= 0:
+        raise RuntimeError("Invalid long range distance reference")
+    scale = (max_distance_km * 1_000.0) / max_base_distance
+    scaled_distances = tuple(distance * scale for distance in base_distances)
+
+    side_km = max(side_km, max_distance_km * 2.0)
+    area_size_m = side_km * 1_000.0
+
+    params = LongRangeParameters(
+        tx_power_dBm=tx_power,
+        tx_antenna_gain_dB=tx_gain,
+        rx_antenna_gain_dB=rx_gain,
+        cable_loss_dB=cable_loss,
+        distances=scaled_distances,
+        spreading_factors=tuple(LONG_RANGE_SPREADING_FACTORS),
+        area_size_m=area_size_m,
+    )
+
+    # Choose the environment closest to the target distance.
+    if factor <= 0.5:
+        environment = lo_name
+    else:
+        environment = hi_name
+
+    return SuggestedLongRange(
+        parameters=params,
+        environment=environment,
+        reference_presets=ref_pair,
+        interpolation_factor=factor,
+        max_distance_km=max_distance_km,
+        area_km2=side_km**2,
+    )
+
+
 def create_long_range_channels(preset: str) -> List[Channel]:
     """Return channels tuned for large area validation."""
 
@@ -115,6 +243,41 @@ def create_long_range_channels(preset: str) -> List[Channel]:
         channel.cable_loss_dB = params.cable_loss_dB
         channels.append(channel)
     return channels
+
+
+def _build_simulator_from_params(
+    params: LongRangeParameters,
+    preset: str,
+    *,
+    seed: int,
+    packets_per_node: int | None = None,
+) -> Simulator:
+    distances = _preset_distances(params)
+    spreading_factors = _preset_spreading_factors(params)
+    if len(distances) != len(spreading_factors):
+        raise ValueError("Distances and spreading factors must have matching lengths")
+
+    channels = create_long_range_channels(preset)
+    for channel in channels:
+        channel.shadowing_std = params.shadowing_std_dB
+        channel.tx_antenna_gain_dB = params.tx_antenna_gain_dB
+        channel.rx_antenna_gain_dB = params.rx_antenna_gain_dB
+        channel.cable_loss_dB = params.cable_loss_dB
+
+    simulator = Simulator(
+        num_nodes=len(distances),
+        num_gateways=1,
+        area_size=_preset_area_size(params),
+        transmission_mode="Periodic",
+        packet_interval=params.packet_interval_s,
+        packets_to_send=packets_per_node or params.packets_per_node,
+        mobility=False,
+        seed=seed,
+        flora_mode=True,
+        channels=channels,
+    )
+    configure_long_range_nodes(simulator, params)
+    return simulator
 
 
 def configure_long_range_nodes(sim: Simulator, params: LongRangeParameters) -> None:
@@ -153,22 +316,24 @@ def build_long_range_simulator(
     if preset not in LONG_RANGE_RECOMMENDATIONS:
         raise ValueError(f"Unknown long range preset: {preset}")
     params = LONG_RANGE_RECOMMENDATIONS[preset]
-    distances = _preset_distances(params)
-    spreading_factors = _preset_spreading_factors(params)
-    if len(distances) != len(spreading_factors):
-        raise ValueError("Distances and spreading factors must have matching lengths")
-    channels = create_long_range_channels(preset)
-    simulator = Simulator(
-        num_nodes=len(distances),
-        num_gateways=1,
-        area_size=_preset_area_size(params),
-        transmission_mode="Periodic",
-        packet_interval=params.packet_interval_s,
-        packets_to_send=packets_per_node or params.packets_per_node,
-        mobility=False,
+    return _build_simulator_from_params(
+        params,
+        preset,
         seed=seed,
-        flora_mode=True,
-        channels=channels,
+        packets_per_node=packets_per_node,
     )
-    configure_long_range_nodes(simulator, params)
-    return simulator
+
+
+def build_simulator_from_suggestion(
+    suggestion: SuggestedLongRange,
+    *,
+    seed: int = 2,
+) -> Simulator:
+    """Instantiate a simulator using :func:`suggest_parameters` output."""
+
+    return _build_simulator_from_params(
+        suggestion.parameters,
+        suggestion.environment,
+        seed=seed,
+        packets_per_node=suggestion.parameters.packets_per_node,
+    )

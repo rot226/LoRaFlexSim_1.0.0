@@ -14,7 +14,9 @@ from loraflexsim.scenarios import (
     LONG_RANGE_RECOMMENDATIONS,
     LONG_RANGE_SPREADING_FACTORS,
     LongRangeParameters,
+    build_simulator_from_suggestion,
     build_long_range_simulator,
+    suggest_parameters,
 )
 
 
@@ -96,3 +98,23 @@ def test_very_long_range_extends_distance() -> None:
     ]
     assert max(distances) >= 15_000.0
     assert len([d for d in distances if d >= 13_000.0]) >= 2
+
+
+def test_auto_suggestion_preserves_sf12_reliability() -> None:
+    """Auto suggestions must stay within known link budgets and keep SF12 reliable."""
+
+    suggestion = suggest_parameters(area_km2=10.0)
+    params = suggestion.parameters
+
+    rural = LONG_RANGE_RECOMMENDATIONS["rural_long_range"]
+    very = LONG_RANGE_RECOMMENDATIONS["very_long_range"]
+
+    assert rural.tx_power_dBm <= params.tx_power_dBm <= very.tx_power_dBm
+    assert rural.tx_antenna_gain_dB <= params.tx_antenna_gain_dB <= very.tx_antenna_gain_dB
+    assert rural.rx_antenna_gain_dB <= params.rx_antenna_gain_dB <= very.rx_antenna_gain_dB
+    assert suggestion.area_km2 >= 10.0
+
+    simulator = build_simulator_from_suggestion(suggestion, seed=3)
+    simulator.run()
+    metrics = simulator.get_metrics()
+    assert metrics["pdr_by_sf"][12] >= 0.7

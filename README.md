@@ -136,22 +136,37 @@ les gains d'antenne du couple passerelle/nœud pour garantir des liaisons de 10 
 disponibles sont résumés ci-dessous :
 
 | Preset CLI (`--long-range-demo <preset>`) | P<sub>TX</sub> (dBm) | Gains TX/RX (dBi) | Perte câble (dB) | Effet observé sur la PDR SF12 |
-|-------------------------------------------|---------------------:|------------------:|-----------------:|--------------------------------|
+|-------------------------------------------|---------------------:|------------------:|-----------------:|------------------------------|
 | `flora` / `flora_hata`                    |                 23.0 |             16/16 |              0.5 | ≈ 75 % : PDR limitée par la marge de sensibilité pour reproduire les mesures historiques.【F:docs/long_range.md†L15-L25】|
 | `rural_long_range`                        |                 16.0 |              6/6  |              0.5 | ≈ 96 % : combinaison adaptée aux déploiements ruraux avec une marge RSSI/SNR confortable.【F:docs/long_range.md†L15-L29】|
 | `very_long_range`                         |                 27.0 |             19/19 |              0.5 | 100 % : ajoute deux nœuds à 13,5–15 km tout en conservant la marge SF12 au-dessus des sensibilités `FLORA_SENSITIVITY`.【F:docs/long_range.md†L15-L38】|
 
+L'utilitaire `suggest_parameters(area_km2, max_distance_km)` interpole ces presets pour
+fournir automatiquement un budget de liaison adapté à une surface cible (km²) et une
+distance maximale (km). La CLI expose cette fonctionnalité via `--long-range-auto` :
+
+| Surface cible | Distance max | P<sub>TX</sub> (dBm) | Gains TX/RX (dBi) | Références ancrées | Commande |
+|---------------|--------------|---------------------:|------------------:|-------------------|----------|
+| 10 km²        | auto (1,58 km) | 16.0 | 6 / 6  | `rural_long_range → rural_long_range` | `python -m loraflexsim.run --long-range-auto 10` |
+| 576 km²       | 13 km         | 24.3 | 17 / 17 | `flora → very_long_range` | `python -m loraflexsim.run --long-range-auto 576 13` |
+| 1 024 km²     | auto (16 km)  | 27.0 | 19 / 19 | `very_long_range → very_long_range` | `python -m loraflexsim.run --long-range-auto 1024` |
+
 Exécutez `python -m loraflexsim.run --long-range-demo` pour lancer le preset
 par défaut `flora_hata` (identique à `python run.py --long-range-demo`). Ajoutez
 `rural_long_range` pour les essais de très grande portée avec un PDR SF12 plus
-élevé ou `very_long_range` pour valider des liens jusqu'à 15 km. Les métriques
-détaillées, un tableau des marges RSSI pour 10/12/15 km et un utilitaire CLI
-(`scripts/long_range_margin.py`) sont présentés dans `docs/long_range.md`.
+élévé ou `very_long_range` pour valider des liens jusqu'à 15 km. Les suggestions
+automatiques (`--long-range-auto <surface> [distance]`) permettent d'explorer des
+budgets intermédiaires. Les métriques détaillées, un tableau des marges RSSI pour
+10/12/15 km et un utilitaire CLI (`scripts/long_range_margin.py`) sont présentés
+dans `docs/long_range.md`.
 
 Le comportement attendu est verrouillé par le test d'intégration
 `pytest tests/integration/test_long_range_large_area.py`, qui s'assure que chaque
 preset conserve une PDR SF12 ≥ 70 % tout en vérifiant les marges de
-sensibilité.【F:tests/integration/test_long_range_large_area.py†L1-L63】
+sensibilité.【F:tests/integration/test_long_range_large_area.py†L1-L63】 Le test
+`test_auto_suggestion_preserves_sf12_reliability` valide en outre que
+`suggest_parameters` maintient un PDR SF12 ≥ 70 % pour une surface de 10 km² tout
+en restant dans l'enveloppe des presets existants.【F:tests/integration/test_long_range_large_area.py†L65-L88】
 
 ## Plan de vérification
 

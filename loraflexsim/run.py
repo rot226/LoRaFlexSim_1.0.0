@@ -353,6 +353,17 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--long-range-auto",
+        nargs="+",
+        type=float,
+        metavar=("AREA_KM2", "MAX_DISTANCE_KM"),
+        help=(
+            "Estime un scénario longue portée à partir d'une surface cible (km²) et "
+            "d'une distance maximale (km). La distance est optionnelle et vaut la moitié "
+            "du côté si omise."
+        ),
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         help="Graine aléatoire pour reproduire les résultats",
@@ -429,22 +440,23 @@ def main(argv=None):
     if args.debug_rx:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    if args.long_range_auto and not (1 <= len(args.long_range_auto) <= 2):
+        parser.error("--long-range-auto attend 1 ou 2 valeurs (surface, distance optionnelle)")
+
+    if args.long_range_auto and args.long_range_demo:
+        parser.error("--long-range-auto est incompatible avec --long-range-demo")
+
     if args.runs < 1:
         parser.error("--runs must be >= 1")
 
-    if args.long_range_demo:
-        from .scenarios import (
-            LONG_RANGE_RECOMMENDATIONS,
-            build_long_range_simulator,
-        )
-
-        preset = args.long_range_demo
-        params = LONG_RANGE_RECOMMENDATIONS[preset]
-        seed = args.seed if args.seed is not None else 2
-        simulator = build_long_range_simulator(preset, seed=seed)
-        simulator.run()
+    def _report_long_range(
+        simulator,
+        params,
+        label: str,
+        csv_preset: str,
+        extra_columns: dict[str, str] | None = None,
+    ) -> None:
         metrics = simulator.get_metrics()
-
         sf = metrics["pdr_by_sf"]
 
         def _percent(value: float) -> float:
@@ -470,7 +482,7 @@ def main(argv=None):
         logging.info(
             "Scénario longue portée (%s) : %d nœuds sur %.1f km², TX=%.1f dBm, "
             "gains TX/RX=%.1f/%.1f dBi",
-            preset,
+            label,
             len(simulator.nodes),
             area_km2,
             params.tx_power_dBm,
@@ -493,38 +505,98 @@ def main(argv=None):
         )
 
         if args.output:
+            header = [
+                "preset",
+                "area_km2",
+                "nodes",
+                "packets_per_node",
+                "pdr_total_pct",
+                "pdr_sf12_pct",
+                "pdr_sf11_pct",
+                "pdr_sf10_pct",
+                "pdr_sf9_pct",
+                "max_rssi_sf12_dBm",
+                "max_snr_sf12_dB",
+            ]
+            row = [
+                csv_preset,
+                f"{area_km2:.3f}",
+                len(simulator.nodes),
+                params.packets_per_node,
+                f"{_percent(metrics['PDR']):.2f}",
+                f"{_percent(sf[12]):.2f}",
+                f"{_percent(sf[11]):.2f}",
+                f"{_percent(sf[10]):.2f}",
+                f"{_percent(sf[9]):.2f}",
+                f"{max_rssi:.2f}" if successful_sf12 else "",
+                f"{max_snr:.2f}" if successful_sf12 else "",
+            ]
+
+            if extra_columns:
+                for key, value in extra_columns.items():
+                    header.append(key)
+                    row.append(value)
+
             with open(args.output, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(
-                    [
-                        "preset",
-                        "area_km2",
-                        "nodes",
-                        "packets_per_node",
-                        "pdr_total_pct",
-                        "pdr_sf12_pct",
-                        "pdr_sf11_pct",
-                        "pdr_sf10_pct",
-                        "pdr_sf9_pct",
-                        "max_rssi_sf12_dBm",
-                        "max_snr_sf12_dB",
-                    ]
-                )
-                writer.writerow(
-                    [
-                        preset,
-                        f"{area_km2:.3f}",
-                        len(simulator.nodes),
-                        params.packets_per_node,
-                        f"{_percent(metrics['PDR']):.2f}",
-                        f"{_percent(sf[12]):.2f}",
-                        f"{_percent(sf[11]):.2f}",
-                        f"{_percent(sf[10]):.2f}",
-                        f"{_percent(sf[9]):.2f}",
-                        f"{max_rssi:.2f}" if successful_sf12 else "",
-                        f"{max_snr:.2f}" if successful_sf12 else "",
-                    ]
-                )
+                writer.writerow(header)
+                writer.writerow(row)
+
+
+    if args.long_range_auto:
+        from .scenarios import (
+            build_simulator_from_suggestion,
+            suggest_parameters,
+        )
+
+        area_km2 = args.long_range_auto[0]
+        max_distance_km = args.long_range_auto[1] if len(args.long_range_auto) == 2 else None
+        suggestion = suggest_parameters(area_km2, max_distance_km)
+        seed = args.seed if args.seed is not None else 2
+        simulator = build_simulator_from_suggestion(suggestion, seed=seed)
+        simulator.run()
+
+        logging.info(
+            "Suggestion longue portée : surface demandée=%.2f km², surface appliquée=%.2f km², "
+            "distance max=%.2f km (références %s → %s, facteur %.2f)",
+            area_km2,
+            suggestion.area_km2,
+            suggestion.max_distance_km,
+            suggestion.reference_presets[0],
+            suggestion.reference_presets[1],
+            suggestion.interpolation_factor,
+        )
+
+        extra = {
+            "requested_area_km2": f"{area_km2:.3f}",
+            "requested_max_distance_km": f"{(max_distance_km if max_distance_km is not None else suggestion.max_distance_km):.3f}",
+            "applied_area_km2": f"{suggestion.area_km2:.3f}",
+            "applied_max_distance_km": f"{suggestion.max_distance_km:.3f}",
+            "reference_lo": suggestion.reference_presets[0],
+            "reference_hi": suggestion.reference_presets[1],
+            "interpolation_factor": f"{suggestion.interpolation_factor:.3f}",
+        }
+        _report_long_range(
+            simulator,
+            suggestion.parameters,
+            f"auto ({suggestion.environment})",
+            "auto",
+            extra_columns=extra,
+        )
+        return
+
+    if args.long_range_demo:
+        from .scenarios import (
+            LONG_RANGE_RECOMMENDATIONS,
+            build_long_range_simulator,
+        )
+
+        preset = args.long_range_demo
+        params = LONG_RANGE_RECOMMENDATIONS[preset]
+        seed = args.seed if args.seed is not None else 2
+        simulator = build_long_range_simulator(preset, seed=seed)
+        simulator.run()
+        _report_long_range(simulator, params, preset, preset)
         return
 
     logging.info(
