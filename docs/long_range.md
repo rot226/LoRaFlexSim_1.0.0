@@ -61,6 +61,19 @@ reste supérieur à 70 % pour les trois presets tout en contrôlant les marges 
 Le test `test_auto_suggestion_preserves_sf12_reliability` complète ce dispositif en
 validant que `suggest_parameters` maintient un PDR SF12 ≥ 70 % pour une surface cible
 de 10 km² tout en restant aligné sur les presets historiques.
+
+### Parité FLoRa 12 km
+
+Une configuration FLoRa équivalente est fournie dans `flora-master/simulations/examples/long_range_flora.ini`
+afin de conserver les distances, SF et puissances attendues par le preset `flora`.【F:flora-master/simulations/examples/long_range_flora.ini†L1-L18】
+Le test d'intégration `tests/integration/test_long_range_flora_parity.py` charge ce
+fichier, construit le simulateur via `build_long_range_simulator("flora")`, puis compare
+les métriques obtenues (PDR, collisions, SNR moyen) à la trace FLoRa
+`tests/integration/data/long_range_flora.sca` avec des tolérances resserrées de
+±0,01 sur la PDR, 0 collision et 0,2 dB sur le SNR.【F:tests/integration/test_long_range_flora_parity.py†L1-L58】【F:tests/integration/data/long_range_flora.sca†L1-L5】
+La simulation LoRaFlexSim reste alignée sur la référence (PDR = 0,903, aucune collision,
+SNR moyen −1,94 dB), sans écart à documenter au-delà du bruit de quantification de la
+trace FLoRa.【F:tests/integration/data/long_range_flora.sca†L1-L5】
 Le scénario peut également être lancé depuis la CLI :
 
 ```bash
