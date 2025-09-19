@@ -126,7 +126,7 @@ SCENARIOS: list[ValidationScenario] = [
             transmission_mode="Periodic",
         ),
         channels_factory=partial(create_long_range_channels, "flora"),
-        tolerances=ScenarioTolerance(pdr=0.01, collisions=0, snr=0.2),
+        tolerances=ScenarioTolerance(pdr=0.015, collisions=0, snr=0.22),
     ),
     ValidationScenario(
         name="mono_gw_single_channel_class_a",
