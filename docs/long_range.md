@@ -42,16 +42,32 @@ La table ci-dessous résume les marges SF12 obtenues avec la largeur de bande 12
 
 *Marge calculée via `scripts/long_range_margin.py --preset <preset> --distances 10 12 15`.
 
+Pour explorer des combinaisons intermédiaires, la fonction Python
+`suggest_parameters(area_km2, max_distance_km)` interpole ces budgets de liaison à
+partir d'une surface cible (km²) et d'une distance maximale (km). L'option
+CLI `--long-range-auto` expose directement ce calcul et lance la simulation
+associée.
+
+| Surface cible | Distance max | P<sub>TX</sub> (dBm) | Gains TX/RX (dBi) | Références ancrées | Commande CLI |
+|---------------|--------------|---------------------:|------------------:|-------------------|--------------|
+| 10 km²        | auto (1,58 km) | 16.0 | 6 / 6  | `rural_long_range → rural_long_range` | `python -m loraflexsim.run --long-range-auto 10` |
+| 576 km²       | 13 km         | 24.3 | 17 / 17 | `flora → very_long_range` | `python -m loraflexsim.run --long-range-auto 576 13` |
+| 1 024 km²     | auto (16 km)  | 27.0 | 19 / 19 | `very_long_range → very_long_range` | `python -m loraflexsim.run --long-range-auto 1024` |
+
 ## Exécution et vérification
 
 L'intégration `tests/integration/test_long_range_large_area.py` vérifie que le PDR SF12
 reste supérieur à 70 % pour les trois presets tout en contrôlant les marges de RSSI/SNR.
+Le test `test_auto_suggestion_preserves_sf12_reliability` complète ce dispositif en
+validant que `suggest_parameters` maintient un PDR SF12 ≥ 70 % pour une surface cible
+de 10 km² tout en restant aligné sur les presets historiques.
 Le scénario peut également être lancé depuis la CLI :
 
 ```bash
 python -m loraflexsim.run --long-range-demo        # preset par défaut : flora_hata
 python -m loraflexsim.run --long-range-demo flora  # forcé sur le preset log-normal
 python -m loraflexsim.run --long-range-demo very_long_range --seed 3
+python -m loraflexsim.run --long-range-auto 576 13  # interpolation auto pour 13 km sur 24x24 km
 ```
 
 ### Exemple de configuration CLI
