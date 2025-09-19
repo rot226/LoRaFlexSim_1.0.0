@@ -655,8 +655,8 @@ class NetworkServer:
                                 node.chmask,
                                 node.nb_trans,
                             ),
+                            gateway=gw,
                         )
-                        node.snr_history.clear()
             elif self.adr_method == "adr-lite":
                 optimal_sf = 12
                 for sf in range(7, 13):
@@ -729,5 +729,5 @@ class NetworkServer:
                         self.send_downlink(
                             node,
                             adr_command=(sf, power, node.chmask, node.nb_trans),
+                            gateway=gw,
                         )
-                        node.snr_history.clear()
