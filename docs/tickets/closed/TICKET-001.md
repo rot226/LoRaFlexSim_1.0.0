@@ -1,5 +1,9 @@
 # TICKET-001 – Filtrage fréquentiel du calcul SNIR
 
+> ✅ Fermeture : résolu via [PR #240](https://github.com/rot226/LoRaFlexSim/pull/240)
+> (merge commit [`ee7bafb`](https://github.com/rot226/LoRaFlexSim/commit/ee7bafb3f91cca730a1606b382af23ce6ee384c9))
+> comprenant la correction principale [`b170412`](https://github.com/rot226/LoRaFlexSim/commit/b1704120a5ed8c978999df9a1ff85151515f35b9).
+
 ## Description
 Le calcul `OmnetPHY.compute_snrs` additionne l’énergie de toutes les transmissions en collision sans distinguer leur fréquence. Dans un scénario multi-canaux, un paquet reçu sur 868,1 MHz est donc dégradé par des transmissions voisines sur 868,3 MHz alors que FLoRa n’agrège que les signaux partageant exactement la même porteuse et largeur de bande.【F:loraflexsim/launcher/omnet_phy.py†L393-L507】【F:flora-master/src/LoRaPhy/LoRaAnalogModel.cc†L123-L160】
 

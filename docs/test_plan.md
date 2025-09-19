@@ -15,7 +15,7 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
 - **Rôle :** reproduction du PHY OMNeT++ (capture, bruit corrélé, consommation énergétique événementielle).
 - **Tests existants :**
   - `tests/test_omnet_phy_energy.py`, `tests/test_rx_chain.py` et `tests/test_overlap_snir.py` couvrent l'accumulation d'énergie, la chaîne de réception et le calcul SNIR.
-  - `tests/test_flora_capture.py` garantit l'équivalence des traces FLoRa.
+  - `tests/test_flora_capture.py` garantit l'équivalence des traces FLoRa et inclut `test_compute_snrs_ignores_other_channels` pour éviter toute régression sur le filtrage fréquentiel.
   - `tests/test_startup_currents.py` et `tests/test_pa_ramp.py` vérifient la modélisation des transitoires.
 
 ### `loraflexsim/launcher/gateway.py`
@@ -30,7 +30,7 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
 - **Tests existants :**
   - `tests/test_network_server.py` couvre l'ordonnancement et la dé-duplication.
   - `tests/test_no_random_drop.py`, `tests/test_run_simulate.py` et `tests/test_class_bc.py` vérifient respectivement la livraison descendante, les scénarios CLI et les classes B/C.
-  - `tests/integration/test_validation_matrix.py` confronte l'ADR serveur et les métriques globales aux traces FLoRa.
+  - `tests/integration/test_validation_matrix.py` confronte l'ADR serveur et les métriques globales aux traces FLoRa, tandis que `tests/integration/test_adr_standard_alignment.py` garantit l'alignement multi-passerelle et la propagation du SNIR mesuré.
 
 ### `loraflexsim/launcher/lorawan.py`
 - **Rôle :** encodage MAC (OTAA, commandes ADR, gestion des fenêtres RX, cryptographie AES/MIC).
