@@ -239,6 +239,7 @@ class Node:
         self.downlink_pending: int = 0
         self.acks_received: int = 0
         self.ack_history: list[bool] = []
+        self.simulator = None
         # RNG stream assigned by Simulator
         self.rng: np.random.Generator | None = None
         # Last uplink end time to schedule Class A downlinks
@@ -770,6 +771,9 @@ class Node:
 
                     req = DutyCycleReq.from_bytes(payload[:2])
                     self.max_duty_cycle = req.max_duty_cycle
+                    simulator = getattr(self, "simulator", None)
+                    if simulator is not None and hasattr(simulator, "update_duty_cycle"):
+                        simulator.update_duty_cycle(self.id, self.max_duty_cycle)
                 except Exception:
                     pass
             elif len(payload) >= 5 and payload[0] == 0x05:

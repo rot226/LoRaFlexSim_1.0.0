@@ -56,7 +56,7 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
 
 | Lacune | Description | Nouveau test |
 | --- | --- | --- |
-| Duty-cycle dynamique | Le `DutyCycleReq` LoRaWAN ne propage pas sa valeur vers le `DutyCycleManager`. | `tests/test_duty_cycle_gap.py` (`xfail` en attendant la mise à jour dynamique). |
+| Duty-cycle dynamique | Le `DutyCycleReq` LoRaWAN ajuste désormais le `DutyCycleManager` et replanifie les transmissions. | `tests/test_duty_cycle_gap.py` |
 
 ## Commandes utiles
 
