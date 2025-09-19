@@ -73,6 +73,7 @@ class NetworkServer:
             tuple[int, int, int, float | None, float | None, object, float | None],
         ] = {}
         self.gateway_snr_samples: dict[int, dict[int, float]] = defaultdict(dict)
+        self.gateway_rssi_samples: dict[int, dict[int, float]] = defaultdict(dict)
         self.beacon_interval = 128.0
         self.beacon_drift = 0.0
         self.ping_slot_interval = 1.0
@@ -462,6 +463,60 @@ class NetworkServer:
             gw.buffer_downlink(node_id, frame)
             frame, gw = self.scheduler.pop_ready(node_id, current_time)
 
+    def _apply_best_gateway_selection(
+        self,
+        event_id: int,
+        node,
+        gateway_id: int | None,
+        snr: float | None,
+        rssi: float | None,
+    ) -> None:
+        """Record the best gateway/SNR pair for ``event_id`` and update history."""
+
+        prev_gateway = self.event_gateway.get(event_id)
+        prev_snr = self.event_snir.get(event_id)
+
+        replace_previous = (
+            node is not None
+            and prev_gateway is not None
+            and prev_snr is not None
+            and gateway_id is not None
+            and snr is not None
+            and (prev_gateway != gateway_id or prev_snr != snr)
+        )
+
+        if replace_previous:
+            history = node.gateway_snr_history.get(prev_gateway)
+            if history:
+                try:
+                    history.remove(prev_snr)
+                except ValueError:
+                    pass
+
+        if gateway_id is not None:
+            self.event_gateway[event_id] = gateway_id
+
+        if snr is not None:
+            self.event_snir[event_id] = snr
+            if node is not None:
+                node.last_snr = snr
+
+        if rssi is not None:
+            self.event_rssi[event_id] = rssi
+            if node is not None:
+                node.last_rssi = rssi
+
+        if (
+            node is not None
+            and gateway_id is not None
+            and snr is not None
+            and (prev_gateway != gateway_id or prev_snr != snr or prev_gateway is None)
+        ):
+            history = node.gateway_snr_history.setdefault(gateway_id, [])
+            history.append(snr)
+            if len(history) > 20:
+                history.pop(0)
+
     def _activate(self, node, gateway=None):
         from .lorawan import JoinAccept, encrypt_join_accept
 
@@ -518,25 +573,101 @@ class NetworkServer:
 
         if snr_value is not None:
             self.gateway_snr_samples[gateway_id][event_id] = snr_value
-
-        if event_id in self.received_events:
-            # Doublon (déjà reçu via une autre passerelle)
-            logger.debug(
-                f"NetworkServer: duplicate packet event {event_id} from node {node_id} (ignored)."
-            )
-            self.duplicate_packets += 1
-            return
-        # Nouveau paquet reçu
-        self.received_events.add(event_id)
-        self.event_gateway[event_id] = gateway_id
-        if snr_value is not None:
-            self.event_snir[event_id] = snr_value
         if rssi is not None:
-            self.event_rssi[event_id] = rssi
-        self.packets_received += 1
-        logger.debug(
-            f"NetworkServer: packet event {event_id} from node {node_id} received via gateway {gateway_id}."
+            self.gateway_rssi_samples[gateway_id][event_id] = rssi
+
+        samples = [
+            (gw_id, gw_samples[event_id])
+            for gw_id, gw_samples in self.gateway_snr_samples.items()
+            if event_id in gw_samples
+        ]
+        best_gateway_id = None
+        best_snr = None
+        if samples:
+            best_gateway_id, best_snr = max(samples, key=lambda item: item[1])
+
+        already_processed = event_id in self.received_events
+        previous_gateway_id = self.event_gateway.get(event_id)
+        previous_snr = self.event_snir.get(event_id)
+        previous_rssi = self.event_rssi.get(event_id)
+
+        selected_gateway_id = (
+            best_gateway_id
+            if best_gateway_id is not None
+            else previous_gateway_id if previous_gateway_id is not None else gateway_id
         )
+        selected_snr = (
+            best_snr
+            if best_snr is not None
+            else previous_snr if previous_snr is not None else snr_value
+        )
+        best_rssi = None
+        if selected_gateway_id is not None:
+            best_rssi = self.gateway_rssi_samples.get(selected_gateway_id, {}).get(event_id)
+        selected_rssi = (
+            best_rssi
+            if best_rssi is not None
+            else previous_rssi if previous_rssi is not None else rssi
+        )
+
+        selection_changed = (
+            selected_gateway_id != previous_gateway_id
+            or (selected_snr is not None and selected_snr != previous_snr)
+            or (selected_snr is None and previous_snr is not None)
+        )
+
+        self._apply_best_gateway_selection(
+            event_id,
+            node,
+            selected_gateway_id,
+            selected_snr,
+            selected_rssi,
+        )
+
+        gw = next((g for g in self.gateways if g.id == selected_gateway_id), None)
+        if gw is None:
+            gw = next((g for g in self.gateways if g.id == gateway_id), None)
+
+        snr_value = selected_snr
+        rssi = selected_rssi
+
+        if already_processed:
+            # Doublon (déjà reçu via une autre passerelle)
+            if selection_changed:
+                if (
+                    node is not None
+                    and previous_snr is not None
+                    and selected_snr is not None
+                ):
+                    for idx in range(len(node.snr_history) - 1, -1, -1):
+                        if node.snr_history[idx] == previous_snr:
+                            del node.snr_history[idx]
+                            break
+                logger.debug(
+                    "NetworkServer: duplicate packet event %s from node %s updated to gateway %s.",
+                    event_id,
+                    node_id,
+                    selected_gateway_id,
+                )
+            else:
+                logger.debug(
+                    "NetworkServer: duplicate packet event %s from node %s (ignored).",
+                    event_id,
+                    node_id,
+                )
+            self.duplicate_packets += 1
+            if not selection_changed:
+                return
+        else:
+            # Nouveau paquet reçu
+            self.received_events.add(event_id)
+            self.packets_received += 1
+            logger.debug(
+                "NetworkServer: packet event %s from node %s received via gateway %s.",
+                event_id,
+                node_id,
+                selected_gateway_id,
+            )
 
         if node is not None:
             node.last_uplink_end_time = end_time
@@ -544,10 +675,6 @@ class NetworkServer:
                 node.last_rssi = rssi
             if snr_value is not None:
                 node.last_snr = snr_value
-                history = node.gateway_snr_history.setdefault(gateway_id, [])
-                history.append(snr_value)
-                if len(history) > 20:
-                    history.pop(0)
         from .lorawan import JoinRequest
 
         if node and isinstance(frame, JoinRequest) and self.join_server:

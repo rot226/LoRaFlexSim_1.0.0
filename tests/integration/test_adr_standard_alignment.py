@@ -55,20 +55,24 @@ def test_adr_standard_alignment_with_flora_trace():
     for entry in events:
         event_id = entry["event_id"]
         best_gateway = entry["best_gateway"]
-        gateway_info = entry["gateways"][str(best_gateway)]
-        snr = gateway_info["snr"]
-        rssi = gateway_info["rssi"]
+        gateways = entry["gateways"]
+        best_info = gateways[str(best_gateway)]
         end_time = entry["end_time"]
 
         sim.current_time = end_time
-        server.receive(
-            event_id,
-            node.id,
-            best_gateway,
-            rssi,
-            end_time=end_time,
-            snir=snr,
-        )
+        for gw_id_str, info in sorted(gateways.items(), key=lambda item: int(item[0]), reverse=True):
+            gw_id = int(gw_id_str)
+            server.receive(
+                event_id,
+                node.id,
+                gw_id,
+                info["rssi"],
+                end_time=end_time,
+                snir=info["snr"],
+            )
+
+        assert server.event_gateway[event_id] == best_gateway
+        assert pytest.approx(server.event_snir[event_id], abs=1e-9) == best_info["snr"]
 
         expected = entry["expected_command"]
         if expected:
