@@ -56,7 +56,6 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
 
 | Lacune | Description | Nouveau test |
 | --- | --- | --- |
-| Calcul d'énergie détaillé | L'énergie de rampe PA est agrégée dans la clé `"tx"` au lieu d'être isolée. | `tests/test_energy_breakdown_gap.py` (`xfail` tant que la composante `"ramp"` n'est pas rapportée). |
 | Duty-cycle dynamique | Le `DutyCycleReq` LoRaWAN ne propage pas sa valeur vers le `DutyCycleManager`. | `tests/test_duty_cycle_gap.py` (`xfail` en attendant la mise à jour dynamique). |
 
 ## Commandes utiles
@@ -69,5 +68,7 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
   ```bash
   pytest tests/integration/test_validation_matrix.py
   ```
+
+Le scénario `tests/test_energy_breakdown_gap.py` vérifie désormais que la décomposition énergétique expose la composante `"ramp"`.
 
 Ce plan doit être maintenu à jour lors de l'ajout de nouvelles fonctionnalités ou de la fermeture des tests marqués `xfail`.

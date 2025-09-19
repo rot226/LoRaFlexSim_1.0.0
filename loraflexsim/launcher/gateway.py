@@ -63,6 +63,7 @@ class Gateway:
         self.energy_preamble = 0.0
         self.energy_sleep = 0.0
         self.energy_processing = 0.0
+        self.energy_ramp = 0.0
         # Accumulateur d'énergie par état
         self.energy = EnergyAccumulator()
         # Transmissions en cours indexées par (sf, frequency)
@@ -88,6 +89,8 @@ class Gateway:
             self.energy_sleep += energy_joules
         elif state == "processing":
             self.energy_processing += energy_joules
+        elif state == "ramp":
+            self.energy_ramp += energy_joules
 
     def get_energy_breakdown(self) -> dict[str, float]:
         """Retourne la consommation d'énergie par état."""
