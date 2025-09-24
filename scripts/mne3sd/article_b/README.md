@@ -115,4 +115,14 @@ Repeat the `--input` flag to combine multiple datasets in a single figure. Use `
 3. Launch the plotting modules to generate the final figures under `figures/mne3sd/article_b/`.
 4. Review the exported figures locally before integrating them into the manuscript.
 
+### Batch execution helper
+
+You can launch the entire Article B pipeline with a single command using `scripts/mne3sd/run_all_article_outputs.py`:
+
+```
+python -m scripts.mne3sd.run_all_article_outputs --article b
+```
+
+This orchestrates every `run_mobility_*` scenario followed by the associated `plot_*` modules and finishes by printing the list of generated CSV files and figures. Combine it with `--skip-scenarios` or `--skip-plots` when you need to refresh only part of the workflow.
+
 Keep this README in sync with the implemented scripts as additional scenarios or plots are added.

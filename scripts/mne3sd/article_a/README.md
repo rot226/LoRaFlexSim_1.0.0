@@ -69,4 +69,14 @@ To run the complete workflow end-to-end:
 3. Launch each plotting module to populate `figures/mne3sd/article_a/`.
 4. Review the figure files locally before exporting them to the manuscript repository.
 
+### Batch execution helper
+
+To execute the complete Article A pipeline in one step, use the shared launcher located at `scripts/mne3sd/run_all_article_outputs.py`:
+
+```
+python -m scripts.mne3sd.run_all_article_outputs --article a
+```
+
+The script runs all `run_class_*` scenarios followed by the available `plot_*` modules and prints a summary of the generated CSV files and figures. Use `--skip-scenarios` or `--skip-plots` to limit the execution to one stage, for example when you only need to refresh the figures from previously generated data.
+
 Keep this README updated as new scenarios or plots are added to guarantee consistent usage across collaborators.
