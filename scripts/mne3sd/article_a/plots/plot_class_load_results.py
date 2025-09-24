@@ -3,34 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, os.fspath(ROOT))
+
+from scripts.mne3sd.common import apply_ieee_style, save_figure
+
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_load_metrics.csv"
 FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_a"
-
-
-def apply_plot_style(style: str | None) -> None:
-    """Apply the default IEEE-inspired plotting style unless overridden."""
-    plt.rcdefaults()
-    if style:
-        plt.style.use(style)
-        return
-
-    plt.rcParams.update(
-        {
-            "font.size": 8,
-            "axes.labelsize": 8,
-            "axes.titlesize": 8,
-            "xtick.labelsize": 8,
-            "ytick.labelsize": 8,
-            "legend.fontsize": 7,
-            "figure.figsize": (3.5, 2.2),
-        }
-    )
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -102,7 +88,7 @@ def plot_energy_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     fig.tight_layout()
 
-    save_figure(fig, output_dir / "class_energy_vs_interval")
+    save_figure(fig, "class_energy_vs_interval", output_dir)
 
 
 def plot_pdr_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
@@ -137,24 +123,15 @@ def plot_pdr_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     fig.tight_layout()
 
-    save_figure(fig, output_dir / "class_pdr_vs_interval")
-
-
-def save_figure(fig: plt.Figure, base_path: Path) -> None:
-    """Save ``fig`` to ``base_path`` as PNG and EPS files."""
-    base_path.parent.mkdir(parents=True, exist_ok=True)
-    png_path = base_path.with_suffix(".png")
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    print(f"Saved {png_path}")
-    eps_path = base_path.with_suffix(".eps")
-    fig.savefig(eps_path, dpi=300, format="eps", bbox_inches="tight")
-    print(f"Saved {eps_path}")
+    save_figure(fig, "class_pdr_vs_interval", output_dir)
 
 
 def main() -> None:
     args = parse_arguments()
 
-    apply_plot_style(args.style)
+    apply_ieee_style()
+    if args.style:
+        plt.style.use(args.style)
 
     metrics = load_metrics(args.results)
 

@@ -20,7 +20,6 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import statistics
@@ -41,6 +40,7 @@ from loraflexsim.launcher import (  # noqa: E402
     Simulator,
     SmoothMobility,
 )
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 DEFAULT_CHANNELS = [
     868_100_000.0,
@@ -178,34 +178,6 @@ def aggregate_gateway_distribution(rows: list[dict[str, object]]) -> dict[str, f
     if count == 0:
         return {}
     return {key: totals[key] / count for key in sorted(totals)}
-
-
-def summarise_replicates(rows: list[dict[str, object]]) -> dict[str, object]:
-    """Return aggregated statistics computed from replicate rows."""
-
-    summary: dict[str, object] = {}
-    metrics = [
-        ("pdr", "pdr_mean", "pdr_std"),
-        ("collision_rate", "collision_rate_mean", "collision_rate_std"),
-        ("avg_downlink_delay_s", "avg_downlink_delay_s_mean", "avg_downlink_delay_s_std"),
-    ]
-
-    for metric_key, mean_key, std_key in metrics:
-        values = [
-            float(row[metric_key])
-            for row in rows
-            if isinstance(row.get(metric_key), (int, float))
-        ]
-        if values:
-            summary[mean_key] = statistics.mean(values)
-            summary[std_key] = statistics.pstdev(values) if len(values) > 1 else 0.0
-        else:
-            summary[mean_key] = ""
-            summary[std_key] = ""
-
-    distribution = aggregate_gateway_distribution(rows)
-    summary["pdr_by_gateway_mean"] = json.dumps(distribution, sort_keys=True)
-    return summary
 
 
 class DownlinkDelayTracker:
@@ -386,34 +358,45 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 for row in replicate_rows
             )
 
-            summary = summarise_replicates(replicate_rows)
-            summary_row: dict[str, object] = {
-                "model": model_name,
-                "gateways": num_gateways,
-                "range_km": args.range_km,
-                "area_size_m": area_size,
-                "nodes": args.nodes,
-                "channels": json.dumps(channel_plan),
-                "replicate": "aggregate",
-                "seed": "",
-                "pdr": "",
-                "collision_rate": "",
-                "avg_downlink_delay_s": "",
-                "downlink_samples": "",
-                "pdr_by_gateway": summary.get("pdr_by_gateway_mean", "{}"),
-            }
-            for key in ("pdr_mean", "pdr_std", "collision_rate_mean", "collision_rate_std",
-                        "avg_downlink_delay_s_mean", "avg_downlink_delay_s_std", "pdr_by_gateway_mean"):
-                if key in summary:
-                    summary_row[key] = summary[key]
-            results.append(summary_row)
+            summary_entries = summarise_metrics(
+                replicate_rows,
+                [
+                    "model",
+                    "gateways",
+                    "range_km",
+                    "area_size_m",
+                    "nodes",
+                    "channels",
+                ],
+                ["pdr", "collision_rate", "avg_downlink_delay_s"],
+            )
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS_PATH.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in results:
-            writer.writerow(row)
+            distribution = aggregate_gateway_distribution(replicate_rows)
+            distribution_json = json.dumps(distribution, sort_keys=True)
+
+            for entry in summary_entries:
+                summary_row: dict[str, object] = {
+                    "model": entry["model"],
+                    "gateways": entry["gateways"],
+                    "range_km": entry["range_km"],
+                    "area_size_m": entry["area_size_m"],
+                    "nodes": entry["nodes"],
+                    "channels": entry["channels"],
+                    "replicate": "aggregate",
+                    "seed": "",
+                    "pdr": "",
+                    "collision_rate": "",
+                    "avg_downlink_delay_s": "",
+                    "downlink_samples": "",
+                    "pdr_by_gateway": distribution_json,
+                    "pdr_by_gateway_mean": distribution_json,
+                }
+                for metric in ("pdr", "collision_rate", "avg_downlink_delay_s"):
+                    summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                    summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                results.append(summary_row)
+
+    write_csv(RESULTS_PATH, FIELDNAMES, results)
 
     print(f"Results saved to {RESULTS_PATH}")
 

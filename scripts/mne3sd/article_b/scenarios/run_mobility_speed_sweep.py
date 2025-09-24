@@ -22,7 +22,6 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import os
 import statistics
 import sys
@@ -36,6 +35,7 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # noqa: E402
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 DEFAULT_SPEED_PROFILES: list[tuple[str, tuple[float, float]]] = [
     ("pedestrian", (0.5, 1.5)),
@@ -142,25 +142,6 @@ def compute_latency_jitter(sim: Simulator) -> float:
     return 0.0
 
 
-def summarise_replicates(rows: list[dict[str, float]]) -> dict[str, float]:
-    """Return aggregated statistics computed from replicate rows."""
-
-    summary: dict[str, float] = {}
-    metrics = [
-        ("pdr", "pdr_mean", "pdr_std"),
-        ("avg_delay_s", "avg_delay_s_mean", "avg_delay_s_std"),
-        ("jitter_s", "jitter_s_mean", "jitter_s_std"),
-        ("energy_per_node_J", "energy_per_node_J_mean", "energy_per_node_J_std"),
-    ]
-
-    for metric_key, mean_key, std_key in metrics:
-        values = [float(row[metric_key]) for row in rows]
-        summary[mean_key] = statistics.mean(values)
-        summary[std_key] = statistics.pstdev(values) if len(values) > 1 else 0.0
-
-    return summary
-
-
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description=(
@@ -218,7 +199,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
     for model_name, model_factory in models:
         for profile_name, (speed_min, speed_max) in speed_profiles:
-            replicate_rows: list[dict[str, float]] = []
+            replicate_rows: list[dict[str, float | str]] = []
 
             for replicate in range(1, args.replicates + 1):
                 seed = args.seed + combination_index * args.replicates + replicate - 1
@@ -264,23 +245,25 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
             results.extend(replicate_rows)
 
-            summary = summarise_replicates(replicate_rows)
-            summary_row: dict[str, float | str] = {
-                "model": model_name,
-                "speed_profile": profile_name,
-                "speed_min_mps": speed_min,
-                "speed_max_mps": speed_max,
-                "replicate": "aggregate",
-            }
-            summary_row.update(summary)
-            results.append(summary_row)
+            summary_entries = summarise_metrics(
+                replicate_rows,
+                ["model", "speed_profile", "speed_min_mps", "speed_max_mps"],
+                ["pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"],
+            )
+            for entry in summary_entries:
+                aggregate_row: dict[str, float | str] = {
+                    "model": entry["model"],
+                    "speed_profile": entry["speed_profile"],
+                    "speed_min_mps": entry["speed_min_mps"],
+                    "speed_max_mps": entry["speed_max_mps"],
+                    "replicate": "aggregate",
+                }
+                for metric in ("pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"):
+                    aggregate_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                    aggregate_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                results.append(aggregate_row)
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS_PATH.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in results:
-            writer.writerow(row)
+    write_csv(RESULTS_PATH, FIELDNAMES, results)
 
     print(f"Results saved to {RESULTS_PATH}")
 

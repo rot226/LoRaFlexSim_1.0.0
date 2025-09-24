@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -11,29 +13,12 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, os.fspath(ROOT))
+
+from scripts.mne3sd.common import apply_ieee_style, save_figure
+
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_speed_metrics.csv"
 FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_b"
-
-
-def apply_plot_style(style: str | None) -> None:
-    """Apply a compact IEEE-inspired plotting style unless overridden."""
-
-    plt.rcdefaults()
-    if style:
-        plt.style.use(style)
-        return
-
-    plt.rcParams.update(
-        {
-            "font.size": 8,
-            "axes.labelsize": 8,
-            "axes.titlesize": 8,
-            "xtick.labelsize": 8,
-            "ytick.labelsize": 8,
-            "legend.fontsize": 7,
-            "figure.figsize": (3.5, 2.2),
-        }
-    )
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -166,7 +151,8 @@ def plot_grouped_bars(
     value_column: str,
     ylabel: str,
     title: str,
-    output_base: Path,
+    output_name: str,
+    output_dir: Path,
     dpi: int,
     value_format: str,
     ylim: tuple[float, float] | None = None,
@@ -200,10 +186,11 @@ def plot_grouped_bars(
         ax.bar_label(container, fmt=value_format, padding=2, fontsize=7)
 
     fig.tight_layout()
-    save_figure(fig, output_base, dpi)
+    save_figure(fig, output_name, output_dir, dpi=dpi)
+    plt.close(fig)
 
 
-def plot_heatmap(df: pd.DataFrame, output_base: Path, dpi: int) -> None:
+def plot_heatmap(df: pd.DataFrame, output_name: str, output_dir: Path, dpi: int) -> None:
     """Plot a heatmap of PDR versus communication range when available."""
 
     if "range_km" not in df.columns:
@@ -251,26 +238,16 @@ def plot_heatmap(df: pd.DataFrame, output_base: Path, dpi: int) -> None:
     cbar.set_label("PDR (%)")
 
     fig.tight_layout()
-    save_figure(fig, output_base, dpi)
-
-
-def save_figure(fig: plt.Figure, base_path: Path, dpi: int) -> None:
-    """Save ``fig`` to ``base_path`` as PNG and EPS files."""
-
-    base_path.parent.mkdir(parents=True, exist_ok=True)
-    png_path = base_path.with_suffix(".png")
-    fig.savefig(png_path, dpi=dpi, bbox_inches="tight")
-    print(f"Saved {png_path}")
-    eps_path = base_path.with_suffix(".eps")
-    fig.savefig(eps_path, dpi=dpi, format="eps", bbox_inches="tight")
-    print(f"Saved {eps_path}")
+    save_figure(fig, output_name, output_dir, dpi=dpi)
     plt.close(fig)
 
 
 def main() -> None:  # pragma: no cover - CLI entry point
     args = parse_arguments()
 
-    apply_plot_style(args.style)
+    apply_ieee_style()
+    if args.style:
+        plt.style.use(args.style)
 
     metrics = load_metrics(args.results)
 
@@ -284,7 +261,8 @@ def main() -> None:  # pragma: no cover - CLI entry point
         "pdr_percent",
         pdr_label,
         "PDR by speed profile",
-        FIGURES_DIR / "pdr_by_speed_profile",
+        "pdr_by_speed_profile",
+        FIGURES_DIR,
         args.dpi,
         pdr_format,
         ylim=pdr_ylim,
@@ -295,12 +273,18 @@ def main() -> None:  # pragma: no cover - CLI entry point
         "avg_delay_s_value",
         "Average delay (s)",
         "Average delay by speed profile",
-        FIGURES_DIR / "average_delay_by_speed_profile",
+        "average_delay_by_speed_profile",
+        FIGURES_DIR,
         args.dpi,
         "{:.2f}",
     )
 
-    plot_heatmap(metrics, FIGURES_DIR / "pdr_heatmap_speed_profile_range", args.dpi)
+    plot_heatmap(
+        metrics,
+        "pdr_heatmap_speed_profile_range",
+        FIGURES_DIR,
+        args.dpi,
+    )
 
     if args.show:
         plt.show()

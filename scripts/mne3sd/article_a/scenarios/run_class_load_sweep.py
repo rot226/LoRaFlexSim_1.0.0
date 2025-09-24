@@ -14,10 +14,8 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import os
-import statistics
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -31,6 +29,7 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 
 LOGGER = logging.getLogger("class_load_sweep")
@@ -147,12 +146,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
     classes = ["A", "B", "C"]
     results: list[dict[str, object]] = []
-    summary: list[dict[str, float | str]] = []
+    summary_rows: list[dict[str, float | str]] = []
 
     for class_type in classes:
         LOGGER.info("=== Simulating class %s ===", class_type)
         for interval_s in intervals:
-            replicate_rows: list[dict[str, float]] = []
+            replicate_rows: list[dict[str, float | str]] = []
             LOGGER.info("Interval %.1f s", interval_s)
             for replicate in range(1, args.replicates + 1):
                 seed = args.seed + replicate - 1
@@ -201,62 +200,21 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
                 replicate_rows.append(
                     {
-                        "replicate": replicate,
-                        "pdr": pdr,
-                        "collisions": float(collisions),
-                        "energy_per_node": energy_per_node,
-                        "energy_tx": energy_tx,
-                        "energy_rx": energy_rx,
-                        "energy_sleep": energy_sleep,
-                        "avg_delay": avg_delay,
-                    }
-                )
-
-            pdr_values = [row["pdr"] for row in replicate_rows]
-            pdr_mean = statistics.mean(pdr_values)
-            pdr_std = statistics.pstdev(pdr_values) if len(pdr_values) > 1 else 0.0
-
-            energy_mean = statistics.mean(row["energy_per_node"] for row in replicate_rows)
-            collisions_mean = statistics.mean(row["collisions"] for row in replicate_rows)
-            avg_delay_mean = statistics.mean(row["avg_delay"] for row in replicate_rows)
-            energy_tx_mean = statistics.mean(row["energy_tx"] for row in replicate_rows)
-            energy_rx_mean = statistics.mean(row["energy_rx"] for row in replicate_rows)
-            energy_sleep_mean = statistics.mean(row["energy_sleep"] for row in replicate_rows)
-
-            summary.append(
-                {
-                    "class": class_type,
-                    "interval": interval_s,
-                    "pdr_mean": pdr_mean,
-                    "pdr_std": pdr_std,
-                    "energy_mean": energy_mean,
-                    "energy_tx_mean": energy_tx_mean,
-                    "energy_rx_mean": energy_rx_mean,
-                    "energy_sleep_mean": energy_sleep_mean,
-                    "collisions_mean": collisions_mean,
-                    "avg_delay_mean": avg_delay_mean,
-                }
-            )
-
-            for row in replicate_rows:
-                results.append(
-                    {
                         "class": class_type,
                         "interval_s": interval_s,
-                        "replicate": row["replicate"],
-                        "pdr": row["pdr"],
-                        "pdr_mean": pdr_mean,
-                        "pdr_std": pdr_std,
-                        "energy_per_node_J": row["energy_per_node"],
-                        "energy_tx_J": row["energy_tx"],
-                        "energy_rx_J": row["energy_rx"],
-                        "energy_sleep_J": row["energy_sleep"],
-                        "collisions": row["collisions"],
-                        "avg_delay_s": row["avg_delay"],
+                        "replicate": replicate,
+                        "pdr": pdr,
+                        "energy_per_node_J": energy_per_node,
+                        "energy_tx_J": energy_tx,
+                        "energy_rx_J": energy_rx,
+                        "energy_sleep_J": energy_sleep,
+                        "collisions": float(collisions),
+                        "avg_delay_s": avg_delay,
                     }
                 )
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            results.extend(replicate_rows)
+
     fieldnames = [
         "class",
         "interval_s",
@@ -271,10 +229,36 @@ def main() -> None:  # noqa: D401 - CLI entry point
         "collisions",
         "avg_delay_s",
     ]
-    with RESULTS_PATH.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
+    summary_entries = summarise_metrics(
+        results,
+        ["class", "interval_s"],
+        [
+            "pdr",
+            "energy_per_node_J",
+            "energy_tx_J",
+            "energy_rx_J",
+            "energy_sleep_J",
+            "collisions",
+            "avg_delay_s",
+        ],
+    )
+    summary_lookup = {
+        (entry["class"], entry["interval_s"]): entry for entry in summary_entries
+    }
+
+    for row in results:
+        summary = summary_lookup.get((row["class"], row["interval_s"]))
+        if summary:
+            row["pdr_mean"] = summary["pdr_mean"]
+            row["pdr_std"] = summary["pdr_std"]
+
+    write_csv(RESULTS_PATH, fieldnames, results)
+
+    for class_type in classes:
+        for interval_s in intervals:
+            entry = summary_lookup.get((class_type, interval_s))
+            if entry:
+                summary_rows.append(entry)
 
     print(f"Results saved to {RESULTS_PATH}")
     print()
@@ -286,13 +270,13 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     print(header)
     print("-" * len(header))
-    for entry in summary:
+    for entry in summary_rows:
         print(
-            f"{entry['class']:<7}{entry['interval']:>14.1f}{entry['pdr_mean']:>12.3f}"
-            f"{entry['pdr_std']:>10.3f}{entry['energy_mean']:>18.4f}"
-            f"{entry['energy_tx_mean']:>10.4f}{entry['energy_rx_mean']:>10.4f}"
-            f"{entry['energy_sleep_mean']:>12.4f}{entry['collisions_mean']:>12.2f}"
-            f"{entry['avg_delay_mean']:>16.3f}"
+            f"{entry['class']:<7}{entry['interval_s']:>14.1f}{entry['pdr_mean']:>12.3f}"
+            f"{entry['pdr_std']:>10.3f}{entry['energy_per_node_J_mean']:>18.4f}"
+            f"{entry['energy_tx_J_mean']:>10.4f}{entry['energy_rx_J_mean']:>10.4f}"
+            f"{entry['energy_sleep_J_mean']:>12.4f}{entry['collisions_mean']:>12.2f}"
+            f"{entry['avg_delay_s_mean']:>16.3f}"
         )
 
 

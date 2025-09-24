@@ -15,10 +15,8 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import os
-import statistics
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -30,6 +28,7 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 
 LOGGER = logging.getLogger("class_density_sweep")
@@ -130,7 +129,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
     classes = ["A", "B", "C"]
     results: list[dict[str, object]] = []
-    summary: list[dict[str, float | str | int]] = []
+    summary_rows: list[dict[str, float | str | int]] = []
 
     for class_index, class_type in enumerate(classes):
         LOGGER.info("=== Simulating class %s ===", class_type)
@@ -188,19 +187,6 @@ def main() -> None:  # noqa: D401 - CLI entry point
                     }
                 )
 
-            pdr_values = [row["pdr"] for row in replicate_rows]
-            pdr_mean = statistics.mean(pdr_values)
-            pdr_std = statistics.pstdev(pdr_values) if len(pdr_values) > 1 else 0.0
-
-            summary.append(
-                {
-                    "class": class_type,
-                    "nodes": num_nodes,
-                    "pdr_mean": pdr_mean,
-                    "pdr_std": pdr_std,
-                }
-            )
-
             for row in replicate_rows:
                 results.append(
                     {
@@ -214,7 +200,6 @@ def main() -> None:  # noqa: D401 - CLI entry point
                     }
                 )
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "class",
         "nodes",
@@ -224,10 +209,21 @@ def main() -> None:  # noqa: D401 - CLI entry point
         "avg_delay_s",
         "energy_per_node_J",
     ]
-    with RESULTS_PATH.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
+    write_csv(RESULTS_PATH, fieldnames, results)
+
+    summary_entries = summarise_metrics(
+        results,
+        ["class", "nodes"],
+        ["pdr"],
+    )
+    summary_lookup = {
+        (entry["class"], entry["nodes"]): entry for entry in summary_entries
+    }
+    for class_type in classes:
+        for num_nodes in node_counts:
+            entry = summary_lookup.get((class_type, num_nodes))
+            if entry:
+                summary_rows.append(entry)
 
     print(f"Results saved to {RESULTS_PATH}")
     print()
@@ -235,7 +231,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     header = f"{'Class':<7}{'Nodes':>10}{'PDR mean':>14}{'PDR std':>12}"
     print(header)
     print("-" * len(header))
-    for entry in summary:
+    for entry in summary_rows:
         print(
             f"{entry['class']:<7}{entry['nodes']:>10d}{entry['pdr_mean']:>14.3f}"
             f"{entry['pdr_std']:>12.3f}"
