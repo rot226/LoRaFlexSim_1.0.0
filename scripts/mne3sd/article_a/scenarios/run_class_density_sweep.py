@@ -1,0 +1,246 @@
+"""Run a sweep to characterise class performance across node densities.
+
+This utility executes the :class:`loraflexsim.launcher.simulator.Simulator`
+for LoRaWAN classes A, B and C while varying the number of nodes participating
+in the network.  The packet interval is kept constant while running several
+replicates for every class/density pair.  The per-replicate metrics are written
+to ``results/mne3sd/article_a/class_density_metrics.csv`` for later analysis.
+
+Example usage::
+
+    python scripts/mne3sd/article_a/scenarios/run_class_density_sweep.py \
+        --nodes-list 50,100,250,500 --interval 300 --replicates 5 --seed 3
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import logging
+import os
+import statistics
+import sys
+from pathlib import Path
+from typing import Iterable
+
+# Allow running the script from a clone without installation
+sys.path.insert(
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")),
+)
+
+from loraflexsim.launcher import Simulator  # noqa: E402
+
+
+LOGGER = logging.getLogger("class_density_sweep")
+DEFAULT_NODE_COUNTS = [50, 100, 250, 500]
+ROOT = Path(__file__).resolve().parents[4]
+RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_density_metrics.csv"
+
+
+def positive_int(value: str) -> int:
+    """Return ``value`` converted to a positive integer."""
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return ivalue
+
+
+def parse_nodes_list(values: Iterable[str] | None) -> list[int]:
+    """Parse ``--nodes-list`` entries into a unique, ordered list of integers."""
+    if not values:
+        return DEFAULT_NODE_COUNTS.copy()
+
+    nodes: list[int] = []
+    seen: set[int] = set()
+    for entry in values:
+        for part in str(entry).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            count = positive_int(part)
+            if count not in seen:
+                nodes.append(count)
+                seen.add(count)
+    if not nodes:
+        raise argparse.ArgumentTypeError("--nodes-list produced an empty list")
+    return nodes
+
+
+def configure_logging(verbose: bool) -> None:
+    """Initialise logging with or without debug output."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(message)s")
+
+
+def main() -> None:  # noqa: D401 - CLI entry point
+    parser = argparse.ArgumentParser(
+        description="Run class density simulations for LoRaWAN classes A/B/C"
+    )
+    parser.add_argument(
+        "--nodes-list",
+        action="append",
+        help=(
+            "Comma separated list of node counts. Can be repeated. "
+            "Defaults to 50,100,250,500 when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=300.0,
+        help="Packet interval in seconds (kept constant across runs)",
+    )
+    parser.add_argument(
+        "--packets", type=positive_int, default=40, help="Packets to send per node"
+    )
+    parser.add_argument(
+        "--replicates",
+        type=positive_int,
+        default=5,
+        help="Number of replicates for each class/node combination",
+    )
+    parser.add_argument("--seed", type=int, default=1, help="Base random seed")
+    parser.add_argument(
+        "--gateway",
+        type=positive_int,
+        default=1,
+        help="Number of gateways for all simulations",
+    )
+    parser.add_argument(
+        "--adr-node",
+        action="store_true",
+        help="Enable ADR on the nodes",
+    )
+    parser.add_argument(
+        "--adr-server",
+        action="store_true",
+        help="Enable ADR on the server",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+    args = parser.parse_args()
+
+    configure_logging(args.verbose)
+
+    node_counts = parse_nodes_list(args.nodes_list)
+
+    classes = ["A", "B", "C"]
+    results: list[dict[str, object]] = []
+    summary: list[dict[str, float | str | int]] = []
+
+    for class_index, class_type in enumerate(classes):
+        LOGGER.info("=== Simulating class %s ===", class_type)
+        for node_index, num_nodes in enumerate(node_counts):
+            replicate_rows: list[dict[str, float]] = []
+            LOGGER.info("Node count %d", num_nodes)
+            for replicate in range(1, args.replicates + 1):
+                combination_offset = (
+                    (class_index * len(node_counts) + node_index) * args.replicates
+                )
+                seed = args.seed + combination_offset + replicate - 1
+                sim = Simulator(
+                    num_nodes=num_nodes,
+                    num_gateways=args.gateway,
+                    packets_to_send=args.packets,
+                    seed=seed,
+                    node_class=class_type,
+                    packet_interval=args.interval,
+                    adr_node=args.adr_node,
+                    adr_server=args.adr_server,
+                )
+                sim.run()
+                metrics = sim.get_metrics()
+
+                delivered = int(metrics.get("delivered", 0))
+                collisions = int(metrics.get("collisions", 0))
+                total_packets = delivered + collisions
+                collision_rate = (
+                    collisions / total_packets if total_packets else 0.0
+                )
+                energy_per_node = (
+                    metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
+                )
+                pdr = float(metrics.get("PDR", 0.0))
+                avg_delay = float(metrics.get("avg_delay_s", 0.0))
+
+                LOGGER.info(
+                    "Replicate %d -> PDR %.3f, collisions %d, collision rate %.3f, "
+                    "avg delay %.3fs, energy/node %.4f J",
+                    replicate,
+                    pdr,
+                    collisions,
+                    collision_rate,
+                    avg_delay,
+                    energy_per_node,
+                )
+
+                replicate_rows.append(
+                    {
+                        "replicate": replicate,
+                        "pdr": pdr,
+                        "collision_rate": collision_rate,
+                        "avg_delay": avg_delay,
+                        "energy_per_node": energy_per_node,
+                    }
+                )
+
+            pdr_values = [row["pdr"] for row in replicate_rows]
+            pdr_mean = statistics.mean(pdr_values)
+            pdr_std = statistics.pstdev(pdr_values) if len(pdr_values) > 1 else 0.0
+
+            summary.append(
+                {
+                    "class": class_type,
+                    "nodes": num_nodes,
+                    "pdr_mean": pdr_mean,
+                    "pdr_std": pdr_std,
+                }
+            )
+
+            for row in replicate_rows:
+                results.append(
+                    {
+                        "class": class_type,
+                        "nodes": num_nodes,
+                        "replicate": row["replicate"],
+                        "pdr": row["pdr"],
+                        "collision_rate": row["collision_rate"],
+                        "avg_delay_s": row["avg_delay"],
+                        "energy_per_node_J": row["energy_per_node"],
+                    }
+                )
+
+    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "class",
+        "nodes",
+        "replicate",
+        "pdr",
+        "collision_rate",
+        "avg_delay_s",
+        "energy_per_node_J",
+    ]
+    with RESULTS_PATH.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+
+    print(f"Results saved to {RESULTS_PATH}")
+    print()
+    print("Summary (PDR mean ± std):")
+    header = f"{'Class':<7}{'Nodes':>10}{'PDR mean':>14}{'PDR std':>12}"
+    print(header)
+    print("-" * len(header))
+    for entry in summary:
+        print(
+            f"{entry['class']:<7}{entry['nodes']:>10d}{entry['pdr_mean']:>14.3f}"
+            f"{entry['pdr_std']:>12.3f}"
+        )
+
+
+if __name__ == "__main__":  # pragma: no cover - script entry point
+    main()
