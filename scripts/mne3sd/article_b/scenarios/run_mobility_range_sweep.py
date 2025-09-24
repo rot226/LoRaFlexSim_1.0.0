@@ -19,10 +19,8 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
-import statistics
 import sys
 from pathlib import Path
 from typing import Iterable, Iterator
@@ -34,6 +32,7 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # noqa: E402
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 
 DEFAULT_RANGES_KM = [5.0, 10.0, 15.0]
@@ -136,28 +135,6 @@ def aggregate_sf_distribution(rows: list[dict[str, object]]) -> dict[str, float]
         return {}
 
     return {key: totals[key] / total_packets for key in sorted(totals)}
-
-
-def summarise_replicates(rows: list[dict[str, object]]) -> dict[str, float | str]:
-    """Return aggregated statistics computed from replicate rows."""
-
-    summary: dict[str, float | str] = {}
-    metrics = [
-        ("pdr", "pdr_mean", "pdr_std"),
-        ("collision_rate", "collision_rate_mean", "collision_rate_std"),
-        ("avg_delay_s", "avg_delay_s_mean", "avg_delay_s_std"),
-        ("energy_per_node_J", "energy_per_node_J_mean", "energy_per_node_J_std"),
-    ]
-
-    for metric_key, mean_key, std_key in metrics:
-        values = [float(row[metric_key]) for row in rows]
-        summary[mean_key] = statistics.mean(values)
-        summary[std_key] = statistics.pstdev(values) if len(values) > 1 else 0.0
-
-    sf_summary = aggregate_sf_distribution(rows)
-    summary["sf_distribution"] = json.dumps(sf_summary, sort_keys=True)
-
-    return summary
 
 
 def main() -> None:  # noqa: D401 - CLI entry point
@@ -265,22 +242,28 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 for row in replicate_rows
             )
 
-            summary = summarise_replicates(replicate_rows)
-            summary_row: dict[str, object] = {
-                "model": model_name,
-                "range_km": range_km,
-                "area_size_m": area_size,
-                "replicate": "aggregate",
-            }
-            summary_row.update(summary)
-            results.append(summary_row)
+            summary_entries = summarise_metrics(
+                replicate_rows,
+                ["model", "range_km", "area_size_m"],
+                ["pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"],
+            )
+            sf_summary = aggregate_sf_distribution(replicate_rows)
+            sf_json = json.dumps(sf_summary, sort_keys=True)
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with RESULTS_PATH.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in results:
-            writer.writerow(row)
+            for entry in summary_entries:
+                summary_row: dict[str, object] = {
+                    "model": entry["model"],
+                    "range_km": entry["range_km"],
+                    "area_size_m": entry["area_size_m"],
+                    "replicate": "aggregate",
+                    "sf_distribution": sf_json,
+                }
+                for metric in ("pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"):
+                    summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                    summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                results.append(summary_row)
+
+    write_csv(RESULTS_PATH, FIELDNAMES, results)
 
     print(f"Results saved to {RESULTS_PATH}")
 

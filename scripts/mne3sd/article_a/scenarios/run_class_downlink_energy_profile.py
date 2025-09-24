@@ -16,10 +16,8 @@ Example usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import os
-import statistics
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -32,6 +30,7 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
+from scripts.mne3sd.common import summarise_metrics, write_csv
 
 
 LOGGER = logging.getLogger("class_downlink_energy")
@@ -236,54 +235,6 @@ def compute_energy_metrics(
     return energy_tx, energy_rx, energy_idle, time_tx, time_rx, time_idle
 
 
-def aggregate_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return mean and standard deviation rows grouped by class."""
-
-    grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        grouped[str(row["class"])].append(row)
-
-    summaries: list[dict[str, Any]] = []
-    metrics = [
-        "uplink_pdr",
-        "downlink_pdr",
-        "downlink_attempted",
-        "downlink_delivered",
-        "energy_tx_J",
-        "energy_rx_J",
-        "energy_idle_J",
-        "time_tx_s",
-        "time_rx_s",
-        "time_idle_s",
-    ]
-
-    for class_type, entries in grouped.items():
-        if not entries:
-            continue
-        summary_base = {
-            "class": class_type,
-            "seed": "",
-            "nodes": entries[0]["nodes"],
-            "gateways": entries[0]["gateways"],
-            "duration_s": entries[0]["duration_s"],
-            "packet_interval_s": entries[0]["packet_interval_s"],
-            "beacon_interval_s": entries[0]["beacon_interval_s"],
-            "class_c_rx_interval_s": entries[0]["class_c_rx_interval_s"],
-            "downlink_period_s": entries[0]["downlink_period_s"],
-            "downlink_payload_bytes": entries[0]["downlink_payload_bytes"],
-        }
-
-        mean_row = {"replicate": "mean", **summary_base}
-        std_row = {"replicate": "std", **summary_base}
-
-        for metric in metrics:
-            values = [float(entry[metric]) for entry in entries]
-            mean_row[metric] = statistics.fmean(values)
-            std_row[metric] = statistics.pstdev(values) if len(values) > 1 else 0.0
-        summaries.extend([mean_row, std_row])
-    return summaries
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Return parsed command line arguments."""
 
@@ -405,7 +356,6 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
     configure_logging(args.verbose)
 
     output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     classes = ["B", "C"]
     rows: list[dict[str, Any]] = []
@@ -497,14 +447,63 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
             }
             rows.append(row)
 
-    summary_rows = aggregate_summary(rows)
-    all_rows = rows + summary_rows
+    summary_entries = summarise_metrics(
+        rows,
+        ["class"],
+        [
+            "uplink_pdr",
+            "downlink_pdr",
+            "downlink_attempted",
+            "downlink_delivered",
+            "energy_tx_J",
+            "energy_rx_J",
+            "energy_idle_J",
+            "time_tx_s",
+            "time_rx_s",
+            "time_idle_s",
+        ],
+    )
 
-    with output_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in all_rows:
-            writer.writerow({field: row.get(field, "") for field in FIELDNAMES})
+    grouped_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped_rows[str(row["class"])].append(row)
+
+    summary_rows: list[dict[str, Any]] = []
+    for entry in summary_entries:
+        class_type = str(entry["class"])
+        sample = grouped_rows.get(class_type, [{}])[0]
+        base_data = {
+            "class": class_type,
+            "seed": "",
+            "nodes": sample.get("nodes", ""),
+            "gateways": sample.get("gateways", ""),
+            "duration_s": sample.get("duration_s", ""),
+            "packet_interval_s": sample.get("packet_interval_s", ""),
+            "beacon_interval_s": sample.get("beacon_interval_s", ""),
+            "class_c_rx_interval_s": sample.get("class_c_rx_interval_s", ""),
+            "downlink_period_s": sample.get("downlink_period_s", ""),
+            "downlink_payload_bytes": sample.get("downlink_payload_bytes", ""),
+        }
+        for label, suffix in ("mean", "std"):
+            summary_row = {"replicate": label, **base_data}
+            for metric in (
+                "uplink_pdr",
+                "downlink_pdr",
+                "downlink_attempted",
+                "downlink_delivered",
+                "energy_tx_J",
+                "energy_rx_J",
+                "energy_idle_J",
+                "time_tx_s",
+                "time_rx_s",
+                "time_idle_s",
+            ):
+                summary_key = f"{metric}_{suffix}"
+                summary_row[metric] = entry.get(summary_key, "")
+            summary_rows.append(summary_row)
+
+    all_rows = rows + summary_rows
+    write_csv(output_path, FIELDNAMES, all_rows)
 
     LOGGER.info("Saved %s", output_path)
 
