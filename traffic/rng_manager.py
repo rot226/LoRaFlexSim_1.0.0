@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import hashlib
-import random
-import secrets
 # Use a regular set instead of WeakSet because numpy.random.Generator
 # does not support weak references in some numpy versions.
+import hashlib
 import importlib
-import numpy as np
+import random
+import secrets
 from typing import Dict, Tuple
+
+import numpy as np
 
 try:
     _np_generator_module = importlib.import_module("numpy.random._generator")
