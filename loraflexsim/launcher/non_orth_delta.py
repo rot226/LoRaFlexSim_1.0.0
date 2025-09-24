@@ -35,8 +35,13 @@ def load_non_orth_delta(path: str | None) -> List[List[float]]:
     :data:`DEFAULT_NON_ORTH_DELTA` matrix is returned.
     """
 
+    def _clone_default() -> List[List[float]]:
+        """Return a defensive copy of :data:`DEFAULT_NON_ORTH_DELTA`."""
+
+        return [row.copy() for row in DEFAULT_NON_ORTH_DELTA]
+
     if path is None:
-        return DEFAULT_NON_ORTH_DELTA
+        return _clone_default()
 
     p = Path(path)
     try:
@@ -56,7 +61,7 @@ def load_non_orth_delta(path: str | None) -> List[List[float]]:
                 key = f"SF{sf}"
                 raw = cp.get("NON_ORTH_DELTA", key, fallback=None)
                 if raw is None:
-                    matrix.append(DEFAULT_NON_ORTH_DELTA[sf - 7])
+                    matrix.append(DEFAULT_NON_ORTH_DELTA[sf - 7].copy())
                     continue
                 parts = [x for x in raw.replace(",", " ").split() if x]
                 if len(parts) != 6:
@@ -65,6 +70,6 @@ def load_non_orth_delta(path: str | None) -> List[List[float]]:
             return matrix
     except Exception:
         # Fall back to default on any error to keep behaviour robust
-        return DEFAULT_NON_ORTH_DELTA
+        return _clone_default()
 
     raise ValueError("Unsupported file format; use JSON or INI")
