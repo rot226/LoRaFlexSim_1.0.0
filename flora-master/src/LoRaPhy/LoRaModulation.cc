@@ -15,6 +15,9 @@
 
 #include "LoRaModulation.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace flora {
 
 const std::vector<ApskSymbol> LoRaModulation::constellation = {};
@@ -73,7 +76,21 @@ double LoRaModulation::calculateBER(double snir, Hz bandwidth, bps bitrate) cons
 
 double LoRaModulation::calculateSER(double snir, Hz bandwidth, bps bitrate) const
 {
-    return NaN;
+    const double ber = calculateBER(snir, bandwidth, bitrate);
+
+    if (std::isnan(ber))
+        return 1.0;
+    if (ber <= 0.0)
+        return 0.0;
+    if (ber >= 1.0)
+        return 1.0;
+
+    const double bitsPerSymbol = static_cast<double>(spreadFactor);
+    const double ser = 1.0 - std::pow(std::max(0.0, 1.0 - ber), bitsPerSymbol);
+
+    if (std::isnan(ser))
+        return 1.0;
+    return std::min(1.0, std::max(0.0, ser));
 //    throw cRuntimeError("Not yet implemented");
 }
 

@@ -4,6 +4,7 @@ import numpy as np
 
 from .energy_profiles import EnergyProfile, FLORA_PROFILE, EnergyAccumulator
 from .channel import Channel
+from .lorawan import default_downlink_datarate
 from traffic.exponential import sample_interval
 
 # Default energy profile used by all nodes (based on the FLoRa model)
@@ -192,14 +193,16 @@ class Node:
         # Parameters configured by MAC commands
         self.max_duty_cycle = 0
         self.rx1_dr_offset = 0
-        self.rx2_datarate = 0
+
+        default_dr = default_downlink_datarate(getattr(self.channel, "region", None))
+        self.rx2_datarate = default_dr if default_dr is not None else 0
         self.rx2_frequency = 869525000
         self.rx_delay = 1
         self.eirp = 0
         self.dwell_time = 0
         self.dl_channels: dict[int, int] = {}
         self.ping_slot_frequency: int | None = None
-        self.ping_slot_dr: int | None = None
+        self.ping_slot_dr: int | None = default_dr
         self.beacon_frequency: int | None = None
         self.ping_slot_periodicity: int | None = None
         self.beacon_delay: int | None = None
