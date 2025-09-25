@@ -1,101 +1,97 @@
-# Article B Mobility Experiments
+# Expériences de mobilité Article B
 
-This directory collects the scripts used to reproduce the mobility-focused experiments that feed the "Article B" study of the MNE3SD campaign. The suite is organised around a small set of canonical mobility scenarios and the post-processing utilities required to transform the raw simulator output into camera-ready figures.
+Ce dossier rassemble les scripts utilisés pour reproduire les expériences axées sur la mobilité de l'étude « Article B » de la campagne MNE3SD. La suite est organisée autour d'un petit ensemble de scénarios de mobilité canoniques et des utilitaires de post-traitement nécessaires pour transformer les sorties brutes du simulateur en figures prêtes à être publiées.
 
-## Mobility scenarios
+## Scénarios de mobilité
 
-All scenarios simulate end-to-end LoRaWAN links with identical PHY parameters (SF10, 125 kHz bandwidth, coding rate 4/5) and an adaptive transmission interval that is recomputed after each successful delivery. The scenarios differ in the spatial layout and motion profiles of the mobile node fleet:
+Tous les scénarios simulent des liens LoRaWAN de bout en bout avec des paramètres PHY identiques (SF10, bande passante 125 kHz, taux de codage 4/5) et un intervalle d'émission adaptatif recalculé après chaque livraison réussie. Les scénarios diffèrent par la configuration spatiale et les profils de mouvement de la flotte de nœuds mobiles :
 
 ### `urban_canyon`
-- **Environment**: Dense city blocks with 30 m street canyons and base stations mounted 25 m above ground.
-- **Node population**: 120 pedestrian trackers.
-- **Distance range**: 0.2 km to 2.5 km from the gateway, sampled uniformly along the street graph.
-- **Velocity profile**: Pedestrian speed drawn from a Gaussian distribution with a mean of 1.4 m/s and a standard deviation of 0.4 m/s (clipped to the \[0.5, 2.5\] m/s interval).
-- **Doppler handling**: Channel coherence updated every 3 seconds to capture fast fading caused by intersections.
+- **Environnement** : îlots urbains denses avec des rues de 30 m de large et des stations de base installées à 25 m du sol.
+- **Population de nœuds** : 120 traceurs piétons.
+- **Plage de distances** : de 0,2 km à 2,5 km de la passerelle, échantillonnée uniformément le long du graphe de rues.
+- **Profil de vitesse** : vitesses piétonnes tirées d'une loi gaussienne de moyenne 1,4 m/s et d'écart-type 0,4 m/s (tronquée dans l'intervalle \[0,5 ; 2,5\] m/s).
+- **Gestion de l'effet Doppler** : cohérence de canal mise à jour toutes les 3 s pour capturer le fading rapide provoqué par les intersections.
 
 ### `rural_highway`
-- **Environment**: 8 km highway segment with sparse roadside gateways installed every 2 km.
-- **Node population**: 40 vehicle trackers moving along predefined lanes.
-- **Distance range**: 0.5 km to 6 km line-of-sight paths with occasional obstructed sections (20% NLOS probability).
-- **Velocity profile**: Triangular distribution peaking at 27 m/s with a support of \[15, 35\] m/s to reflect varying traffic conditions.
-- **Handover model**: Nodes reassociate to the strongest gateway whenever the reference signal strength drops below -115 dBm for more than 5 seconds.
+- **Environnement** : tronçon autoroutier de 8 km avec des passerelles en bord de route espacées de 2 km.
+- **Population de nœuds** : 40 traceurs de véhicules circulant sur des voies prédéfinies.
+- **Plage de distances** : trajets en ligne de vue de 0,5 km à 6 km avec des sections occasionnellement obstruées (20 % de probabilité NLOS).
+- **Profil de vitesse** : distribution triangulaire culminant à 27 m/s et support \[15 ; 35\] m/s pour refléter la variabilité du trafic.
+- **Modèle de handover** : les nœuds se réassocient à la passerelle la plus puissante dès que la puissance reçue reste sous –115 dBm pendant plus de 5 s.
 
 ### `industrial_campus`
-- **Environment**: 1.5 km × 1.0 km industrial site with metallic obstacles and three indoor gateways.
-- **Node population**: 75 asset trackers alternating between indoor (60%) and outdoor (40%) areas.
-- **Distance range**: 50 m to 1.8 km with a bimodal distribution favouring short-haul indoor hops.
-- **Velocity profile**: Piecewise constant speeds sampled from \[0.1, 1.8\] m/s to model forklifts and personnel.
-- **Shadowing**: Log-normal shadowing with a standard deviation of 8 dB applied indoors and 4 dB outdoors.
+- **Environnement** : site industriel de 1,5 km × 1,0 km avec obstacles métalliques et trois passerelles intérieures.
+- **Population de nœuds** : 75 traceurs d'actifs alternant entre zones intérieures (60 %) et extérieures (40 %).
+- **Plage de distances** : de 50 m à 1,8 km avec une distribution bimodale favorisant les sauts courts en intérieur.
+- **Profil de vitesse** : vitesses par morceaux constantes tirées de \[0,1 ; 1,8\] m/s pour modéliser chariots élévateurs et personnel.
+- **Ombrage** : shadowing log-normal d'écart-type 8 dB en intérieur et 4 dB en extérieur.
 
-Each scenario script stores derived parameters (e.g. propagation exponent, retry backoff) inside module-level constants to keep the CLI interface focused on reproducible inputs.
+Chaque script de scénario stocke les paramètres dérivés (exposant de propagation, backoff de retransmission, etc.) dans des constantes de module afin de concentrer l'interface CLI sur des entrées reproductibles.
 
-## Simulation parameters
+## Paramètres de simulation
 
-Scenario entry points expose the following command-line flags:
+Les points d'entrée des scénarios proposent les options suivantes :
 
-- `--config`: Optional path to a custom simulator configuration file. Defaults to `config.ini`.
-- `--seed`: Base random seed applied to the simulator. Every repeated run increments the seed internally to ensure reproducible Monte Carlo batches.
-- `--runs`: Number of Monte Carlo repetitions. Default: `20` for pedestrians (`urban_canyon`, `industrial_campus`), `10` for vehicles (`rural_highway`).
-- `--duration`: Simulation horizon in seconds. Defaults to `7200` seconds.
-- `--distance-min` / `--distance-max`: Override the minimum and maximum link distances. When omitted the ranges listed above are used.
-- `--speed-min` / `--speed-max`: Override the admissible speed interval used by the scenario-specific random generators.
-- `--output`: Target CSV file under `results/mne3sd/article_b/`.
+- `--config` : chemin optionnel vers un fichier de configuration personnalisé pour le simulateur. Valeur par défaut : `config.ini`.
+- `--seed` : graine aléatoire de base appliquée au simulateur. Chaque run répété incrémente la graine en interne pour garantir des lots Monte Carlo reproductibles.
+- `--runs` : nombre de répétitions Monte Carlo. Par défaut : `20` pour les piétons (`urban_canyon`, `industrial_campus`), `10` pour les véhicules (`rural_highway`).
+- `--duration` : horizon de simulation en secondes. Valeur par défaut : `7200` s.
+- `--distance-min` / `--distance-max` : redéfinit les distances minimales et maximales du lien. En l'absence de ces options, les plages ci-dessus sont utilisées.
+- `--speed-min` / `--speed-max` : redéfinit l'intervalle de vitesses autorisé par les générateurs aléatoires propres au scénario.
+- `--output` : fichier CSV de destination dans `results/mne3sd/article_b/`.
 
-Scenario modules may offer additional flags (for instance, toggling gateway diversity or adjusting traffic load). Document such options in the module docstrings.
+Les modules de scénario peuvent proposer d'autres options (activation de la diversité passerelle, ajustement de la charge, etc.). Documentez-les dans les docstrings correspondantes.
 
-## Plotting utilities
+## Utilitaires de tracé
 
-Plot modules are thin wrappers that aggregate CSV files produced by the scenarios and render the figures used in Article B. The shared CLI accepts:
+Les modules de tracé sont de fines surcouches qui agrègent les CSV produits par les scénarios et génèrent les figures de l'Article B. L'interface partagée accepte :
 
-- `--input`: One or more CSV files generated by the scenario scripts. Repeat the flag to process multiple datasets.
-- `--figures-dir`: Destination directory for the exported figures. Defaults to `figures/mne3sd/article_b/`.
-- `--format`: Output format (`png`, `pdf`, `svg`, ...). The default is `pdf`.
-- `--style`: Optional Matplotlib style sheet applied before rendering (default: `figures/matplotlib-paper.mplstyle` when available).
+- `--input` : un ou plusieurs fichiers CSV générés par les scripts de scénario. Répétez l'option pour traiter plusieurs jeux de données.
+- `--figures-dir` : répertoire de destination des figures exportées. Valeur par défaut : `figures/mne3sd/article_b/`.
+- `--format` : format de sortie (`png`, `pdf`, `svg`, …). Par défaut : `pdf`.
+- `--style` : feuille de style Matplotlib optionnelle appliquée avant le rendu (par défaut `figures/matplotlib-paper.mplstyle` lorsqu'elle est disponible).
 
-### Execution profiles
-Scenario launchers honour the shared `--profile` flag and the `MNE3SD_PROFILE`
-environment variable:
+### Profils d'exécution
+Les lanceurs de scénarios respectent l'option `--profile` partagée ainsi que la variable d'environnement `MNE3SD_PROFILE` :
 
-- `full` *(default)* – executes the complete scenario grid with the documented
-  research parameters.
-- `ci` – trims node counts, mobility ranges, gateway permutations and Monte
-  Carlo repetitions so that automated smoke tests complete quickly while still
-  producing representative outputs.
+- `full` *(par défaut)* – exécute l'intégralité de la grille de scénarios avec les paramètres de recherche documentés.
+- `ci` – réduit le nombre de nœuds, les plages de mobilité, les permutations de passerelles et les répétitions Monte Carlo afin d'accélérer les tests automatisés tout en produisant des résultats représentatifs.
 
-## Directory structure
+## Structure du répertoire
 
 ```
 scripts/mne3sd/article_b/
-├── README.md                # This guide
-├── __init__.py              # Package marker for shared helpers
-├── scenarios/               # Scenario entry points
+├── README.md                # Ce guide
+├── __init__.py              # Marqueur de package pour les utilitaires partagés
+├── scenarios/               # Points d'entrée des scénarios
 │   └── __init__.py
-└── plots/                   # Plotting entry points
+└── plots/                   # Points d'entrée pour les figures
     └── __init__.py
 ```
 
-## Expected outputs
+## Sorties attendues
 
-### CSV artefacts
-All raw simulation data and aggregated metrics belong in `results/mne3sd/article_b/`. Use descriptive file names such as `urban_canyon_runs.csv` or `rural_highway_summary.csv`. When a scenario emits multiple files (e.g. per-gateway metrics and per-node traces) create a subdirectory: `results/mne3sd/article_b/industrial_campus/gateway_load.csv`.
+### Artefacts CSV
+Toutes les données brutes et métriques agrégées doivent résider dans `results/mne3sd/article_b/`. Utilisez des noms explicites comme `urban_canyon_runs.csv` ou `rural_highway_summary.csv`. Lorsqu'un scénario produit plusieurs fichiers (par exemple métriques par passerelle et traces par nœud), créez un sous-dossier : `results/mne3sd/article_b/industrial_campus/gateway_load.csv`.
 
-Each CSV must include, at minimum, the following columns to support the downstream plotting pipeline:
+Chaque CSV doit contenir au minimum les colonnes suivantes pour alimenter la chaîne de génération de figures :
 
-- `scenario`: Name of the scenario module (e.g. `urban_canyon`).
-- `run`: Monte Carlo repetition index starting at 0.
-- `distance_m`: Instantaneous transmitter-receiver distance.
-- `speed_mps`: Node speed at the sampling instant.
-- `snr_db`, `rssi_dbm`: Channel quality indicators.
-- `latency_s`, `delivery_ratio`: Key performance indicators used in the Article B figures.
+- `scenario` : nom du module de scénario (ex. `urban_canyon`).
+- `run` : indice de répétition Monte Carlo à partir de 0.
+- `distance_m` : distance instantanée émetteur-récepteur.
+- `speed_mps` : vitesse du nœud à l'instant échantillonné.
+- `snr_db`, `rssi_dbm` : indicateurs de qualité de canal.
+- `latency_s`, `delivery_ratio` : indicateurs clés utilisés dans les figures de l'Article B.
 
-### Figure artefacts
-Export figures under `figures/mne3sd/article_b/`, keeping filenames aligned with the manuscript numbering (e.g. `figure_3_latency_vs_speed.pdf`). Place temporary debugging plots inside a dedicated subfolder such as `figures/mne3sd/article_b/debug/` to avoid mixing them with publication-ready outputs.
+### Artefacts graphiques
+Exportez les figures dans `figures/mne3sd/article_b/`, en gardant des noms alignés sur la numérotation du manuscrit (ex. `figure_3_latency_vs_speed.pdf`). Placez les graphiques temporaires de débogage dans un sous-dossier dédié tel que `figures/mne3sd/article_b/debug/` pour ne pas les mélanger aux figures finales.
 
-## Running the pipeline
+## Exécution de la chaîne
 
-All commands must be executed from the repository root. Replace `<scenario_module>` with the scenario file name (without the `.py` suffix) and `<figure_module>` with the plot module you want to run.
+Toutes les commandes doivent être lancées depuis la racine du dépôt. Remplacez `<scenario_module>` par le nom du fichier de scénario (sans l'extension `.py`) et `<figure_module>` par le module de tracé souhaité.
 
-### Generate simulation data
+### Générer les données de simulation
 
 ```
 python -m scripts.mne3sd.article_b.scenarios.<scenario_module> \
@@ -105,9 +101,9 @@ python -m scripts.mne3sd.article_b.scenarios.<scenario_module> \
     --output results/mne3sd/article_b/<scenario_name>.csv
 ```
 
-To sweep over distance or speed ranges use `--distance-min`, `--distance-max`, `--speed-min`, and `--speed-max`. Scenario modules may expose additional flags (for instance `--handover-threshold` in `rural_highway`); consult the module docstring for details.
+Pour balayer différentes plages de distance ou de vitesse, utilisez `--distance-min`, `--distance-max`, `--speed-min` et `--speed-max`. Les modules de scénario peuvent proposer des options additionnelles (par exemple `--handover-threshold` dans `rural_highway`). Consultez la docstring pour les détails.
 
-### Generate figures
+### Générer les figures
 
 ```
 python -m scripts.mne3sd.article_b.plots.<figure_module> \
@@ -116,23 +112,23 @@ python -m scripts.mne3sd.article_b.plots.<figure_module> \
     --format pdf
 ```
 
-Repeat the `--input` flag to combine multiple datasets in a single figure. Use `--style` to ensure all figures share the publication layout.
+Répétez l'option `--input` pour combiner plusieurs jeux de données dans une seule figure. Utilisez `--style` afin d'assurer une mise en page homogène entre les figures.
 
-### Full workflow
+### Chaîne complète
 
-1. Run every required scenario script until `results/mne3sd/article_b/` is populated with the expected CSV files.
-2. Inspect the outputs to confirm that the distance and speed ranges reflect the desired configuration.
-3. Launch the plotting modules to generate the final figures under `figures/mne3sd/article_b/`.
-4. Review the exported figures locally before integrating them into the manuscript.
+1. Exécutez chaque script de scénario requis jusqu'à remplir `results/mne3sd/article_b/` avec les CSV attendus.
+2. Inspectez les sorties pour vérifier que les plages de distance et de vitesse correspondent à la configuration souhaitée.
+3. Lancez les modules de tracé pour générer les figures finales dans `figures/mne3sd/article_b/`.
+4. Relisez les figures exportées localement avant de les intégrer au manuscrit.
 
-### Batch execution helper
+### Lanceur de batch
 
-You can launch the entire Article B pipeline with a single command using `scripts/mne3sd/run_all_article_outputs.py`:
+Vous pouvez exécuter toute la chaîne Article B en une seule commande grâce à `scripts/mne3sd/run_all_article_outputs.py` :
 
 ```
 python -m scripts.mne3sd.run_all_article_outputs --article b
 ```
 
-This orchestrates every `run_mobility_*` scenario followed by the associated `plot_*` modules and finishes by printing the list of generated CSV files and figures. Combine it with `--skip-scenarios` or `--skip-plots` when you need to refresh only part of the workflow.
+Cette commande orchestre tous les scénarios `run_mobility_*`, puis les modules `plot_*`, et se termine en affichant la liste des CSV et figures générés. Combinez-la avec `--skip-scenarios` ou `--skip-plots` lorsque seule une partie du workflow doit être régénérée.
 
-Keep this README in sync with the implemented scripts as additional scenarios or plots are added.
+Maintenez ce README synchronisé avec les scripts disponibles lorsque de nouveaux scénarios ou graphiques sont ajoutés.
