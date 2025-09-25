@@ -51,6 +51,33 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 - `docs/test_plan.md` récapitule la couverture par module et liste les tests marqués `xfail` pour les fonctionnalités manquantes.
 - `pytest tests/test_rest_api_gap.py tests/test_energy_breakdown_gap.py tests/test_duty_cycle_gap.py` vérifie que les scénarios décrivant les lacunes identifiées restent exécutables avant une livraison.
 
+### Checklists de validation
+
+#### Propagation
+
+- [ ] `pytest tests/integration/test_long_range_large_area.py` : confirme les marges RSSI/SNR des presets longue portée et la cohérence des profils `flora_*` au-delà de 10 km.【F:tests/integration/test_long_range_large_area.py†L1-L88】
+- [ ] `python scripts/run_validation.py --output results/validation_matrix.csv` : surveille les dérives de perte de parcours et de sensibilité sur l'ensemble des scénarios FLoRa.【F:scripts/run_validation.py†L1-L112】
+
+#### Collisions
+
+- [ ] `pytest tests/integration/test_validation_matrix.py` : compare collisions et PDR aux traces `.sca` de référence pour chaque mode (mono/multi-canaux, classes B/C).【F:tests/integration/test_validation_matrix.py†L1-L113】
+- [ ] `pytest tests/test_flora_defaults.py` : vérifie le seuil de détection, la matrice non orthogonale et la fenêtre de capture appliqués en mode FLoRa.【F:tests/test_flora_defaults.py†L1-L26】
+
+#### ADR
+
+- [ ] `pytest tests/integration/test_adr_standard_alignment.py` : valide que la méthode `avg` reproduit les décisions ADR serveur historiques, y compris les fenêtres RX spécifiques aux classes.【F:tests/integration/test_adr_standard_alignment.py†L1-L79】
+- [ ] `pytest tests/test_flora_sca.py` : contrôle l'alignement des métriques PDR/SNR et des commandes ADR sur les fichiers `.sca` produits par FLoRa.【F:tests/test_flora_sca.py†L1-L60】
+
+#### Énergie
+
+- [ ] `pytest tests/test_flora_energy.py` : compare l'énergie cumulée aux traces OMNeT++ pour assurer la parité du modèle énergétique FLoRa.【F:tests/test_flora_energy.py†L1-L34】
+- [ ] `pytest tests/test_energy_breakdown_gap.py` : garantit que les régressions identifiées restent détectées via le suivi détaillé de l'énergie par état radio.【F:tests/test_energy_breakdown_gap.py†L1-L79】
+
+#### Downlink
+
+- [ ] `pytest tests/test_class_bc.py` : couvre la planification des beacons, ping slots et délais de classe C via le `DownlinkScheduler`.【F:tests/test_class_bc.py†L1-L60】
+- [ ] `pytest tests/test_node_classes.py` : vérifie les comportements par défaut des nœuds classes B/C (états radio, transitions sleep/RX).【F:tests/test_node_classes.py†L1-L68】
+
 ## Résultats récents
 
 La campagne `pytest` est actuellement entièrement sautée faute de dépendance `pandas`, ce qui impose de suivre le script CLI pour obtenir les métriques réelles.【F:tests/integration/test_validation_matrix.py†L9-L24】 L'exécution du run `python scripts/run_validation.py --output results/validation_matrix.csv` confirme que tous les scénarios reviennent au statut `ok`. Une légère dérive a été observée sur le preset longue portée : la tolérance PDR passe à `±0.015` et celle du SNR à `±0.22` pour absorber un écart stable de `0.014` paquet livré et `0.21 dB` sur plusieurs runs.【F:loraflexsim/validation/__init__.py†L114-L130】【F:results/validation_matrix.csv†L2-L16】
