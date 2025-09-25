@@ -29,11 +29,19 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 
 LOGGER = logging.getLogger("class_density_sweep")
 DEFAULT_NODE_COUNTS = [50, 100, 250, 500]
+CI_NODE_COUNTS = [20]
+CI_REPLICATES = 1
+CI_PACKETS_PER_NODE = 5
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_density_metrics.csv"
 
@@ -46,10 +54,14 @@ def positive_int(value: str) -> int:
     return ivalue
 
 
-def parse_nodes_list(values: Iterable[str] | None) -> list[int]:
+def parse_nodes_list(
+    values: Iterable[str] | None, *, default: Iterable[int] | None = None
+) -> list[int]:
     """Parse ``--nodes-list`` entries into a unique, ordered list of integers."""
+
     if not values:
-        return DEFAULT_NODE_COUNTS.copy()
+        base = list(default) if default is not None else DEFAULT_NODE_COUNTS
+        return [int(entry) for entry in base]
 
     nodes: list[int] = []
     seen: set[int] = set()
@@ -178,11 +190,19 @@ def main() -> None:  # noqa: D401 - CLI entry point
         default=1,
         help="Number of parallel worker processes to use",
     )
+    add_execution_profile_argument(parser)
     args = parser.parse_args()
 
     configure_logging(args.verbose, args.quiet)
 
-    node_counts = parse_nodes_list(args.nodes_list)
+    profile = resolve_execution_profile(args.profile)
+    node_defaults = DEFAULT_NODE_COUNTS if profile != "ci" else CI_NODE_COUNTS
+    node_counts = parse_nodes_list(args.nodes_list, default=node_defaults)
+    if profile == "ci" and args.nodes_list:
+        node_counts = node_counts[:1]
+
+    replicates = args.replicates if profile != "ci" else CI_REPLICATES
+    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS_PER_NODE)
 
     classes = ["A", "B", "C"]
     results: list[dict[str, object]] = []
@@ -194,9 +214,9 @@ def main() -> None:  # noqa: D401 - CLI entry point
         LOGGER.info("=== Simulating class %s ===", class_type)
         for node_index, num_nodes in enumerate(node_counts):
             LOGGER.info("Node count %d", num_nodes)
-            for replicate in range(1, args.replicates + 1):
+            for replicate in range(1, replicates + 1):
                 combination_offset = (
-                    (class_index * len(node_counts) + node_index) * args.replicates
+                    (class_index * len(node_counts) + node_index) * replicates
                 )
                 seed = args.seed + combination_offset + replicate - 1
                 tasks.append(
@@ -206,7 +226,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
                         "replicate": replicate,
                         "seed": seed,
                         "gateways": args.gateway,
-                        "packets": args.packets,
+                        "packets": packets,
                         "interval": args.interval,
                         "adr_node": args.adr_node,
                         "adr_server": args.adr_server,

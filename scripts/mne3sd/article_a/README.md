@@ -20,6 +20,16 @@ Scripts under `plots/` share an analogous interface:
 - `--figures-dir`: Directory where the generated figures will be written. Defaults to `figures/mne3sd/article_a/`.
 - `--format`: Image format for the exported charts (e.g. `png`, `pdf`, `svg`).
 
+### Execution profiles
+All scenario launchers accept the shared `--profile` flag (or the `MNE3SD_PROFILE`
+environment variable) to switch between presets:
+
+- `full` *(default)* – preserves the publication-grade parameters documented
+  in each script.
+- `ci` – reduces node counts, repetitions and explored parameter sets to keep
+  automated checks and quick smoke tests fast while still exercising the
+  complete pipeline.
+
 ## Directory layout and artefacts
 ```
 scripts/mne3sd/article_a/

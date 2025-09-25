@@ -32,10 +32,19 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # noqa: E402
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 
 DEFAULT_RANGES_KM = [5.0, 10.0, 15.0]
+CI_RANGE_VALUES = [5.0]
+CI_NODES = 40
+CI_PACKETS = 10
+CI_REPLICATES = 1
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_range_metrics.csv"
 
@@ -78,11 +87,14 @@ def positive_float(value: str) -> float:
     return number
 
 
-def parse_range_list(values: Iterable[str] | None) -> list[float]:
+def parse_range_list(
+    values: Iterable[str] | None, *, default: Iterable[float] | None = None
+) -> list[float]:
     """Parse ``--range-km`` entries into a unique ordered list of floats."""
 
     if not values:
-        return DEFAULT_RANGES_KM.copy()
+        base = list(default) if default is not None else DEFAULT_RANGES_KM
+        return [float(entry) for entry in base]
 
     ranges: list[float] = []
     seen: set[float] = set()
@@ -171,9 +183,18 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    add_execution_profile_argument(parser)
     args = parser.parse_args()
 
-    range_values = parse_range_list(args.range_km)
+    profile = resolve_execution_profile(args.profile)
+    default_ranges = DEFAULT_RANGES_KM if profile != "ci" else CI_RANGE_VALUES
+    range_values = parse_range_list(args.range_km, default=default_ranges)
+    if profile == "ci" and args.range_km:
+        range_values = range_values[:1]
+
+    nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
+    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
+    replicates = args.replicates if profile != "ci" else CI_REPLICATES
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -188,13 +209,13 @@ def main() -> None:  # noqa: D401 - CLI entry point
             area_size = range_km * 2000.0
             replicate_rows: list[dict[str, object]] = []
 
-            for replicate in range(1, args.replicates + 1):
-                seed = args.seed + combination_index * args.replicates + replicate - 1
+            for replicate in range(1, replicates + 1):
+                seed = args.seed + combination_index * replicates + replicate - 1
                 mobility_model = model_factory(area_size)
                 sim = Simulator(
-                    num_nodes=args.nodes,
+                    num_nodes=nodes,
                     num_gateways=1,
-                    packets_to_send=args.packets,
+                    packets_to_send=packets,
                     seed=seed,
                     mobility=True,
                     mobility_model=mobility_model,
@@ -212,7 +233,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 collision_rate = collisions / total_packets if total_packets else 0.0
 
                 energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-                energy_per_node = energy_nodes / args.nodes if args.nodes else 0.0
+                energy_per_node = energy_nodes / nodes if nodes else 0.0
 
                 sf_distribution = normalise_sf_distribution(metrics.get("sf_distribution", {}))
 

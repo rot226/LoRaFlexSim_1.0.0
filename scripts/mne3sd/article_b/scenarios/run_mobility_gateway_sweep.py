@@ -40,7 +40,12 @@ from loraflexsim.launcher import (  # noqa: E402
     Simulator,
     SmoothMobility,
 )
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 DEFAULT_CHANNELS = [
     868_100_000.0,
@@ -50,6 +55,11 @@ DEFAULT_CHANNELS = [
 DEFAULT_GATEWAYS = [1, 2, 4]
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_gateway_metrics.csv"
+CI_GATEWAYS = [1]
+CI_NODES = 40
+CI_PACKETS = 10
+CI_REPLICATES = 1
+CI_RANGE_KM = 5.0
 
 FIELDNAMES = [
     "model",
@@ -275,11 +285,24 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    add_execution_profile_argument(parser)
     args = parser.parse_args()
 
+    profile = resolve_execution_profile(args.profile)
     gateway_values = parse_gateways_list(args.gateways_list)
+    if profile == "ci":
+        if args.gateways_list:
+            gateway_values = gateway_values[:1]
+        else:
+            gateway_values = CI_GATEWAYS.copy()
+
     channel_plan = parse_channel_frequencies(args.channels)
-    area_size = args.range_km * 2000.0
+    range_km = args.range_km if profile != "ci" else min(args.range_km, CI_RANGE_KM)
+    area_size = range_km * 2000.0
+
+    nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
+    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
+    replicates = args.replicates if profile != "ci" else CI_REPLICATES
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -293,13 +316,13 @@ def main() -> None:  # noqa: D401 - CLI entry point
         for model_name, model_factory in models:
             replicate_rows: list[dict[str, object]] = []
 
-            for replicate in range(1, args.replicates + 1):
-                seed = args.seed + combination_index * args.replicates + replicate - 1
+            for replicate in range(1, replicates + 1):
+                seed = args.seed + combination_index * replicates + replicate - 1
                 mobility_model = model_factory(area_size)
                 sim = Simulator(
-                    num_nodes=args.nodes,
+                    num_nodes=nodes,
                     num_gateways=num_gateways,
-                    packets_to_send=args.packets,
+                    packets_to_send=packets,
                     seed=seed,
                     mobility=True,
                     mobility_model=mobility_model,
@@ -332,9 +355,9 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 row = {
                     "model": model_name,
                     "gateways": num_gateways,
-                    "range_km": args.range_km,
+                    "range_km": range_km,
                     "area_size_m": area_size,
-                    "nodes": args.nodes,
+                    "nodes": nodes,
                     "channels": json.dumps(channel_plan),
                     "replicate": replicate,
                     "seed": seed,

@@ -30,7 +30,12 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 
 LOGGER = logging.getLogger("class_downlink_energy")
@@ -38,6 +43,9 @@ ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = (
     ROOT / "results" / "mne3sd" / "article_a" / "class_downlink_energy.csv"
 )
+CI_RUNS = 1
+CI_DURATION_S = 900.0
+CI_NODES = 25
 
 FIELDNAMES = [
     "class",
@@ -244,6 +252,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "periodic downlink traffic."
         )
     )
+    add_execution_profile_argument(parser)
     parser.add_argument("--config", help="Optional simulator INI configuration file")
     parser.add_argument("--seed", type=int, default=1, help="Base random seed")
     parser.add_argument(
@@ -346,8 +355,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(argv)
-    if args.runs < 5:
+    profile = resolve_execution_profile(args.profile)
+    args.profile = profile
+
+    if profile != "ci" and args.runs < 5:
         parser.error("--runs must be at least 5 to ensure statistical confidence")
+
+    if profile == "ci":
+        args.runs = max(1, min(args.runs, CI_RUNS))
+        args.duration = min(args.duration, CI_DURATION_S)
+        args.nodes = min(args.nodes, CI_NODES)
+
     return args
 
 

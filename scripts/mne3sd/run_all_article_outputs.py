@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
+from scripts.mne3sd.common import add_execution_profile_argument, resolve_execution_profile
+
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 
@@ -121,6 +123,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Execute all MNE3SD article scenarios and/or plotting scripts.",
     )
+    add_execution_profile_argument(parser)
     parser.add_argument(
         "--article",
         choices=("a", "b", "both"),
@@ -140,7 +143,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def execute_tasks(tasks: Iterable[Task], heading: str) -> list[Path]:
+def execute_tasks(
+    tasks: Iterable[Task], heading: str, *, profile: str | None = None
+) -> list[Path]:
     """Run the provided tasks and return the artefact paths they generate."""
 
     executed_outputs: list[Path] = []
@@ -151,7 +156,10 @@ def execute_tasks(tasks: Iterable[Task], heading: str) -> list[Path]:
     print(f"\n=== {heading} ===")
     for task in task_list:
         print(f"→ {task.description} ({task.module})")
-        subprocess.run([PYTHON, "-m", task.module], check=True, cwd=ROOT)
+        command = [PYTHON, "-m", task.module]
+        if profile and ".scenarios." in task.module:
+            command.extend(["--profile", profile])
+        subprocess.run(command, check=True, cwd=ROOT)
         executed_outputs.extend(task.outputs)
     return executed_outputs
 
@@ -192,6 +200,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     """Entry point for the batch execution script."""
 
     args = parse_args(argv)
+    profile = resolve_execution_profile(getattr(args, "profile", None))
+    scenario_profile = None if profile == "full" else profile
 
     if args.skip_plots and args.skip_scenarios:
         print("Both stages were skipped; nothing to do.")
@@ -209,7 +219,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         if not args.skip_scenarios:
             tasks = ARTICLE_SCENARIOS.get(article, ())
             heading = f"Article {article.upper()} scenarios"
-            all_outputs.extend(execute_tasks(tasks, heading))
+            all_outputs.extend(
+                execute_tasks(tasks, heading, profile=scenario_profile)
+            )
         else:
             print(f"\nSkipping scenarios for article {article.upper()}.")
 
