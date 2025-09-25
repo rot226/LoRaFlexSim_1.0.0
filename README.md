@@ -71,6 +71,9 @@ Pour aligner strictement LoRaFlexSim sur les scénarios FLoRa, assurez-vous que
 les paramètres suivants sont appliqués lors de la création du `Simulator` ou du
 `Channel` :
 
+> 📘 Consultez également [`docs/reproduction_flora.md`](docs/reproduction_flora.md)
+> pour une checklist détaillée des paramètres et du mode compatibilité.
+
 - `flora_mode=True` — active automatiquement les courbes logistiques de FLoRa,
   impose le modèle physique `omnet_full`, applique le seuil de détection
   historique et réutilise les presets de propagation « flora » sur l'ensemble
@@ -104,6 +107,46 @@ python run.py --long-range-demo flora_hata --seed 1        # reproduction terrai
 
 Ces commandes activent automatiquement la matrice inter-SF historique, la
 fenêtre de capture FLoRa et les réglages d'émission adaptés au preset choisi.
+
+## Classes B & C
+
+La pile LoRaWAN embarquée dans LoRaFlexSim reproduit les mécanismes clés des
+classes B et C afin de valider les scénarios à fenêtres descendantes.
+
+### Classe B : beacons et ping slots
+
+- Le simulateur planifie un beacon toutes les `128 s` et diffuse des événements
+  `PING_SLOT` pour chaque nœud de classe B selon la périodicité signalée par la
+  commande `PingSlotInfoReq`. Les pertes de beacon et la dérive d’horloge sont
+  modélisées via `beacon_loss_prob` et `beacon_drift` sur chaque nœud.【F:loraflexsim/launcher/simulator.py†L432-L470】【F:loraflexsim/launcher/simulator.py†L1416-L1488】【F:loraflexsim/launcher/node.py†L65-L217】
+- `DownlinkScheduler.schedule_class_b` utilise `next_ping_slot_time` pour
+  réserver le créneau immédiatement disponible en tenant compte de la durée de
+  la trame et de l’occupation de la passerelle, garantissant une file d’attente
+  réaliste des downlinks.【F:loraflexsim/launcher/downlink_scheduler.py†L1-L83】【F:loraflexsim/launcher/lorawan.py†L835-L889】
+- Les commandes MAC `PingSlotChannelReq`, `PingSlotInfoReq`, `BeaconFreqReq`
+  et `BeaconTimingReq` mettent à jour la configuration locale (fréquence,
+  périodicité, canal) de chaque nœud pour rester conforme aux échanges
+  LoRaWAN.【F:loraflexsim/launcher/node.py†L820-L910】
+
+### Classe C : écoute continue
+
+- `schedule_class_c` planifie les downlinks dès qu’un nœud de classe C a un
+  message en attente, tout en respectant l’occupation RF de la passerelle et le
+  temps de transmission calculé par le canal.【F:loraflexsim/launcher/downlink_scheduler.py†L60-L83】
+- Le simulateur quantifie l’écoute quasi continue grâce au paramètre
+  `class_c_rx_interval`, qui reprogramme automatiquement une fenêtre de
+  réception tant que la simulation est active, tout en comptabilisant l’énergie
+  consommée en mode RX.【F:loraflexsim/launcher/simulator.py†L234-L470】【F:loraflexsim/launcher/simulator.py†L1416-L1478】
+
+### Limites connues
+
+- Les commandes modifiant la fréquence de beacon ou des ping slots sont stockées
+  sur les nœuds mais ne reconfigurent pas encore la fréquence des transmissions
+  descendantes, ce qui impose l’utilisation d’un canal unique pour les essais de
+  classe B.【F:loraflexsim/launcher/node.py†L201-L910】【F:loraflexsim/launcher/server.py†L200-L335】
+- La classe C repose sur un polling toutes les `class_c_rx_interval` secondes
+  plutôt que sur une écoute strictement continue, ce qui peut sous-estimer le
+  temps passé en réception pour des applications ultra-denses.【F:loraflexsim/launcher/simulator.py†L234-L470】【F:loraflexsim/launcher/simulator.py†L1416-L1478】
 
 ### Exemple complet (run.py)
 
