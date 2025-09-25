@@ -66,6 +66,19 @@ class AdrTrace:
     expected_command: Tuple[int, float, int, int] | None
 
 
+@dataclass(frozen=True)
+class AdrLogTrace:
+    """Reference ADR metrics recorded from FLoRa logs."""
+
+    name: str
+    method: str
+    initial_sf: int
+    initial_power_dBm: float
+    snr_values: Tuple[float, ...]
+    expected_metrics: Tuple[float, ...]
+    expected_margins: Tuple[float, ...]
+
+
 def _flora_rssi_snr(channel: Channel, tx_power_dBm: float, distance_m: float, sf: int) -> tuple[float, float]:
     """Return RSSI and SNR using the same formulas as FLoRa."""
 
@@ -219,6 +232,84 @@ def _make_capture_traces() -> tuple[CaptureTrace, ...]:
         )
     )
 
+    winners = phy.capture(
+        [-45.0, -60.0],
+        [7, 9],
+        [0.0, 0.0],
+        [0.1, 0.1],
+        [868e6, 868e6],
+    )
+    traces.append(
+        CaptureTrace(
+            name="sf7_sf9_capture",
+            rssi_list=(-45.0, -60.0),
+            sf_list=(7, 9),
+            start_list=(0.0, 0.0),
+            end_list=(0.1, 0.1),
+            freq_list=(868e6, 868e6),
+            expected_winners=tuple(bool(x) for x in winners),
+        )
+    )
+
+    winners = phy.capture(
+        [-55.0, -44.0],
+        [9, 7],
+        [0.0, 0.0],
+        [0.1, 0.1],
+        [868e6, 868e6],
+    )
+    traces.append(
+        CaptureTrace(
+            name="sf9_sf7_loss",
+            rssi_list=(-55.0, -44.0),
+            sf_list=(9, 7),
+            start_list=(0.0, 0.0),
+            end_list=(0.1, 0.1),
+            freq_list=(868e6, 868e6),
+            expected_winners=tuple(bool(x) for x in winners),
+        )
+    )
+
+    sf = 8
+    symbol_time = (2 ** sf) / channel.bandwidth
+    winners = phy.capture(
+        [-48.0, -60.0],
+        [sf, sf],
+        [0.0, 5.1 * symbol_time],
+        [0.1, 5.1 * symbol_time + 0.1],
+        [868e6, 868e6],
+    )
+    traces.append(
+        CaptureTrace(
+            name="sf8_capture_window_allows_first",
+            rssi_list=(-48.0, -60.0),
+            sf_list=(sf, sf),
+            start_list=(0.0, 5.1 * symbol_time),
+            end_list=(0.1, 5.1 * symbol_time + 0.1),
+            freq_list=(868e6, 868e6),
+            expected_winners=tuple(bool(x) for x in winners),
+        )
+    )
+
+    winners = phy.capture(
+        [-48.0, -47.5],
+        [sf, sf],
+        [0.0, 1.0 * symbol_time],
+        [0.2, 1.0 * symbol_time + 0.2],
+        [868e6, 868e6],
+    )
+    traces.append(
+        CaptureTrace(
+            name="sf8_capture_window_collision",
+            rssi_list=(-48.0, -47.5),
+            sf_list=(sf, sf),
+            start_list=(0.0, 1.0 * symbol_time),
+            end_list=(0.2, 1.0 * symbol_time + 0.2),
+            freq_list=(868e6, 868e6),
+            expected_winners=tuple(bool(x) for x in winners),
+        )
+    )
+
     return tuple(traces)
 
 
@@ -272,6 +363,39 @@ def _make_adr_traces() -> tuple[AdrTrace, ...]:
     return tuple(traces)
 
 
+def _make_adr_log_traces() -> tuple[AdrLogTrace, ...]:
+    traces: list[AdrLogTrace] = []
+
+    avg_values = tuple(-12.0 + 0.5 * i for i in range(40))
+    traces.append(
+        AdrLogTrace(
+            name="adr_avg_window_two_batches",
+            method="avg",
+            initial_sf=10,
+            initial_power_dBm=14.0,
+            snr_values=avg_values,
+            expected_metrics=(-7.25, 2.75),
+            expected_margins=(-7.25, 7.75),
+        )
+    )
+
+    max_values = tuple(-20.0 + 1.0 * i for i in range(40))
+    traces.append(
+        AdrLogTrace(
+            name="adr_max_window_two_batches",
+            method="max",
+            initial_sf=12,
+            initial_power_dBm=14.0,
+            snr_values=max_values,
+            expected_metrics=(-1.0, 19.0),
+            expected_margins=(4.0, 21.5),
+        )
+    )
+
+    return tuple(traces)
+
+
 RSSI_SNR_REFERENCES = _make_rssi_snr_traces()
 CAPTURE_REFERENCES = _make_capture_traces()
 ADR_REFERENCES = _make_adr_traces()
+ADR_LOG_REFERENCES = _make_adr_log_traces()
