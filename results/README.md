@@ -1,14 +1,14 @@
-# Long Range Demo Results
+# Résultats de la démo longue portée
 
-## flora_hata Preset Summary
-- Simulation area: 576 km² with 9 nodes (8 packets each).
-- Global PDR: 95.83 %.
-- PDR by spreading factor:
-  - SF12: 91.67 % (limited by edge nodes at ~11 km).
-  - SF11: 100.00 %.
-  - SF10: 100.00 %.
-  - SF9: 93.75 %.
-- RSSI margin for SF12: -114.62 dBm (max observed).
-- SNR margin for SF12: 2.39 dB (max observed).
+## Synthèse du preset `flora_hata`
+- Aire de simulation : 576 km² avec 9 nœuds (8 paquets chacun).
+- PDR globale : 95,83 %.
+- PDR par Spreading Factor :
+  - SF12 : 91,67 % (limitée par les nœuds en bordure vers ~11 km).
+  - SF11 : 100,00 %.
+  - SF10 : 100,00 %.
+  - SF9 : 93,75 %.
+- Marge RSSI pour SF12 : –114,62 dBm (maximum observé).
+- Marge SNR pour SF12 : 2,39 dB (maximum observé).
 
-Notable observation: the flora_hata preset maintains perfect delivery for SF11 and SF10 packets, while SF12 and SF9 experience slight drops (≤8 percentage points) due to longer-range links.
+Observation notable : le preset `flora_hata` conserve une livraison parfaite pour les paquets SF11 et SF10, tandis que les SF12 et SF9 subissent une légère baisse (≤ 8 points de pourcentage) en raison des liaisons longues distances.
