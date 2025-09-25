@@ -856,10 +856,17 @@ class Channel:
         gain = max(math.cos(angle_rad), 0.0) ** 2
         return 10 * math.log10(max(gain, 1e-3))
 
-    def airtime(self, sf: int, payload_size: int = 20) -> float:
+    def airtime(
+        self,
+        sf: int,
+        payload_size: int = 20,
+        *,
+        bandwidth: float | None = None,
+    ) -> float:
         """Calcule l'airtime complet d'un paquet LoRa en secondes."""
         # Durée d'un symbole
-        rs = self.bandwidth / (2 ** sf)
+        bw = self.bandwidth if bandwidth is None else bandwidth
+        rs = bw / (2 ** sf)
         ts = 1.0 / rs
         de = 1 if sf >= self.low_data_rate_threshold else 0
         cr_denom = self.coding_rate + 4

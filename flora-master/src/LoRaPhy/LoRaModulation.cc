@@ -13,6 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
+#include <cmath>
+
 #include "LoRaModulation.h"
 
 namespace flora {
@@ -73,8 +75,23 @@ double LoRaModulation::calculateBER(double snir, Hz bandwidth, bps bitrate) cons
 
 double LoRaModulation::calculateSER(double snir, Hz bandwidth, bps bitrate) const
 {
-    return NaN;
-//    throw cRuntimeError("Not yet implemented");
+    double ber = calculateBER(snir, bandwidth, bitrate);
+    if (!std::isfinite(ber))
+        return 1.0;
+    if (ber <= 0.0)
+        return 0.0;
+    if (ber >= 1.0)
+        return 1.0;
+
+    const double bitsPerSymbol = spreadFactor > 0 ? static_cast<double>(spreadFactor) : 1.0;
+    double ser = 1.0 - std::pow(1.0 - ber, bitsPerSymbol);
+    if (!std::isfinite(ser))
+        ser = 1.0;
+    else if (ser < 0.0)
+        ser = 0.0;
+    else if (ser > 1.0)
+        ser = 1.0;
+    return ser;
 }
 
 } // namespace inet

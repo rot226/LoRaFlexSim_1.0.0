@@ -33,6 +33,36 @@ def test_schedule_class_b():
     assert frame == b"a" and gw2 is gw
 
 
+def test_schedule_class_b_replans_busy_slot():
+    scheduler = DownlinkScheduler()
+    gw = Gateway(1, 0, 0)
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="B")
+    first = scheduler.schedule_class_b(
+        node,
+        0.0,
+        b"a",
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+    )
+    second = scheduler.schedule_class_b(
+        node,
+        0.0,
+        b"b",
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+    )
+    assert math.isclose(first, 2.0)
+    assert math.isclose(second, 3.0)
+    frame1, gw1 = scheduler.pop_ready(node.id, first)
+    frame2, gw2 = scheduler.pop_ready(node.id, second)
+    assert frame1 == b"a" and gw1 is gw
+    assert frame2 == b"b" and gw2 is gw
+
+
 def test_schedule_class_c_delay():
     scheduler = DownlinkScheduler(link_delay=0.5)
     gw = Gateway(1, 0, 0)

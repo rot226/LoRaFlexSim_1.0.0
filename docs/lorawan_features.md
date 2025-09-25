@@ -43,6 +43,9 @@ Ce document résume les différences entre la simulation FLoRa d'origine
 
 - Sécurité LoRaWAN (chiffrement des charges utiles et MIC).
 - Gestion explicite des classes B et C avec planification des downlinks.
+- Sélection du data rate downlink conforme aux paramètres régionaux LoRaWAN
+  (formule EU868/IN865/KR920/AS923, tables US/AU915) validée par les tests
+  automatisés.【F:loraflexsim/launcher/lorawan.py†L12-L71】【F:tests/test_downlink_dr.py†L1-L23】
 - Grand nombre de commandes MAC supplémentaires.
 - Activation OTAA avec dérivation dynamique des clés.
 

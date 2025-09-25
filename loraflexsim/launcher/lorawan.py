@@ -20,7 +20,83 @@ class LoRaWANFrame:
 # ---------------------------------------------------------------------------
 
 DR_TO_SF = {0: 12, 1: 11, 2: 10, 3: 9, 4: 8, 5: 7}
-SF_TO_DR = {sf: dr for dr, sf in DR_TO_SF.items()}
+DOWNLINK_DR_TO_SF = {
+    **DR_TO_SF,
+    6: 7,
+    7: 7,
+    8: 12,
+    9: 11,
+    10: 10,
+    11: 9,
+    12: 8,
+    13: 7,
+}
+SF_TO_DR: dict[int, int] = {}
+for dr, sf in DR_TO_SF.items():
+    SF_TO_DR.setdefault(sf, dr)
+
+REGION_RX1_DEFAULT_LIMITS = {
+    "EU868": (0, 5),
+    "IN865": (0, 5),
+    "KR920": (0, 5),
+    "AS923": (0, 5),
+}
+
+REGION_RX1_OFFSET_TABLE = {
+    "US915": [
+        [10, 11, 12, 13, 13],
+        [9, 10, 11, 12, 13],
+        [8, 9, 10, 11, 12],
+        [8, 8, 9, 10, 11],
+        [8, 8, 8, 9, 10],
+        [8, 8, 8, 8, 9],
+        [8, 8, 8, 8, 8],
+        [8, 8, 8, 8, 8],
+    ],
+    "AU915": [
+        [10, 11, 12, 13, 13],
+        [9, 10, 11, 12, 13],
+        [8, 9, 10, 11, 12],
+        [8, 8, 9, 10, 11],
+        [8, 8, 8, 9, 10],
+        [8, 8, 8, 8, 9],
+        [8, 8, 8, 8, 8],
+        [8, 8, 8, 8, 8],
+    ],
+}
+
+
+def rx1_downlink_dr(
+    region: str | None,
+    uplink_dr: int,
+    rx1_dr_offset: int,
+) -> int:
+    """Return the RX1 downlink data rate index for ``region``.
+
+    The mapping follows the LoRaWAN regional parameters. Regions without a
+    dedicated table (EU868, IN865, KR920 and AS923) use the generic
+    ``max(min_dr, min(max_dr, uplink_dr - offset))`` rule defined by the
+    specification. US915 and AU915 rely on the explicit lookup tables where
+    offsets above the specification range are clamped to the closest entry.
+    """
+
+    reg = (region or "EU868").upper()
+    if reg in REGION_RX1_OFFSET_TABLE:
+        table = REGION_RX1_OFFSET_TABLE[reg]
+        if not table:
+            return uplink_dr
+        offset = max(0, min(len(table) - 1, rx1_dr_offset))
+        row = table[offset]
+        idx = max(0, min(len(row) - 1, uplink_dr))
+        return row[idx]
+
+    min_dr, max_dr = REGION_RX1_DEFAULT_LIMITS.get(reg, (0, 5))
+    dr = uplink_dr - rx1_dr_offset
+    if dr < min_dr:
+        return min_dr
+    if dr > max_dr:
+        return max_dr
+    return dr
 # Transmission power levels (matching the FLoRa reference values)
 TX_POWER_INDEX_TO_DBM = {
     0: 14.0,

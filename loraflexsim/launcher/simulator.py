@@ -29,6 +29,7 @@ from .gateway import Gateway, FLORA_NON_ORTH_DELTA
 from .channel import Channel
 from .multichannel import MultiChannel
 from .server import NetworkServer
+from .lorawan import DOWNLINK_DR_TO_SF, SF_TO_DR, rx1_downlink_dr
 from .duty_cycle import DutyCycleManager
 from .smooth_mobility import SmoothMobility
 from .id_provider import next_node_id, next_gateway_id, reset as reset_ids
@@ -1337,7 +1338,24 @@ class Simulator:
                         payload_len = len(frame.to_bytes())
                     except Exception:
                         pass
-                duration_dl = node.channel.airtime(node.sf, payload_len)
+                region = getattr(node.channel, "region", None)
+                sf = node.sf
+                bandwidth = node.channel.bandwidth
+                dr: int | None = None
+                last_end = getattr(node, "last_uplink_end_time", None)
+                if last_end is not None:
+                    rx1_time, rx2_time = node.schedule_receive_windows(last_end)
+                    if math.isclose(time, rx1_time, rel_tol=0.0, abs_tol=1e-6):
+                        uplink_dr = SF_TO_DR.get(node.sf)
+                        if uplink_dr is not None:
+                            dr = rx1_downlink_dr(region, uplink_dr, getattr(node, "rx1_dr_offset", 0))
+                    elif math.isclose(time, rx2_time, rel_tol=0.0, abs_tol=1e-6):
+                        dr = getattr(node, "rx2_datarate", None)
+                if dr is not None:
+                    sf = DOWNLINK_DR_TO_SF.get(dr, sf)
+                    if (region or "").upper() in {"US915", "AU915"} and dr >= 8:
+                        bandwidth = 500e3
+                duration_dl = node.channel.airtime(sf, payload_len, bandwidth=bandwidth)
                 tx_power_dl = gw.select_downlink_power(node)
                 current_gw = gw.profile.get_tx_current(tx_power_dl)
                 energy_tx = current_gw * gw.profile.voltage_v * duration_dl
@@ -1491,9 +1509,7 @@ class Simulator:
                         pass
                 sf = node.sf
                 if node.ping_slot_dr is not None:
-                    from .lorawan import DR_TO_SF
-
-                    sf = DR_TO_SF.get(node.ping_slot_dr, node.sf)
+                    sf = DOWNLINK_DR_TO_SF.get(node.ping_slot_dr, node.sf)
                 duration_dl = node.channel.airtime(sf, payload_len)
                 tx_power_dl = gw.select_downlink_power(node)
                 current_gw = gw.profile.get_tx_current(tx_power_dl)

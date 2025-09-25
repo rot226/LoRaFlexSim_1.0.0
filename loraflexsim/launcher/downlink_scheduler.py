@@ -1,4 +1,5 @@
 import heapq
+import math
 
 
 class DownlinkScheduler:
@@ -49,20 +50,41 @@ class DownlinkScheduler:
     ) -> float:
         """Schedule ``frame`` for ``node`` at its next ping slot."""
         duration = node.channel.airtime(node.sf, self._payload_length(frame))
-        t = node.next_ping_slot_time(
-            after_time,
+        busy_until = self._gateway_busy.get(gateway.id, 0.0)
+        search_start = max(after_time, busy_until - self.link_delay)
+        slot_time = node.next_ping_slot_time(
+            search_start,
             beacon_interval,
             ping_slot_interval,
             ping_slot_offset,
             last_beacon_time=last_beacon_time,
         )
-        busy = self._gateway_busy.get(gateway.id, 0.0)
-        if t < busy:
-            t = busy
-        t += self.link_delay
-        self.schedule(node.id, t, frame, gateway, priority=priority)
-        self._gateway_busy[gateway.id] = t + duration
-        return t
+        scheduled_times = [entry[0] for entry in self.queue.get(node.id, [])]
+        max_attempts = 128
+        attempts = 0
+        while True:
+            scheduled_at = slot_time + self.link_delay
+            conflict = any(
+                math.isclose(scheduled_at, existing, rel_tol=0.0, abs_tol=1e-6)
+                for existing in scheduled_times
+            )
+            if not conflict and scheduled_at >= busy_until - 1e-9:
+                break
+            attempts += 1
+            if attempts > max_attempts:
+                raise RuntimeError("Unable to schedule Class B downlink: no ping slot available")
+            search_start = slot_time + 1e-6
+            slot_time = node.next_ping_slot_time(
+                search_start,
+                beacon_interval,
+                ping_slot_interval,
+                ping_slot_offset,
+                last_beacon_time=last_beacon_time,
+            )
+        scheduled_at = slot_time + self.link_delay
+        self.schedule(node.id, scheduled_at, frame, gateway, priority=priority)
+        self._gateway_busy[gateway.id] = scheduled_at + duration
+        return scheduled_at
 
     def schedule_class_c(self, node, time: float, frame, gateway, *, priority: int = 0):
         """Schedule a frame for a Class C node at ``time`` with optional ``priority`` and return the scheduled time."""
