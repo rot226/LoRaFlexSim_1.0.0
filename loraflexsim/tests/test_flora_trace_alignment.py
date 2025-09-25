@@ -7,9 +7,15 @@ import os
 import pytest
 
 from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.server import ADR_WINDOW_SIZE, MARGIN_DB, REQUIRED_SNR
 from loraflexsim.launcher.simulator import Simulator
 
-from .reference_traces import ADR_REFERENCES, CAPTURE_REFERENCES, RSSI_SNR_REFERENCES
+from .reference_traces import (
+    ADR_LOG_REFERENCES,
+    ADR_REFERENCES,
+    CAPTURE_REFERENCES,
+    RSSI_SNR_REFERENCES,
+)
 
 
 def _resolve_tolerance(default: float) -> float:
@@ -127,7 +133,7 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
     server.channel = node.channel
 
     # Simulate a history of SNR samples as would be available after a previous command.
-    node.snr_history = [30.0] * 20
+    node.snr_history = [30.0] * ADR_WINDOW_SIZE
     node.frames_since_last_adr_command = 0
 
     commands: list[tuple[int, float, int, int]] = []
@@ -143,7 +149,9 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
     gateway_id = sim.gateways[0].id
     rssi = noise_floor + 30.0
 
-    for event_id in range(19):
+    window = ADR_WINDOW_SIZE
+
+    for event_id in range(window - 1):
         node.sf = 12
         node.tx_power = 14.0
         node.channel.detection_threshold_dBm = (
@@ -160,10 +168,10 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
         Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
         + node.channel.sensitivity_margin_dB
     )
-    server.receive(19, node.id, gateway_id, rssi=rssi)
+    server.receive(window - 1, node.id, gateway_id, rssi=rssi)
     assert len(commands) == 1
 
-    for event_id in range(20, 39):
+    for event_id in range(window, 2 * window - 1):
         node.sf = 12
         node.tx_power = 14.0
         node.channel.detection_threshold_dBm = (
@@ -179,5 +187,61 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
         Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
         + node.channel.sensitivity_margin_dB
     )
-    server.receive(39, node.id, gateway_id, rssi=rssi)
+    server.receive(2 * window - 1, node.id, gateway_id, rssi=rssi)
     assert len(commands) == 2
+
+
+@pytest.mark.parametrize("trace", ADR_LOG_REFERENCES, ids=lambda tr: tr.name)
+def test_adr_metric_matches_flora_log(trace):
+    """Aggregate SNR and margins match FLoRa-derived logs."""
+
+    sim = Simulator(num_nodes=1, num_gateways=1, flora_mode=True, mobility=False)
+    server = sim.network_server
+    server.adr_enabled = True
+    server.adr_method = trace.method
+
+    node = sim.nodes[0]
+    node.sf = trace.initial_sf
+    node.tx_power = trace.initial_power_dBm
+    node.channel.detection_threshold_dBm = (
+        Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
+        + node.channel.sensitivity_margin_dB
+    )
+    server.channel = node.channel
+
+    recorded_metrics: list[tuple[float, float]] = []
+    current_sf_for_margin = node.sf
+
+    def record_command(target_node, payload=b"", confirmed=False, adr_command=None, **kwargs):
+        nonlocal current_sf_for_margin
+        if not adr_command:
+            return
+        history = tuple(target_node.snr_history)
+        assert len(history) == ADR_WINDOW_SIZE
+        if trace.method == "avg":
+            metric = sum(history) / len(history)
+        else:
+            metric = max(history)
+        required = REQUIRED_SNR.get(current_sf_for_margin, -20.0)
+        margin = metric - required - MARGIN_DB
+        recorded_metrics.append((metric, margin))
+        target_node.frames_since_last_adr_command = 0
+
+    server.send_downlink = record_command  # type: ignore[assignment]
+
+    noise_floor = node.channel.noise_floor_dBm()
+    gateway_id = sim.gateways[0].id
+
+    for event_id, snr in enumerate(trace.snr_values):
+        rssi = noise_floor + snr
+        current_sf_for_margin = node.sf
+        server.receive(event_id, node.id, gateway_id, rssi=rssi)
+
+    assert recorded_metrics, "No ADR command recorded"
+    metrics, margins = zip(*recorded_metrics)
+    assert len(metrics) == len(trace.expected_metrics)
+    assert len(margins) == len(trace.expected_margins)
+    for got, expected in zip(metrics, trace.expected_metrics):
+        assert got == pytest.approx(expected, abs=1e-6)
+    for got, expected in zip(margins, trace.expected_margins):
+        assert got == pytest.approx(expected, abs=1e-6)

@@ -17,6 +17,18 @@ Une matrice de cas reproductibles couvre désormais les variantes mono/multi-pas
 | `explora_at_balanced_airtime` | 1 passerelle / 3 canaux | EXPLoRa-AT | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/explora_at_balanced_airtime.sca` |
 | `adr_ml_adaptive_strategy` | 1 passerelle / 3 canaux | ADR-ML | A | Non | `flora-master/simulations/examples/n100-gw1.ini` | `tests/integration/data/adr_ml_adaptive_strategy.sca` |
 
+### Collisions et capture
+
+Les tests unitaires complètent la matrice précédente avec des traces ciblant la capture non orthogonale et la fenêtre de six symboles imposée par FLoRa. Chaque cas est vérifié via `test_capture_matches_flora_reference` qui rejoue les scénarios documentés ci-dessous.【F:loraflexsim/tests/test_flora_trace_alignment.py†L54-L74】【F:loraflexsim/tests/reference_traces.py†L205-L266】
+
+| Trace | Description | Référence |
+| --- | --- | --- |
+| `sf7_capture` | Capture classique SF7 ↔ SF7 avec un écart de 5 dB. | `loraflexsim/tests/reference_traces.py`【F:loraflexsim/tests/reference_traces.py†L205-L212】 |
+| `sf7_sf9_capture` | Capture non-orthogonale SF7 ↔ SF9 lorsque la matrice `NON_ORTH_DELTA` est satisfaite. | `loraflexsim/tests/reference_traces.py`【F:loraflexsim/tests/reference_traces.py†L243-L251】 |
+| `sf9_sf7_loss` | Collision SF9 ↔ SF7 quand l'interférence est trop forte pour la capture. | `loraflexsim/tests/reference_traces.py`【F:loraflexsim/tests/reference_traces.py†L262-L270】 |
+| `sf8_capture_window_allows_first` | La fenêtre de capture de six symboles laisse passer la première trame malgré une arrivée tardive. | `loraflexsim/tests/reference_traces.py`【F:loraflexsim/tests/reference_traces.py†L284-L291】 |
+| `sf8_capture_window_collision` | Une arrivée avant la fenêtre de six symboles sans marge suffisante conduit à une collision totale. | `loraflexsim/tests/reference_traces.py`【F:loraflexsim/tests/reference_traces.py†L302-L309】 |
+
 ### Correspondance des paramètres FLoRa ↔ LoRaFlexSim
 
 | Paramètres FLoRa | Équivalent LoRaFlexSim | Vérification |
@@ -25,6 +37,7 @@ Une matrice de cas reproductibles couvre désormais les variantes mono/multi-pas
 | `**.LoRaMedium.pathLossType = "LoRaLogNormalShadowing"`, `**.sigma = 3.57` | `environment = "flora"` et shadowing repris depuis `Channel.ENV_PRESETS` | Le preset est appliqué par défaut en mode FLoRa et validé par les scénarios d'intégration alignés sur les traces `.sca`.【F:flora-master/simulations/examples/n100-gw1.ini†L54-L69】【F:loraflexsim/launcher/channel.py†L68-L80】【F:tests/test_flora_sca.py†L18-L39】 |
 | `timeToFirstPacket = timeToNextPacket = exponential(1000s)` | `packet_interval = first_packet_interval = 1000` et tirages exponentiels identiques | Les tests comparent l'intervalle moyen issu de l'INI et celui mesuré dans LoRaFlexSim.【F:flora-master/simulations/examples/n100-gw1.ini†L33-L35】【F:loraflexsim/launcher/simulator.py†L251-L266】【F:tests/test_flora_packet_interval.py†L1-L21】 |
 | `NetworkServer.**.evaluateADRinServer = true`, `adrMethod = "avg"` | `Simulator(..., adr_method="avg")` déclenche la même agrégation SNR | Le scénario `test_flora_sca` utilise `adr_method="avg"` et compare les métriques aux fichiers `.sca` de référence.【F:flora-master/simulations/examples/n100-gw1.ini†L20-L27】【F:tests/test_flora_sca.py†L18-L39】 |
+| `scalar NetworkServerApp.calculatedSNRmargin` (OMNeT++) | Fenêtre ADR de 20 mesures et marge SNR conformes aux journaux FLoRa (modes `avg` et `max`). | `test_adr_metric_matches_flora_log` rejoue les séries du log via `ADR_LOG_REFERENCES`.【F:loraflexsim/tests/test_flora_trace_alignment.py†L194-L247】【F:loraflexsim/tests/reference_traces.py†L366-L401】 |
 | `LoRaReceiver::nonOrthDelta`, fenêtre de capture sur les 6 derniers symboles | `FLORA_NON_ORTH_DELTA` injectée et `capture_window_symbols=6` dès que FLoRa est activé (mode, PHY ou courbes) | La matrice est propagée par `Simulator`/`MultiChannel` et validée par les tests de configuration FLoRa.【F:loraflexsim/launcher/simulator.py†L392-L470】【F:loraflexsim/launcher/channel.py†L454-L520】【F:tests/test_flora_defaults.py†L1-L11】 |
 
 Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le PDR, le nombre de collisions et le SNR moyen restent dans les tolérances fixées par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】 Les références FLoRa (fichiers `.sca`) sont conservées dans `tests/integration/data/` pour servir de base de comparaison. Un test dédié garantit également que chaque module avancé (duty-cycle, multicanal dynamique, classes B/C mobiles, EXPLoRa, ADR-ML) dispose d'un scénario associé dans la matrice.【F:tests/integration/test_validation_matrix.py†L80-L113】 Enfin, les presets longue portée `--long-range-demo` (dont `very_long_range` pour 15 km) sont vérifiés via `tests/integration/test_long_range_large_area.py` afin de s'assurer que les marges SF12 et les collisions inter-SF restent conformes aux hypothèses FLoRa lorsque les distances dépassent 10 km.【F:tests/integration/test_long_range_large_area.py†L1-L63】【F:loraflexsim/scenarios/long_range.py†L9-L182】
@@ -33,6 +46,8 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 - `pytest tests/integration/test_validation_matrix.py` exécute la matrice pour l'intégration continue.
 - `python scripts/run_validation.py` génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
+- `python scripts/run_rssi_snr_regression.py --output results/rssi_snr_regression.csv` compare les courbes RSSI/SNR (SF7–SF12) avec et sans obstacles aux traces FLoRa.【F:scripts/run_rssi_snr_regression.py†L1-L197】
+- `python scripts/run_per_monte_carlo.py --output results/per_campaign.csv` exécute une campagne Monte-Carlo pour confronter les modèles PER logistique et Croce selon SNR/SF/payload.【F:scripts/run_per_monte_carlo.py†L1-L135】
 - `docs/test_plan.md` récapitule la couverture par module et liste les tests marqués `xfail` pour les fonctionnalités manquantes.
 - `pytest tests/test_rest_api_gap.py tests/test_energy_breakdown_gap.py tests/test_duty_cycle_gap.py` vérifie que les scénarios décrivant les lacunes identifiées restent exécutables avant une livraison.
 
@@ -135,6 +150,7 @@ Cette représentation permet d’identifier rapidement les scénarios qui s’é
 - ✅ Détection des doublons et association passerelle/événement identique à la table de traitement FLoRa.
 - ✅ Gestion des fenêtres RX et des classes A/B/C via un ordonnanceur, comme dans les self-messages OMNeT++.
 - ✅ Implémentation ADR (méthodes max/avg) alignée sur la logique `evaluateADR` (marge SNR et pas de 3 dB).
+- ✅ La fenêtre ADR de 20 mesures (modes `avg`/`max`) reproduit les marges observées dans les journaux FLoRa.【F:loraflexsim/tests/test_flora_trace_alignment.py†L194-L247】【F:loraflexsim/tests/reference_traces.py†L366-L401】
 
 ### Écarts
 #### Bloquant

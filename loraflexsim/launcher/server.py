@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Paramètres ADR (valeurs issues de la spécification LoRaWAN)
 REQUIRED_SNR = {7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0}
+ADR_WINDOW_SIZE = 20
 MARGIN_DB = 15.0
 # Typical payload size (in bytes) used when balancing airtime for EXPLoRa-AT
 EXPLORA_AT_PAYLOAD_SIZE = 20
@@ -516,7 +517,7 @@ class NetworkServer:
         ):
             history = node.gateway_snr_history.setdefault(gateway_id, [])
             history.append(snr)
-            if len(history) > 20:
+            if len(history) > ADR_WINDOW_SIZE:
                 history.pop(0)
 
     def _activate(self, node, gateway=None):
@@ -744,9 +745,9 @@ class NetworkServer:
                 )
 
                 node.snr_history.append(snr_value)
-                if len(node.snr_history) > 20:
+                if len(node.snr_history) > ADR_WINDOW_SIZE:
                     node.snr_history.pop(0)
-                if len(node.snr_history) >= 20:
+                if len(node.snr_history) >= ADR_WINDOW_SIZE:
                     snr_max = max(node.snr_history)
                     required = REQUIRED_SNR.get(node.sf, -20.0)
                     margin = snr_max - required - MARGIN_DB
@@ -823,13 +824,13 @@ class NetworkServer:
                 )
 
                 node.snr_history.append(snr_value)
-                if len(node.snr_history) > 20:
+                if len(node.snr_history) > ADR_WINDOW_SIZE:
                     node.snr_history.pop(0)
-                if len(node.snr_history) < 20:
+                if len(node.snr_history) < ADR_WINDOW_SIZE:
                     return
 
                 if (
-                    getattr(node, "frames_since_last_adr_command", 0) < 20
+                    getattr(node, "frames_since_last_adr_command", 0) < ADR_WINDOW_SIZE
                     and not adr_ack_req
                 ):
                     return
