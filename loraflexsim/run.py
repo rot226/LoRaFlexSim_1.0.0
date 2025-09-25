@@ -3,6 +3,7 @@ import configparser
 import csv
 import math
 import numbers
+import operator
 
 import logging
 import sys
@@ -68,6 +69,20 @@ if not diag_logger.handlers:
 diag_logger.setLevel(logging.INFO)
 
 
+def _ensure_positive_int(name: str, value, minimum: int = 1) -> int:
+    """Return ``value`` as an int after validating its type and range."""
+
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer, not bool")
+    try:
+        ivalue = operator.index(value)
+    except TypeError as exc:
+        raise TypeError(f"{name} must be an integer") from exc
+    if ivalue < minimum:
+        raise ValueError(f"{name} must be >= {minimum}")
+    return ivalue
+
+
 def simulate(
     nodes,
     gateways,
@@ -95,12 +110,9 @@ def simulate(
     et sur les ``gateways`` disponibles et les collisions ne surviennent
     qu'entre nœuds partageant à la fois le même canal **et** la même passerelle.
     """
-    if nodes < 1:
-        raise ValueError("nodes must be >= 1")
-    if gateways < 1:
-        raise ValueError("gateways must be >= 1")
-    if channels < 1:
-        raise ValueError("channels must be >= 1")
+    nodes = _ensure_positive_int("nodes", nodes)
+    gateways = _ensure_positive_int("gateways", gateways)
+    channels = _ensure_positive_int("channels", channels)
 
     # Accept values that behave like floats (e.g. numpy floating types) while
     # still rejecting integers and booleans to remain consistent with the
@@ -119,8 +131,7 @@ def simulate(
         and math.isfinite(first_interval)
     ):
         raise ValueError("first_interval must be positive float")
-    if steps <= 0:
-        raise ValueError("steps must be > 0")
+    steps = _ensure_positive_int("steps", steps)
 
     mode_lower = mode.lower()
     if mode_lower not in {"random", "periodic"}:
