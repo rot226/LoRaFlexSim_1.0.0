@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import csv
+import os
 import statistics
+import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+
+PROFILE_CHOICES = ("full", "ci")
+PROFILE_ENV_VAR = "MNE3SD_PROFILE"
+PROFILE_HELP = (
+    "Execution profile preset. 'full' keeps the publication-grade defaults while "
+    "'ci' minimises the workload for automated smoke tests. The preset can also be "
+    f"supplied through the {PROFILE_ENV_VAR} environment variable."
+)
 
 
 def ensure_directory(path: str | Path) -> Path:
@@ -111,4 +121,34 @@ def summarise_metrics(
                 summary[f"{value_key}_std"] = ""
         summaries.append(summary)
     return summaries
+
+
+def add_execution_profile_argument(parser) -> None:
+    """Attach a shared ``--profile`` option to ``parser``."""
+
+    parser.add_argument(
+        "--profile",
+        choices=PROFILE_CHOICES,
+        default=None,
+        help=PROFILE_HELP,
+    )
+
+
+def resolve_execution_profile(
+    selected: str | None, *, env_var: str = PROFILE_ENV_VAR
+) -> str:
+    """Return the execution profile resolved from CLI and environment input."""
+
+    candidate = selected or os.getenv(env_var)
+    if not candidate:
+        return "full"
+    profile = candidate.strip().lower()
+    if profile in PROFILE_CHOICES:
+        return profile
+    warnings.warn(
+        f"Unknown execution profile '{candidate}', falling back to 'full'.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return "full"
 

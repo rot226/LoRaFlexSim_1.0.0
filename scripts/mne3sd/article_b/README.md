@@ -52,6 +52,16 @@ Plot modules are thin wrappers that aggregate CSV files produced by the scenario
 - `--format`: Output format (`png`, `pdf`, `svg`, ...). The default is `pdf`.
 - `--style`: Optional Matplotlib style sheet applied before rendering (default: `figures/matplotlib-paper.mplstyle` when available).
 
+### Execution profiles
+Scenario launchers honour the shared `--profile` flag and the `MNE3SD_PROFILE`
+environment variable:
+
+- `full` *(default)* – executes the complete scenario grid with the documented
+  research parameters.
+- `ci` – trims node counts, mobility ranges, gateway permutations and Monte
+  Carlo repetitions so that automated smoke tests complete quickly while still
+  producing representative outputs.
+
 ## Directory structure
 
 ```

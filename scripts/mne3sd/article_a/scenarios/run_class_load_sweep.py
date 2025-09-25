@@ -29,11 +29,20 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import Simulator  # noqa: E402
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 
 LOGGER = logging.getLogger("class_load_sweep")
 DEFAULT_INTERVALS = [60.0, 300.0, 900.0]
+CI_INTERVALS = [300.0]
+CI_REPLICATES = 1
+CI_NODES = 20
+CI_PACKETS = 10
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_load_metrics.csv"
 
@@ -138,11 +147,23 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    add_execution_profile_argument(parser)
     args = parser.parse_args()
 
     configure_logging(args.verbose)
 
+    profile = resolve_execution_profile(args.profile)
+    user_supplied_intervals = args.interval is not None or bool(args.interval_list)
     intervals = parse_intervals(args.interval, args.interval_list)
+    if profile == "ci":
+        if user_supplied_intervals:
+            intervals = intervals[:1]
+        else:
+            intervals = CI_INTERVALS.copy()
+
+    replicates = args.replicates if profile != "ci" else CI_REPLICATES
+    num_nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
+    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
 
     classes = ["A", "B", "C"]
     results: list[dict[str, object]] = []
@@ -153,12 +174,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
         for interval_s in intervals:
             replicate_rows: list[dict[str, float | str]] = []
             LOGGER.info("Interval %.1f s", interval_s)
-            for replicate in range(1, args.replicates + 1):
+            for replicate in range(1, replicates + 1):
                 seed = args.seed + replicate - 1
                 sim = Simulator(
-                    num_nodes=args.nodes,
+                    num_nodes=num_nodes,
                     num_gateways=args.gateway,
-                    packets_to_send=args.packets,
+                    packets_to_send=packets,
                     seed=seed,
                     node_class=class_type,
                     packet_interval=interval_s,
@@ -169,10 +190,10 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 metrics = sim.get_metrics()
 
                 energy_per_node = (
-                    metrics.get("energy_nodes_J", 0.0) / args.nodes if args.nodes else 0.0
+                    metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
                 )
                 energy_tx, energy_rx, energy_sleep = compute_energy_breakdown(
-                    metrics, args.nodes
+                    metrics, num_nodes
                 )
                 pdr = float(metrics.get("PDR", 0.0))
                 collisions = int(metrics.get("collisions", 0))

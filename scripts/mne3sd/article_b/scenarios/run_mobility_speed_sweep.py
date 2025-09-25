@@ -35,13 +35,23 @@ sys.path.insert(
 )
 
 from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # noqa: E402
-from scripts.mne3sd.common import summarise_metrics, write_csv
+from scripts.mne3sd.common import (
+    add_execution_profile_argument,
+    resolve_execution_profile,
+    summarise_metrics,
+    write_csv,
+)
 
 DEFAULT_SPEED_PROFILES: list[tuple[str, tuple[float, float]]] = [
     ("pedestrian", (0.5, 1.5)),
     ("urban", (1.5, 3.5)),
     ("vehicular", (5.0, 15.0)),
 ]
+CI_SPEED_PROFILES = [DEFAULT_SPEED_PROFILES[0]]
+CI_RANGE_KM = 5.0
+CI_NODES = 40
+CI_PACKETS = 10
+CI_REPLICATES = 1
 
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_speed_metrics.csv"
@@ -184,10 +194,23 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    add_execution_profile_argument(parser)
     args = parser.parse_args()
 
+    profile = resolve_execution_profile(args.profile)
     speed_profiles = parse_speed_profiles(args.speed_profiles)
-    area_size = args.range_km * 2000.0
+    if profile == "ci":
+        if args.speed_profiles:
+            speed_profiles = speed_profiles[:1]
+        else:
+            speed_profiles = CI_SPEED_PROFILES.copy()
+
+    range_km = args.range_km if profile != "ci" else min(args.range_km, CI_RANGE_KM)
+    area_size = range_km * 2000.0
+
+    nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
+    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
+    replicates = args.replicates if profile != "ci" else CI_REPLICATES
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -201,17 +224,17 @@ def main() -> None:  # noqa: D401 - CLI entry point
         for profile_name, (speed_min, speed_max) in speed_profiles:
             replicate_rows: list[dict[str, float | str]] = []
 
-            for replicate in range(1, args.replicates + 1):
-                seed = args.seed + combination_index * args.replicates + replicate - 1
+            for replicate in range(1, replicates + 1):
+                seed = args.seed + combination_index * replicates + replicate - 1
                 mobility_model = model_factory(
                     area_size,
                     min_speed=speed_min,
                     max_speed=speed_max,
                 )
                 sim = Simulator(
-                    num_nodes=args.nodes,
+                    num_nodes=nodes,
                     num_gateways=1,
-                    packets_to_send=args.packets,
+                    packets_to_send=packets,
                     seed=seed,
                     mobility=True,
                     mobility_model=mobility_model,
@@ -225,7 +248,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
                 metrics = sim.get_metrics()
 
                 energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-                energy_per_node = energy_nodes / args.nodes if args.nodes else 0.0
+                energy_per_node = energy_nodes / nodes if nodes else 0.0
 
                 replicate_rows.append(
                     {
