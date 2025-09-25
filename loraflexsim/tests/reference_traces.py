@@ -26,6 +26,12 @@ DBM_TO_TX_POWER_INDEX = {int(v): k for k, v in TX_POWER_INDEX_TO_DBM.items()}
 REQUIRED_SNR = {7: -7.5, 8: -10.0, 9: -12.5, 10: -15.0, 11: -17.5, 12: -20.0}
 
 
+def _round_half_away_from_zero(value: float) -> int:
+    """Mirror the rounding behaviour of ``std::round`` (half away from zero)."""
+
+    return int(math.copysign(math.floor(abs(value) + 0.5), value))
+
+
 @dataclass(frozen=True)
 class RssiSnrTrace:
     """Reference RSSI/SNR for a simple link budget scenario."""
@@ -108,7 +114,7 @@ def _flora_adr_decision(
 
     required = REQUIRED_SNR.get(initial_sf, -20.0)
     margin = metric - required - margin_db
-    nstep = round(margin / 3.0)
+    nstep = _round_half_away_from_zero(margin / 3.0)
 
     sf = initial_sf
     power_idx = DBM_TO_TX_POWER_INDEX.get(int(round(initial_power_dBm)), 0)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+import math
 
 from typing import TYPE_CHECKING
 from .downlink_scheduler import DownlinkScheduler
@@ -97,6 +98,17 @@ class NetworkServer:
         """Record that a beacon was emitted at ``time``."""
         self.last_beacon_time = time
 
+    def _adr_margin_db(self) -> float:
+        """Return the ADR device margin configured on the server."""
+
+        return getattr(self, "MARGIN_DB", MARGIN_DB)
+
+    @staticmethod
+    def _round_half_away_from_zero(value: float) -> int:
+        """Match ``std::round`` semantics used by FLoRa (half away from zero)."""
+
+        return int(math.copysign(math.floor(abs(value) + 0.5), value))
+
     def assign_explora_sf_groups(self) -> None:
         """Assign nodes to spreading factor groups based on last RSSI."""
         nodes = [n for n in self.nodes if getattr(n, "last_rssi", None) is not None]
@@ -168,7 +180,7 @@ class NetworkServer:
                 snr = node.last_rssi - noise
                 target_sf = sf
                 required = REQUIRED_SNR.get(target_sf, -20.0)
-                margin = snr - required - MARGIN_DB
+                margin = snr - required - self._adr_margin_db()
 
                 p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
                 max_idx = max(TX_POWER_INDEX_TO_DBM.keys())
@@ -182,7 +194,7 @@ class NetworkServer:
                 while margin < 0 and target_sf < 12:
                     target_sf += 1
                     required = REQUIRED_SNR.get(target_sf, -20.0)
-                    margin = snr - required - MARGIN_DB
+                    margin = snr - required - self._adr_margin_db()
 
                 # Reduce power if we have excess margin
                 while margin >= 3.0 and p_idx < max_idx:
@@ -749,8 +761,8 @@ class NetworkServer:
                 if len(node.snr_history) >= 20:
                     snr_max = max(node.snr_history)
                     required = REQUIRED_SNR.get(node.sf, -20.0)
-                    margin = snr_max - required - MARGIN_DB
-                    nstep = round(margin / 3.0)
+                    margin = snr_max - required - self._adr_margin_db()
+                    nstep = self._round_half_away_from_zero(margin / 3.0)
 
                     sf = node.sf
                     p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
@@ -795,7 +807,7 @@ class NetworkServer:
             elif self.adr_method == "adr-lite":
                 optimal_sf = 12
                 for sf in range(7, 13):
-                    required = REQUIRED_SNR.get(sf, -20.0) + MARGIN_DB
+                    required = REQUIRED_SNR.get(sf, -20.0) + self._adr_margin_db()
                     if snr_value >= required:
                         optimal_sf = sf
                         break
@@ -839,8 +851,8 @@ class NetworkServer:
                 else:
                     snr_m = max(node.snr_history)
                 required = REQUIRED_SNR.get(node.sf, -20.0)
-                margin = snr_m - required - MARGIN_DB
-                nstep = round(margin / 3.0)
+                margin = snr_m - required - self._adr_margin_db()
+                nstep = self._round_half_away_from_zero(margin / 3.0)
 
                 sf = node.sf
                 p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
