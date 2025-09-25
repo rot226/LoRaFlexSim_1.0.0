@@ -264,13 +264,22 @@ def _build_simulator_from_params(
         channel.rx_antenna_gain_dB = params.rx_antenna_gain_dB
         channel.cable_loss_dB = params.cable_loss_dB
 
+    # ``packets_per_node`` explicitly allows ``0`` to request an unlimited run,
+    # mirroring :class:`Simulator`'s ``packets_to_send`` parameter.  The previous
+    # implementation used ``packets_per_node or ...`` which accidentally
+    # replaced ``0`` with the default preset value, making it impossible to
+    # disable the packet cap from the helper API.
+    packet_budget = (
+        packets_per_node if packets_per_node is not None else params.packets_per_node
+    )
+
     simulator = Simulator(
         num_nodes=len(distances),
         num_gateways=1,
         area_size=_preset_area_size(params),
         transmission_mode="Periodic",
         packet_interval=params.packet_interval_s,
-        packets_to_send=packets_per_node or params.packets_per_node,
+        packets_to_send=packet_budget,
         mobility=False,
         seed=seed,
         flora_mode=True,
