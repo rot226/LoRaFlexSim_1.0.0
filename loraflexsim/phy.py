@@ -66,12 +66,14 @@ class LoRaPHY:
             except (TypeError, ValueError):
                 params = {}
             if "per_model" in params:
-                per_kwargs["per_model"] = "logistic"
-            per = flora_phy.packet_error_rate(
-                snr,
-                self.node.sf,
-                payload_bytes=payload_size,
-                **per_kwargs,
+                per_model = getattr(channel, "flora_per_model", "logistic")
+                if per_model is not None:
+                    per_kwargs["per_model"] = per_model
+        per = flora_phy.packet_error_rate(
+            snr,
+            self.node.sf,
+            payload_bytes=payload_size,
+            **per_kwargs,
             )
         if per is None:
             per = channel.packet_error_rate(

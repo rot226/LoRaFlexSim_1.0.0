@@ -47,3 +47,34 @@ def test_tx_energy_accounted_once():
     )
     assert node.energy_startup == pytest.approx(expected_startup)
     assert node.energy_preamble == pytest.approx(expected_preamble)
+
+
+def test_downlink_energy_uses_gateway_power():
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        transmission_mode="Periodic",
+        packet_interval=10.0,
+        packets_to_send=0,
+        mobility=False,
+        fixed_sf=7,
+        seed=0,
+        node_class="C",
+    )
+    node = sim.nodes[0]
+    gw = sim.gateways[0]
+    gw.downlink_power_dBm = 20.0
+    sim.network_server.send_downlink(node, b"x")
+    for _ in range(10):
+        if not sim.step():
+            break
+        if gw.energy_tx > 0:
+            break
+    current = gw.profile.get_tx_current(gw.downlink_power_dBm)
+    airtime = node.channel.airtime(node.sf, len(b"x"))
+    expected_tx = current * gw.profile.voltage_v * airtime
+    expected_ramp = current * gw.profile.voltage_v * (
+        gw.profile.ramp_up_s + gw.profile.ramp_down_s
+    )
+    assert gw.energy_tx == pytest.approx(expected_tx)
+    assert gw.energy_ramp == pytest.approx(expected_ramp)

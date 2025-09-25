@@ -396,6 +396,7 @@ class Channel:
         self.impulsive_noise_dB = float(impulsive_noise_dB)
         self.adjacent_interference_dB = float(adjacent_interference_dB)
         self._use_flora_curves = False
+        self.flora_per_model: str | None = "logistic"
         self.tx_current_a = float(tx_current_a)
         self.rx_current_a = float(rx_current_a)
         self.idle_current_a = float(idle_current_a)

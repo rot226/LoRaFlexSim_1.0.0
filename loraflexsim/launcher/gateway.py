@@ -27,6 +27,7 @@ class Gateway:
         orientation_az: float = 0.0,
         orientation_el: float = 0.0,
         energy_profile: EnergyProfile | str | None = None,
+        downlink_power_dBm: float | None = None,
     ):
         """
         Initialise une passerelle LoRa.
@@ -48,6 +49,7 @@ class Gateway:
         self.rx_gain_dB = rx_gain_dB
         self.orientation_az = orientation_az
         self.orientation_el = orientation_el
+        self.downlink_power_dBm = downlink_power_dBm
         if isinstance(energy_profile, str):
             from .energy_profiles import get_profile
 
@@ -72,6 +74,15 @@ class Gateway:
         self.active_by_event: dict[int, tuple[tuple[int, float], dict]] = {}
         # Downlink frames waiting for the corresponding node receive windows
         self.downlink_buffer: dict[int, list] = {}
+
+    def select_downlink_power(self, node=None) -> float:
+        """Return the TX power (dBm) to use for downlinks to ``node``."""
+
+        if self.downlink_power_dBm is not None:
+            return self.downlink_power_dBm
+        if node is not None and getattr(node, "tx_power", None) is not None:
+            return float(node.tx_power)
+        return 14.0
 
     def add_energy(self, energy_joules: float, state: str = "tx") -> None:
         """Ajoute de l'énergie consommée par la passerelle."""

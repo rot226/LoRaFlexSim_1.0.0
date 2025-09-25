@@ -23,6 +23,7 @@ def test_load_yaml_json_syntax(tmp_path: Path) -> None:
     assert first_interval is None
     assert len(gateways) == 2
     assert gateways[1]["x"] == 6000.0
+    assert gateways[0]["tx_power"] is None
     assert len(nodes) == 2
     assert nodes[0]["sf"] == 7
     assert nodes[1]["tx_power"] == 20.0
