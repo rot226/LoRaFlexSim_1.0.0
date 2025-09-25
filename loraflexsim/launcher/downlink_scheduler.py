@@ -21,6 +21,8 @@ class DownlinkScheduler:
         self._counter = 0
         # Track when each gateway becomes free to transmit
         self._gateway_busy: dict[int, float] = {}
+        # Track the last scheduled downlink per gateway to allow re-planning
+        self._last_gateway_entry: dict[int, dict[str, Any]] = {}
         self.link_delay = link_delay
 
     @staticmethod
@@ -89,21 +91,102 @@ class DownlinkScheduler:
             ping_slot_offset,
             last_beacon_time=last_beacon_time,
         )
+        slot_time = t
+        start_time = slot_time + self.link_delay
         busy = self._gateway_busy.get(gateway.id, 0.0)
-        if t < busy:
-            t = busy
-        t += self.link_delay
+        tolerance = 1e-9
+
+        if start_time < busy - tolerance:
+            last = self._last_gateway_entry.get(gateway.id)
+            if (
+                last
+                and priority < last["priority"]
+                and slot_time <= last["slot_time"] + tolerance
+            ):
+                prev_node = last["node"]
+                new_slot = prev_node.next_ping_slot_time(
+                    last["slot_time"] + 1e-6,
+                    last["beacon_interval"],
+                    last["ping_slot_interval"],
+                    last["ping_slot_offset"],
+                    last_beacon_time=last["last_beacon_time"],
+                )
+                new_start = new_slot + self.link_delay
+                self._retime_entry(last["node_id"], last["counter"], new_start)
+                last["slot_time"] = new_slot
+                last["start_time"] = new_start
+                last["end_time"] = new_start + last["duration"]
+                busy = start_time
+                # Gateway is now free at the requested slot for the priority frame
+            else:
+                after = max(busy - self.link_delay, slot_time)
+                slot_time = node.next_ping_slot_time(
+                    after + 1e-6,
+                    beacon_interval,
+                    ping_slot_interval,
+                    ping_slot_offset,
+                    last_beacon_time=last_beacon_time,
+                )
+                start_time = slot_time + self.link_delay
+                busy = self._gateway_busy.get(gateway.id, 0.0)
+
+        while start_time < busy - tolerance:
+            slot_time = node.next_ping_slot_time(
+                busy - self.link_delay + 1e-6,
+                beacon_interval,
+                ping_slot_interval,
+                ping_slot_offset,
+                last_beacon_time=last_beacon_time,
+            )
+            start_time = slot_time + self.link_delay
+            busy = self._gateway_busy.get(gateway.id, 0.0)
+
+        counter = self._counter
         self.schedule(
             node.id,
-            t,
+            start_time,
             frame,
             gateway,
             priority=priority,
             data_rate=dr,
             tx_power=tx_power,
         )
-        self._gateway_busy[gateway.id] = t + duration
-        return t
+
+        entry_end = start_time + duration
+        last_entry = self._last_gateway_entry.get(gateway.id)
+        if (
+            last_entry is None
+            or entry_end >= last_entry["end_time"] - tolerance
+        ):
+            self._last_gateway_entry[gateway.id] = {
+                "slot_time": slot_time,
+                "start_time": start_time,
+                "end_time": entry_end,
+                "duration": duration,
+                "priority": priority,
+                "node": node,
+                "node_id": node.id,
+                "counter": counter,
+                "beacon_interval": beacon_interval,
+                "ping_slot_interval": ping_slot_interval,
+                "ping_slot_offset": ping_slot_offset,
+                "last_beacon_time": last_beacon_time,
+            }
+        self._gateway_busy[gateway.id] = max(
+            entry_end,
+            self._last_gateway_entry.get(gateway.id, {}).get("end_time", entry_end),
+        )
+        return start_time
+
+    def _retime_entry(self, node_id: int, counter: int, new_time: float) -> None:
+        queue = self.queue.get(node_id)
+        if not queue:
+            return
+        for index, (time, priority, cnt, item) in enumerate(queue):
+            if cnt == counter:
+                queue[index] = (new_time, priority, cnt, item)
+                heapq.heapify(queue)
+                break
 
     def schedule_class_c(
         self,

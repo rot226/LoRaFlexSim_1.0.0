@@ -21,6 +21,15 @@ class LoRaWANFrame:
 
 DR_TO_SF = {0: 12, 1: 11, 2: 10, 3: 9, 4: 8, 5: 7}
 SF_TO_DR = {sf: dr for dr, sf in DR_TO_SF.items()}
+# Default RX2 (and ping-slot) data rate per LoRaWAN region
+REGION_DEFAULT_RX2_DR = {
+    "EU868": 3,
+    "US915": 8,
+    "AU915": 8,
+    "AS923": 2,
+    "IN865": 2,
+    "KR920": 0,
+}
 # Transmission power levels (matching the FLoRa reference values)
 TX_POWER_INDEX_TO_DBM = {
     0: 14.0,
@@ -32,6 +41,14 @@ TX_POWER_INDEX_TO_DBM = {
     6: 2.0,
 }
 DBM_TO_TX_POWER_INDEX = {int(v): k for k, v in TX_POWER_INDEX_TO_DBM.items()}
+
+
+def default_downlink_datarate(region: str | None) -> int | None:
+    """Return the default downlink data rate (RX2/ping slot) for ``region``."""
+
+    if region is None:
+        return None
+    return REGION_DEFAULT_RX2_DR.get(region.upper())
 
 
 @dataclass

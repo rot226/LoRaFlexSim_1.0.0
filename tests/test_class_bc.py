@@ -106,11 +106,47 @@ def test_class_b_explicit_rate_and_gateway_congestion():
         data_rate=4,
     )
     assert math.isclose(t1, 2.0)
-    assert math.isclose(t2, t1 + max(duration_first, 0.0))
+    assert math.isclose(t2, t1 + 1.0)
     entry1 = scheduler.pop_ready(node.id, t1)
     assert entry1 and entry1.data_rate == 5 and entry1.tx_power == 10.0
     entry2 = scheduler.pop_ready(node.id, t2)
     assert entry2 and entry2.data_rate == 4 and entry2.tx_power is None
+
+
+def test_class_b_priority_preemption():
+    scheduler = DownlinkScheduler()
+    gw = Gateway(1, 0, 0)
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="B")
+    node.ping_slot_periodicity = 0
+    node.last_beacon_time = 0.0
+    low_frame = b"low"
+    high_frame = b"high"
+    t_low = scheduler.schedule_class_b(
+        node,
+        0.0,
+        low_frame,
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+        priority=0,
+    )
+    assert math.isclose(t_low, 2.0)
+    t_high = scheduler.schedule_class_b(
+        node,
+        0.0,
+        high_frame,
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+        priority=-1,
+    )
+    assert math.isclose(t_high, 2.0)
+    first = scheduler.pop_ready(node.id, t_high)
+    assert first and first.frame == high_frame
+    second = scheduler.pop_ready(node.id, t_high + 1.0)
+    assert second and second.frame == low_frame
 
 
 def test_class_c_multi_gateway_latency_and_metadata():
