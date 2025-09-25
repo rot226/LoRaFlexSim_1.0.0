@@ -1,5 +1,8 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 from collections import defaultdict
+from dataclasses import dataclass
+import math
 
 DEFAULT_TX_CURRENT_MAP_A: dict[float, float] = {
     2.0: 0.02,  # ~20 mA
@@ -37,27 +40,76 @@ class EnergyProfile:
         key = min(self.tx_current_map_a.keys(), key=lambda k: abs(k - power_dBm))
         return self.tx_current_map_a[key]
 
+    def current_for(
+        self, state: str, power_dBm: float | None = None
+    ) -> float:
+        """Return the current drawn when the radio is in ``state``."""
+
+        key = state.lower()
+        if key == "sleep":
+            return self.sleep_current_a
+        if key == "rx":
+            return self.rx_current_a
+        if key == "listen":
+            return (
+                self.listen_current_a
+                if self.listen_current_a > 0.0
+                else self.rx_current_a
+            )
+        if key == "processing":
+            return self.process_current_a
+        if key == "startup":
+            return self.startup_current_a
+        if key == "preamble":
+            return self.preamble_current_a
+        if key == "tx":
+            if power_dBm is None:
+                raise ValueError("power_dBm is required for TX energy computation")
+            return self.get_tx_current(power_dBm)
+        if key == "ramp":
+            # Ramp phases use the TX (or listen) current depending on context.
+            if self.listen_current_a > 0.0:
+                return self.listen_current_a
+            if power_dBm is None:
+                return self.rx_current_a
+            return self.get_tx_current(power_dBm)
+        return 0.0
+
     def energy_for(
         self, state: str, duration_s: float, power_dBm: float | None = None
     ) -> float:
         """Return the energy (J) spent in ``state`` during ``duration_s`` seconds."""
+
         if duration_s <= 0:
             return 0.0
-        if state == "sleep":
-            current = self.sleep_current_a
-        elif state == "rx":
-            current = self.rx_current_a
-        elif state == "listen":
-            current = self.listen_current_a
-        elif state == "processing":
-            current = self.process_current_a
-        elif state == "tx":
-            if power_dBm is None:
-                raise ValueError("power_dBm is required for TX energy computation")
-            current = self.get_tx_current(power_dBm)
-        else:
-            current = 0.0
+        current = self.current_for(state, power_dBm)
         return current * self.voltage_v * duration_s
+
+    def enforce_energy(
+        self,
+        state: str,
+        duration_s: float,
+        energy_joules: float,
+        power_dBm: float | None = None,
+        *,
+        rel_tol: float = 1e-9,
+        abs_tol: float = 1e-12,
+    ) -> float:
+        """
+        Ensure that the provided ``energy_joules`` matches ``E = V·I·t``.
+
+        The method returns the corrected energy value.  When ``duration_s`` is
+        non-positive the original value is returned unchanged.
+        """
+
+        if duration_s <= 0:
+            return energy_joules
+        expected = self.energy_for(state, duration_s, power_dBm)
+        if expected == 0.0:
+            return 0.0 if math.isclose(energy_joules, 0.0, abs_tol=abs_tol) else energy_joules
+        if math.isclose(energy_joules, expected, rel_tol=rel_tol, abs_tol=abs_tol):
+            return energy_joules
+        return expected
 
 
 class EnergyAccumulator:
