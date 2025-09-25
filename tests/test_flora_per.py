@@ -1,6 +1,11 @@
 import math
 
+import random
+
 from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.flora_phy import FloraPHY
+from loraflexsim.loranode import Node
+from loraflexsim.phy import LoRaPHY
 
 
 def test_per_matches_croce_curve():
@@ -34,3 +39,18 @@ def test_per_uses_flora_ber_model():
     expected = max(per_bit, per_sym)
     per = ch.packet_error_rate(snr, sf, payload_bytes=20, ber_model="flora")
     assert math.isclose(per, expected, rel_tol=1e-9)
+
+
+def test_flora_per_none_mode_disables_losses():
+    ch = Channel(phy_model="flora_full", use_flora_curves=True, shadowing_std=0.0)
+    ch.flora_phy = FloraPHY(ch, loss_model=ch.flora_loss_model)
+    ch.flora_per_model = "none"
+    src = Node(1, 0.0, 0.0, 7, 14, channel=ch)
+    dst = Node(2, 10.0, 0.0, 7, 14, channel=ch)
+    phy = LoRaPHY(src)
+    rng = random.Random(0)
+    successes = []
+    for _ in range(5):
+        _, _, _, ok = phy.transmit(dst, 10, rng=rng)
+        successes.append(ok)
+    assert all(successes)

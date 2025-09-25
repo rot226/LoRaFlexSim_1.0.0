@@ -55,6 +55,7 @@ def load_config(
             gateways.append({
                 "x": float(gw.get("x", 0)),
                 "y": float(gw.get("y", 0)),
+                "tx_power": float(gw["tx_power"]) if "tx_power" in gw else None,
             })
         for nd in data.get("nodes", []):
             nodes.append({
@@ -76,6 +77,7 @@ def load_config(
             gateways.append({
                 "x": float(parts[0]),
                 "y": float(parts[1]),
+                "tx_power": float(parts[2]) if len(parts) > 2 else None,
             })
 
     if cp.has_section("nodes"):

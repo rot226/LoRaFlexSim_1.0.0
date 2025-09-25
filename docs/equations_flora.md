@@ -151,7 +151,7 @@ canal de base que pour les variantes OMNeT++ et avancées
 ## Taux d'erreur paquet (PER)
 
 La fonction `FloraPHY.packet_error_rate` accepte un paramètre `per_model`
-permettant de basculer entre deux approximations :
+permettant de basculer entre plusieurs approximations :
 
 - ``"logistic"`` — approximation historique de FLoRa :
 
@@ -174,8 +174,11 @@ permettant de basculer entre deux approximations :
   per = max(per_bit, per_sym)
   ```
 
-  Cette formule suit l'approximation de Croce *et al.* pour un paquet de
-  ``payload_bytes`` octets【F:loraflexsim/launcher/flora_phy.py†L154-L161】.
+-  Cette formule suit l'approximation de Croce *et al.* pour un paquet de
+-  ``payload_bytes`` octets【F:loraflexsim/launcher/flora_phy.py†L154-L161】.
+
+- ``"none"`` — désactive les pertes aléatoires liées au PER et renvoie
+  systématiquement 0【F:loraflexsim/launcher/flora_phy.py†L149-L161】.
 
 ## Calcul de l'airtime
 

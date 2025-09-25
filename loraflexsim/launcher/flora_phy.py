@@ -147,6 +147,8 @@ class FloraPHY:
             ``"croce"`` to rely on BER/SER expressions from Croce et al.
         """
 
+        if per_model == "none":
+            return 0.0
         if per_model == "logistic":
             th = self.SNR_THRESHOLDS[sf]
             per = 1.0 / (1.0 + math.exp(2 * (snr - (th + 2))))

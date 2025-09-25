@@ -59,11 +59,81 @@ logger = logging.getLogger(__name__)
 diag_logger = logging.getLogger("diagnostics")
 
 
+class _PowerTimeline:
+    """Track start/end times of interfering transmissions in linear power."""
+
+    def __init__(self) -> None:
+        self._entries: dict[int, tuple[float, float, float]] = {}
+
+    def add(self, event_id: int, start: float, end: float, power_mw: float) -> None:
+        if end <= start:
+            return
+        self._entries[event_id] = (start, end, power_mw)
+
+    def remove(self, event_id: int) -> None:
+        self._entries.pop(event_id, None)
+
+    def prune(self, time: float) -> None:
+        finished = [eid for eid, (_, end, _) in self._entries.items() if end <= time]
+        for eid in finished:
+            self._entries.pop(eid, None)
+
+    def is_empty(self) -> bool:
+        return not self._entries
+
+    def average_power(
+        self, start: float, end: float, base_power: float = 0.0
+    ) -> float:
+        if end <= start:
+            return base_power
+        events: dict[float, float] = {}
+        if base_power != 0.0:
+            events[start] = events.get(start, 0.0) + base_power
+            events[end] = events.get(end, 0.0) - base_power
+        for s, e, p in self._entries.values():
+            overlap_start = max(start, s)
+            overlap_end = min(end, e)
+            if overlap_end <= overlap_start:
+                continue
+            events[overlap_start] = events.get(overlap_start, 0.0) + p
+            events[overlap_end] = events.get(overlap_end, 0.0) - p
+        if not events:
+            return base_power
+        energy = 0.0
+        level = 0.0
+        last_time: float | None = None
+        for t in sorted(events):
+            if last_time is not None and t > last_time:
+                energy += level * (t - last_time)
+            level += events[t]
+            last_time = t
+        duration = end - start
+        if duration <= 0.0:
+            return base_power
+        return energy / duration
+
+    def power_changes(
+        self, start: float, end: float, base_power: float = 0.0
+    ) -> dict[float, float]:
+        events: dict[float, float] = {}
+        if base_power != 0.0:
+            events[start] = events.get(start, 0.0) + base_power
+            events[end] = events.get(end, 0.0) - base_power
+        for s, e, p in self._entries.values():
+            overlap_start = max(start, s)
+            overlap_end = min(end, e)
+            if overlap_end <= overlap_start:
+                continue
+            events[overlap_start] = events.get(overlap_start, 0.0) + p
+            events[overlap_end] = events.get(overlap_end, 0.0) - p
+        return dict(sorted(events.items()))
+
+
 class _TxManager:
     """Track ongoing transmissions per gateway and frequency."""
 
     def __init__(self) -> None:
-        self.active: dict[tuple[int, float], list[dict]] = {}
+        self.active: dict[tuple[int, float], _PowerTimeline] = {}
 
     def add(
         self,
@@ -72,40 +142,54 @@ class _TxManager:
         rssi_dBm: float,
         end_time: float,
         event_id: int,
+        *,
+        start_time: float,
     ) -> None:
         key = (gateway_id, frequency)
-        self.active.setdefault(key, []).append(
-            {"rssi": rssi_dBm, "end": end_time, "id": event_id}
-        )
+        timeline = self.active.setdefault(key, _PowerTimeline())
+        timeline.add(event_id, start_time, end_time, 10 ** (rssi_dBm / 10.0))
 
-    def total_power(
+    def average_power(
         self,
         gateway_id: int,
         frequency: float,
         current_time: float,
+        end_time: float,
         *,
         base_noise_mW: float = 0.0,
     ) -> float:
         key = (gateway_id, frequency)
-        transmissions = self.active.get(key)
-        total = base_noise_mW
-        if not transmissions:
-            return total
-        remaining = []
-        for t in transmissions:
-            if t["end"] > current_time:
-                total += 10 ** (t["rssi"] / 10.0)
-                remaining.append(t)
-        if remaining:
-            self.active[key] = remaining
-        else:
+        timeline = self.active.get(key)
+        if timeline is None:
+            return base_noise_mW
+        timeline.prune(current_time)
+        if timeline.is_empty():
             self.active.pop(key, None)
-        return total
+            return base_noise_mW
+        return timeline.average_power(current_time, end_time, base_noise_mW)
+
+    def power_changes(
+        self,
+        gateway_id: int,
+        frequency: float,
+        start: float,
+        end: float,
+        *,
+        base_noise_mW: float = 0.0,
+    ) -> dict[float, float]:
+        key = (gateway_id, frequency)
+        timeline = self.active.get(key)
+        if timeline is None:
+            if base_noise_mW == 0.0:
+                return {}
+            return {start: base_noise_mW, end: -base_noise_mW}
+        return timeline.power_changes(start, end, base_noise_mW)
 
     def remove(self, event_id: int) -> None:
         for key in list(self.active.keys()):
-            self.active[key] = [t for t in self.active[key] if t["id"] != event_id]
-            if not self.active[key]:
+            timeline = self.active[key]
+            timeline.remove(event_id)
+            if timeline.is_empty():
                 self.active.pop(key, None)
 
 
@@ -551,13 +635,18 @@ class Simulator:
             if cfg_gateways and idx < len(cfg_gateways):
                 gw_x = cfg_gateways[idx]["x"]
                 gw_y = cfg_gateways[idx]["y"]
+                gw_power = cfg_gateways[idx].get("tx_power")
             elif self.num_gateways == 1:
                 gw_x = area_size / 2.0
                 gw_y = area_size / 2.0
+                gw_power = None
             else:
                 gw_x = self.pos_rng.random() * area_size
                 gw_y = self.pos_rng.random() * area_size
-            self.gateways.append(Gateway(gw_id, gw_x, gw_y))
+                gw_power = None
+            self.gateways.append(
+                Gateway(gw_id, gw_x, gw_y, downlink_power_dBm=gw_power)
+            )
 
         # Générer les nœuds aléatoirement dans l'aire et assigner un SF/power initiaux
         self.nodes = []
@@ -951,19 +1040,27 @@ class Simulator:
                 noise_dBm = node.channel.last_noise_dBm
                 noise_lin = 10 ** (noise_dBm / 10.0)
                 freq_hz = getattr(node.channel, "last_freq_hz", node.channel.frequency_hz)
-                total_power = self._tx_manager.total_power(
+                avg_noise = self._tx_manager.average_power(
                     gw.id,
                     freq_hz,
                     time,
+                    end_time,
                     base_noise_mW=noise_lin,
                 )
-                if total_power > noise_lin:
-                    snr -= 10 * math.log10(total_power / noise_lin)
+                if avg_noise <= 0.0:
+                    avg_noise = noise_lin
+                signal_lin = 10 ** (rssi / 10.0)
+                snr = 10 * math.log10(signal_lin / avg_noise)
                 rssi += getattr(gw, "rx_gain_dB", 0.0)
                 snr += getattr(gw, "rx_gain_dB", 0.0)
                 # Enregistrer la transmission pour l'interférence future
                 self._tx_manager.add(
-                    gw.id, freq_hz, rssi, end_time, event_id
+                    gw.id,
+                    freq_hz,
+                    rssi,
+                    end_time,
+                    event_id,
+                    start_time=time,
                 )
                 if not self.pure_poisson_mode:
                     if rssi < node.channel.detection_threshold_dBm:
@@ -1241,7 +1338,7 @@ class Simulator:
                     except Exception:
                         pass
                 duration_dl = node.channel.airtime(node.sf, payload_len)
-                tx_power_dl = node.tx_power
+                tx_power_dl = gw.select_downlink_power(node)
                 current_gw = gw.profile.get_tx_current(tx_power_dl)
                 energy_tx = current_gw * gw.profile.voltage_v * duration_dl
                 ramp = current_gw * gw.profile.voltage_v * (
@@ -1289,7 +1386,7 @@ class Simulator:
                         getattr(node, "orientation_el", 0.0),
                     )
                 rssi, snr = node.channel.compute_rssi(
-                    node.tx_power,
+                    tx_power_dl,
                     distance,
                     node.sf,
                     **kwargs,
@@ -1398,7 +1495,7 @@ class Simulator:
 
                     sf = DR_TO_SF.get(node.ping_slot_dr, node.sf)
                 duration_dl = node.channel.airtime(sf, payload_len)
-                tx_power_dl = node.tx_power
+                tx_power_dl = gw.select_downlink_power(node)
                 current_gw = gw.profile.get_tx_current(tx_power_dl)
                 energy_tx = current_gw * gw.profile.voltage_v * duration_dl
                 ramp = current_gw * gw.profile.voltage_v * (
