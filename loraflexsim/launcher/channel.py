@@ -7,6 +7,7 @@ import numpy as np
 
 from .obstacle_loss import ObstacleLoss
 from .omnet_model import OmnetModel
+from .propagation_cache import PropagationCache
 
 
 def path_loss_hata_okumura(distance: float, k1: float, k2: float) -> float:
@@ -198,6 +199,7 @@ class Channel:
         flora_noise_path: str | os.PathLike | None = None,
         obstacle_map: str | os.PathLike | None = None,
         obstacle_loss: ObstacleLoss | None = None,
+        propagation_cache: PropagationCache | None = None,
         *,
         processing_gain: bool = False,
         bandwidth: float = 125e3,
@@ -419,6 +421,7 @@ class Channel:
             self.obstacle_loss = ObstacleLoss.from_file(obstacle_map)
         else:
             self.obstacle_loss = None
+        self.propagation_cache = propagation_cache
         self.omnet = OmnetModel(
             fine_fading_std,
             fading_correlation,
@@ -595,12 +598,8 @@ class Channel:
         self.last_noise_dBm = noise
         return noise
 
-    def path_loss(self, distance: float) -> float:
-        """Calcule la perte de parcours (en dB) pour une distance donnée (m)."""
-        if self.omnet_phy:
-            return self.omnet_phy.path_loss(distance)
-        if distance <= 0:
-            return 0.0
+    def _path_loss_uncached(self, distance: float) -> float:
+        """Internal helper implementing the deterministic loss model."""
         if self.flora_loss_model == "hata":
             loss = path_loss_hata_okumura(distance, self.hata_k1, self.hata_k2)
         elif self.flora_loss_model == "oulu":
@@ -617,6 +616,30 @@ class Channel:
                 d / self.reference_distance
             )
         return loss + self.system_loss_dB
+
+    def path_loss(self, distance: float) -> float:
+        """Calcule la perte de parcours (en dB) pour une distance donnée (m)."""
+        if self.omnet_phy:
+            return self.omnet_phy.path_loss(distance)
+        if distance <= 0:
+            return 0.0
+        if self.propagation_cache is not None:
+            return self.propagation_cache.get(
+                distance, lambda: self._path_loss_uncached(distance)
+            )
+        return self._path_loss_uncached(distance)
+
+    def enable_propagation_cache(
+        self,
+        *,
+        resolution: float = 1.0,
+        max_entries: int | None = 10_000,
+    ) -> None:
+        """Enable an internal cache for deterministic propagation quantities."""
+
+        self.propagation_cache = PropagationCache(
+            resolution=resolution, max_entries=max_entries
+        )
 
     def compute_rssi(
         self,

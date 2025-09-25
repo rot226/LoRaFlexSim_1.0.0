@@ -1008,6 +1008,29 @@ Le fichier [docs/extension_guide.md](docs/extension_guide.md) détaille comment
 ajouter des options au tableau de bord et intégrer vos propres modules. Ce guide
 vise à faciliter les contributions extérieures.
 
+## Accélérations pour les runs exploratoires
+
+- `python -m loraflexsim.run --fast` réduit automatiquement la durée simulée et
+  le nombre de nœuds (avec un minimum de 600 s) afin de valider rapidement une
+  configuration. L'option `--sample-size` accepte en complément une fraction de
+  durée pour tronquer explicitement un run.
+- Le script `scripts/run_all_fast.sh` enchaîne plusieurs scénarios
+  représentatifs en mode rapide et constitue une vérification de fumée avant
+  des campagnes lourdes.
+- `scripts/profile_simulation.py` encapsule `cProfile` :
+
+  ```bash
+  python scripts/profile_simulation.py --output stats.prof -- --nodes 200 --steps 86400 --fast
+  ```
+
+  Un résumé cumulé est affiché en console et le fichier `stats.prof` peut être
+  exploré avec `snakeviz` ou `pstats`.
+- Le canal LoRa possède désormais un cache optionnel (`Channel.enable_propagation_cache`)
+  pour réutiliser les pertes de propagation entre paires immobiles.
+- `scripts/simulation_analysis_utils.py` propose `export_lightweight_trace` et
+  `cache_metrics_ready` afin de produire des CSV/Parquet allégés ainsi que des
+  métriques agrégées prêtes pour les scripts de traçage.
+
 ## Améliorations possibles
 
 Les points suivants ont été intégrés à LoRaFlexSim :

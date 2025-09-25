@@ -1,17 +1,60 @@
 import argparse
 import configparser
 import csv
-import numbers
 import math
+import numbers
 
-from traffic.exponential import sample_interval
-from traffic.rng_manager import RngManager
 import logging
 import sys
 from pathlib import Path
 
+try:
+    import numpy as _np  # type: ignore
+
+    _REAL_NUMPY = getattr(_np, "__name__", "") == "numpy"
+except Exception:  # pragma: no cover - gracefully degrade when numpy missing
+    _np = None
+    _REAL_NUMPY = False
+
+from traffic.exponential import sample_interval
+from traffic.rng_manager import RngManager
+
 from .launcher.non_orth_delta import load_non_orth_delta
 PAYLOAD_SIZE = 20  # octets simulés par paquet
+_FAST_STEP_RATIO = 0.1
+
+
+def apply_speed_settings(
+    nodes: int,
+    steps: int,
+    *,
+    fast: bool = False,
+    sample_size: float | None = None,
+    min_fast_steps: int = 600,
+) -> tuple[int, int]:
+    """Return adjusted ``(nodes, steps)`` for quick simulation passes.
+
+    When ``fast`` is enabled only a fraction of the original steps are simulated
+    (10 % by default, but never more than ``min_fast_steps``) and the number of
+    nodes is halved to keep contention patterns while reducing runtime.  The
+    ``sample_size`` option accepts a fraction between 0 and 1 to explicitly
+    trim the simulated duration.  Invalid ``sample_size`` values raise a
+    :class:`ValueError` to mirror ``argparse``'s validation.
+    """
+
+    if steps <= 0:
+        raise ValueError("steps must be > 0")
+    if nodes <= 0:
+        raise ValueError("nodes must be > 0")
+    if sample_size is not None:
+        if not (0.0 < sample_size <= 1.0):
+            raise ValueError("sample_size must be within (0, 1]")
+        steps = max(1, int(math.ceil(steps * sample_size)))
+    if fast:
+        fast_steps = max(1, int(math.ceil(steps * _FAST_STEP_RATIO)))
+        steps = min(steps, max(min_fast_steps, fast_steps))
+        nodes = max(1, int(math.ceil(nodes * 0.5)))
+    return nodes, steps
 
 # Configuration du logger pour afficher les informations
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -110,13 +153,21 @@ def simulate(
 
     # Génération des instants d'émission pour chaque nœud et attribution d'un canal
     send_times = {node: [] for node in range(nodes)}
-    node_channels = {node: node % channels for node in range(nodes)}
-    node_gateways = {node: node % max(1, gateways) for node in range(nodes)}
+    if _REAL_NUMPY:
+        node_channels = _np.mod(_np.arange(nodes, dtype=_np.int32), channels)
+        node_gateways = _np.mod(_np.arange(nodes, dtype=_np.int32), max(1, gateways))
+        node_sf = _np.empty(nodes, dtype=_np.int16)
+    else:
+        node_channels = [node % channels for node in range(nodes)]
+        node_gateways = [node % max(1, gateways) for node in range(nodes)]
+        node_sf = [0] * nodes
     # Random spreading factor for each node to allow cross-SF interference
-    node_sf = {
-        node: 7 + rng_manager.get_stream("sf", node).integers(0, 6)
-        for node in range(nodes)
-    }
+    for node in range(nodes):
+        sf_value = 7 + rng_manager.get_stream("sf", node).integers(0, 6)
+        if _REAL_NUMPY:
+            node_sf[node] = sf_value
+        else:
+            node_sf[node] = sf_value
     # Le paramètre phy_model est présent pour conserver une interface similaire
     # au tableau de bord mais n'influence pas ce modèle simplifié.
 
@@ -147,18 +198,88 @@ def simulate(
 
     for t in sorted(events.keys()):
         nodes_ready = events[t]
-        for gw in range(max(1, gateways)):
-            gw_nodes = [n for n in nodes_ready if node_gateways[n] == gw]
-            for ch in range(channels):
-                nodes_on_ch = [n for n in gw_nodes if node_channels[n] == ch]
-                nb_tx = len(nodes_on_ch)
-                if nb_tx == 0:
-                    continue
-                total_transmissions += nb_tx
-                energy_consumed += nb_tx * (tx_energy + rx_energy)
-                if nb_tx == 1:
-                    n = nodes_on_ch[0]
-                    rng = rng_manager.get_stream("traffic", n)
+        if not nodes_ready:
+            continue
+        if _REAL_NUMPY:
+            nodes_ready_arr = _np.asarray(nodes_ready, dtype=_np.int32)
+            gw_ids = node_gateways[nodes_ready_arr]
+            ch_ids = node_channels[nodes_ready_arr]
+            pairs = _np.stack((gw_ids, ch_ids), axis=1)
+            unique_pairs, inverse = _np.unique(pairs, axis=0, return_inverse=True)
+            grouped_nodes = [
+                nodes_ready_arr[inverse == idx].tolist()
+                for idx in range(len(unique_pairs))
+            ]
+            pair_iterable = zip(unique_pairs.tolist(), grouped_nodes)
+        else:
+            pair_map: dict[tuple[int, int], list[int]] = {}
+            for n in nodes_ready:
+                key = (node_gateways[n], node_channels[n])
+                pair_map.setdefault(key, []).append(n)
+            pair_iterable = pair_map.items()
+
+        for (gw, ch), nodes_on_ch in pair_iterable:
+            nb_tx = len(nodes_on_ch)
+            if nb_tx == 0:
+                continue
+            total_transmissions += nb_tx
+            energy_consumed += nb_tx * (tx_energy + rx_energy)
+            if nb_tx == 1:
+                n = nodes_on_ch[0]
+                rng = rng_manager.get_stream("traffic", n)
+                success = True
+                if (
+                    fine_fading_std > 0.0
+                    and rng.normal(0.0, fine_fading_std) < -3.0
+                ):
+                    success = False
+                if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
+                    success = False
+                if success:
+                    delivered += 1
+                    delays.append(0)
+                    if debug_rx:
+                        logging.debug(f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu")
+                else:
+                    collisions += 1
+                    if debug_rx:
+                        logging.debug(
+                            f"t={t:.3f} Node {n} GW {gw} CH {ch} rejeté (bruit)"
+                        )
+                        diag_logger.info(
+                            f"t={t:.3f} gw={gw} ch={ch} collision=[{n}] cause=noise"
+                        )
+            else:
+                # Several nodes transmit simultaneously on the same
+                # frequency. Resolve the collision using the provided
+                # non-orthogonal capture matrix when available.
+                rssi_map = {
+                    n: rng_manager.get_stream("rssi", n).normal(-100.0, 3.0)
+                    for n in nodes_on_ch
+                }
+                winners: list[int] = []
+                if non_orth_delta is None:
+                    rng = rng_manager.get_stream("traffic", nodes_on_ch[0])
+                    winners = [rng.choice(nodes_on_ch)]
+                else:
+                    for n in nodes_on_ch:
+                        rssi_n = rssi_map[n]
+                        sf_n = int(node_sf[n])
+                        captured = True
+                        for m in nodes_on_ch:
+                            if m == n:
+                                continue
+                            diff = rssi_n - rssi_map[m]
+                            th = non_orth_delta[sf_n - 7][int(node_sf[m]) - 7]
+                            if diff < th:
+                                captured = False
+                                break
+                        if captured:
+                            winners.append(n)
+
+                if len(winners) == 1:
+                    winner = winners[0]
+                    rng = rng_manager.get_stream("traffic", winner)
                     success = True
                     if (
                         fine_fading_std > 0.0
@@ -168,96 +289,35 @@ def simulate(
                     if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
                         success = False
                     if success:
+                        collisions += nb_tx - 1
                         delivered += 1
                         delays.append(0)
                         if debug_rx:
-                            logging.debug(f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu")
-                    else:
-                        collisions += 1
-                        if debug_rx:
-                            logging.debug(
-                                f"t={t:.3f} Node {n} GW {gw} CH {ch} rejeté (bruit)"
-                            )
-                            diag_logger.info(
-                                f"t={t:.3f} gw={gw} ch={ch} collision=[{n}] cause=noise"
-                            )
-                else:
-                    # Several nodes transmit simultaneously on the same
-                    # frequency. Resolve the collision using the provided
-                    # non-orthogonal capture matrix when available.
-                    rssi_map = {
-                        n: rng_manager.get_stream("rssi", n).normal(-100.0, 3.0)
-                        for n in nodes_on_ch
-                    }
-                    winners: list[int] = []
-                    if non_orth_delta is None:
-                        rng = rng_manager.get_stream("traffic", nodes_on_ch[0])
-                        winners = [rng.choice(nodes_on_ch)]
-                    else:
-                        for n in nodes_on_ch:
-                            rssi_n = rssi_map[n]
-                            sf_n = node_sf[n]
-                            captured = True
-                            for m in nodes_on_ch:
-                                if m == n:
-                                    continue
-                                diff = rssi_n - rssi_map[m]
-                                th = non_orth_delta[sf_n - 7][node_sf[m] - 7]
-                                if diff < th:
-                                    captured = False
-                                    break
-                            if captured:
-                                winners.append(n)
-
-                    if len(winners) == 1:
-                        winner = winners[0]
-                        rng = rng_manager.get_stream("traffic", winner)
-                        success = True
-                        if (
-                            fine_fading_std > 0.0
-                            and rng.normal(0.0, fine_fading_std) < -3.0
-                        ):
-                            success = False
-                        if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
-                            success = False
-                        if success:
-                            collisions += nb_tx - 1
-                            delivered += 1
-                            delays.append(0)
-                            if debug_rx:
-                                for n in nodes_on_ch:
-                                    if n == winner:
-                                        logging.debug(
-                                            f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu après collision"
-                                        )
-                                    else:
-                                        logging.debug(
-                                            f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
-                                        )
-                            diag_logger.info(
-                                f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} winner={winner}"
-                            )
-                        else:
-                            collisions += nb_tx
-                            if debug_rx:
-                                for n in nodes_on_ch:
+                            for n in nodes_on_ch:
+                                if n == winner:
                                     logging.debug(
-                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision/bruit)"
+                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu après collision"
                                     )
-                            diag_logger.info(
-                                f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} none"
-                            )
+                                else:
+                                    logging.debug(
+                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
+                                    )
+                        diag_logger.info(
+                            f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} winner={winner}"
+                        )
                     else:
-                        # No unique winner -> all packets lost
                         collisions += nb_tx
                         if debug_rx:
                             for n in nodes_on_ch:
                                 logging.debug(
-                                    f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
+                                    f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision/bruit)"
                                 )
                         diag_logger.info(
                             f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} none"
                         )
+                else:
+                    # No unique winner -> all packets lost
+                    collisions += nb_tx
 
     # Calcul des métriques finales
     pdr = (delivered / total_transmissions) * 100 if total_transmissions > 0 else 0
@@ -325,6 +385,20 @@ def main(argv=None):
         type=int,
         default=100,
         help="Nombre de pas de temps de la simulation",
+    )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help=(
+            "Exécute un run tronqué (10 % des pas de temps, au moins 600 s) et "
+            "réduit le nombre de nœuds de moitié pour les tests rapides."
+        ),
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=float,
+        default=None,
+        help="Fraction (0-1] de la durée totale à simuler pour un run exploratoire",
     )
     parser.add_argument(
         "--runs",
@@ -448,6 +522,26 @@ def main(argv=None):
 
     if args.runs < 1:
         parser.error("--runs must be >= 1")
+
+    try:
+        adjusted_nodes, adjusted_steps = apply_speed_settings(
+            args.nodes,
+            args.steps,
+            fast=args.fast,
+            sample_size=args.sample_size,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    if (adjusted_nodes, adjusted_steps) != (args.nodes, args.steps):
+        logging.info(
+            "Mode rapide activé : %d nœuds -> %d, durée %d s -> %d s",
+            args.nodes,
+            adjusted_nodes,
+            args.steps,
+            adjusted_steps,
+        )
+    args.nodes = adjusted_nodes
+    args.steps = adjusted_steps
 
     def _report_long_range(
         simulator,

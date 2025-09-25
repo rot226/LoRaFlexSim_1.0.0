@@ -8,9 +8,13 @@ statistics.
 
 from __future__ import annotations
 
+import csv
+import gzip
+import json
 import math
 import os
-from typing import Iterable, Sequence
+from pathlib import Path
+from typing import Iterable, Iterator, Sequence
 
 import numpy as np
 
@@ -82,11 +86,25 @@ def compute_latency_stats(latencies: Sequence[float]) -> dict[str, float]:
 
     if not latencies:
         return {"mean": 0.0, "p95": 0.0}
-    arr = np.asarray(latencies, dtype=float)
-    return {
-        "mean": float(arr.mean()),
-        "p95": float(np.percentile(arr, 95)),
-    }
+    try:
+        arr = np.asarray(latencies, dtype=float)
+    except TypeError:  # numpy_stub compatibility
+        arr = np.asarray(latencies)
+    if hasattr(arr, "mean"):
+        mean_val = float(arr.mean())
+    else:
+        seq = list(arr)
+        mean_val = float(sum(seq) / len(seq))
+    try:
+        p95_val = float(np.percentile(arr, 95))
+    except AttributeError:
+        seq = sorted(float(x) for x in arr)
+        if not seq:
+            p95_val = 0.0
+        else:
+            idx = max(0, min(len(seq) - 1, int(math.ceil(0.95 * len(seq)) - 1)))
+            p95_val = seq[idx]
+    return {"mean": mean_val, "p95": p95_val}
 
 
 def place_gateways_in_grid(gateways: Sequence[object], area_size: float) -> None:
@@ -102,3 +120,88 @@ def place_gateways_in_grid(gateways: Sequence[object], area_size: float) -> None
         col = index % side
         setattr(gateway, "x", spacing * (col + 1))
         setattr(gateway, "y", spacing * (row + 1))
+
+
+def _select_columns(records: Iterable[dict], columns: Sequence[str]) -> Iterator[dict]:
+    for record in records:
+        yield {col: record.get(col) for col in columns}
+
+
+def export_lightweight_trace(
+    records: Sequence[dict],
+    destination: str | os.PathLike,
+    columns: Sequence[str],
+    *,
+    fmt: str | None = None,
+    compression: str | None = None,
+) -> Path:
+    """Export ``records`` keeping only ``columns`` in a compact format."""
+
+    path = Path(destination)
+    suffixes = [s.lower() for s in path.suffixes]
+    if fmt is None:
+        if suffixes and suffixes[-1] == ".parquet":
+            fmt = "parquet"
+        else:
+            fmt = "csv"
+    fmt = fmt.lower()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    selected = list(_select_columns(records, columns))
+
+    if fmt == "csv":
+        use_gzip = False
+        if compression is None:
+            use_gzip = suffixes[-1:] in ([".gz"], [".gzip"])
+        elif compression.lower() in {"gz", "gzip"}:
+            use_gzip = True
+        opener = gzip.open if use_gzip else open
+        mode = "wt"
+        with opener(path, mode, newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(columns))
+            writer.writeheader()
+            for row in selected:
+                writer.writerow(row)
+        return path
+    if fmt == "parquet":
+        try:
+            import pandas as pd  # type: ignore
+        except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("pandas is required for Parquet export") from exc
+        frame = pd.DataFrame(selected, columns=list(columns))
+        frame.to_parquet(path, index=False, compression=compression)
+        return path
+    raise ValueError(f"Unsupported trace format: {fmt}")
+
+
+def cache_metrics_ready(
+    events: Sequence[dict],
+    nodes: Sequence[object],
+    destination: str | os.PathLike,
+) -> Path:
+    """Persist pre-aggregated metrics for quick plotting scripts."""
+
+    latencies = collect_latencies(events)
+    stats = compute_latency_stats(latencies)
+    attempts, deliveries, energies = summarise_nodes(nodes)
+    pdr = (deliveries / attempts) if attempts else 0.0
+    if energies:
+        try:
+            mean_energy = float(np.mean(energies))
+        except AttributeError:
+            mean_energy = float(sum(energies) / len(energies))
+    else:
+        mean_energy = 0.0
+    payload = {
+        "attempts": attempts,
+        "deliveries": deliveries,
+        "pdr": pdr,
+        "latency_mean": stats["mean"],
+        "latency_p95": stats["p95"],
+        "mean_energy": mean_energy,
+        "node_count": len(nodes),
+    }
+    path = Path(destination)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+    return path
