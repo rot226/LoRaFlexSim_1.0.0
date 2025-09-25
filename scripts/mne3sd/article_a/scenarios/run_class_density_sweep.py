@@ -19,6 +19,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Iterable
 
 # Allow running the script from a clone without installation
@@ -66,10 +67,55 @@ def parse_nodes_list(values: Iterable[str] | None) -> list[int]:
     return nodes
 
 
-def configure_logging(verbose: bool) -> None:
+def configure_logging(verbose: bool, quiet: bool) -> None:
     """Initialise logging with or without debug output."""
-    level = logging.DEBUG if verbose else logging.INFO
+    if quiet:
+        level = logging.WARNING
+    else:
+        level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(level=level, format="%(message)s")
+
+
+def run_single_simulation(task: dict[str, object]) -> dict[str, object]:
+    """Execute a single simulation and return the collected metrics."""
+
+    class_type = str(task["class"])
+    num_nodes = int(task["nodes"])
+    seed = int(task["seed"])
+    replicate = int(task["replicate"])
+
+    sim = Simulator(
+        num_nodes=num_nodes,
+        num_gateways=int(task["gateways"]),
+        packets_to_send=int(task["packets"]),
+        seed=seed,
+        node_class=class_type,
+        packet_interval=float(task["interval"]),
+        adr_node=bool(task["adr_node"]),
+        adr_server=bool(task["adr_server"]),
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    delivered = int(metrics.get("delivered", 0))
+    collisions = int(metrics.get("collisions", 0))
+    total_packets = delivered + collisions
+    collision_rate = collisions / total_packets if total_packets else 0.0
+    energy_per_node = (
+        metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
+    )
+    pdr = float(metrics.get("PDR", 0.0))
+    avg_delay = float(metrics.get("avg_delay_s", 0.0))
+
+    return {
+        "class": class_type,
+        "nodes": num_nodes,
+        "replicate": replicate,
+        "pdr": pdr,
+        "collision_rate": collision_rate,
+        "avg_delay_s": avg_delay,
+        "energy_per_node_J": energy_per_node,
+    }
 
 
 def main() -> None:  # noqa: D401 - CLI entry point
@@ -121,9 +167,20 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress logs (only warnings and the summary are printed)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel worker processes to use",
+    )
     args = parser.parse_args()
 
-    configure_logging(args.verbose)
+    configure_logging(args.verbose, args.quiet)
 
     node_counts = parse_nodes_list(args.nodes_list)
 
@@ -131,74 +188,55 @@ def main() -> None:  # noqa: D401 - CLI entry point
     results: list[dict[str, object]] = []
     summary_rows: list[dict[str, float | str | int]] = []
 
+    tasks: list[dict[str, object]] = []
+
     for class_index, class_type in enumerate(classes):
         LOGGER.info("=== Simulating class %s ===", class_type)
         for node_index, num_nodes in enumerate(node_counts):
-            replicate_rows: list[dict[str, float]] = []
             LOGGER.info("Node count %d", num_nodes)
             for replicate in range(1, args.replicates + 1):
                 combination_offset = (
                     (class_index * len(node_counts) + node_index) * args.replicates
                 )
                 seed = args.seed + combination_offset + replicate - 1
-                sim = Simulator(
-                    num_nodes=num_nodes,
-                    num_gateways=args.gateway,
-                    packets_to_send=args.packets,
-                    seed=seed,
-                    node_class=class_type,
-                    packet_interval=args.interval,
-                    adr_node=args.adr_node,
-                    adr_server=args.adr_server,
-                )
-                sim.run()
-                metrics = sim.get_metrics()
-
-                delivered = int(metrics.get("delivered", 0))
-                collisions = int(metrics.get("collisions", 0))
-                total_packets = delivered + collisions
-                collision_rate = (
-                    collisions / total_packets if total_packets else 0.0
-                )
-                energy_per_node = (
-                    metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
-                )
-                pdr = float(metrics.get("PDR", 0.0))
-                avg_delay = float(metrics.get("avg_delay_s", 0.0))
-
-                LOGGER.info(
-                    "Replicate %d -> PDR %.3f, collisions %d, collision rate %.3f, "
-                    "avg delay %.3fs, energy/node %.4f J",
-                    replicate,
-                    pdr,
-                    collisions,
-                    collision_rate,
-                    avg_delay,
-                    energy_per_node,
-                )
-
-                replicate_rows.append(
-                    {
-                        "replicate": replicate,
-                        "pdr": pdr,
-                        "collision_rate": collision_rate,
-                        "avg_delay": avg_delay,
-                        "energy_per_node": energy_per_node,
-                    }
-                )
-
-            for row in replicate_rows:
-                results.append(
+                tasks.append(
                     {
                         "class": class_type,
                         "nodes": num_nodes,
-                        "replicate": row["replicate"],
-                        "pdr": row["pdr"],
-                        "collision_rate": row["collision_rate"],
-                        "avg_delay_s": row["avg_delay"],
-                        "energy_per_node_J": row["energy_per_node"],
+                        "replicate": replicate,
+                        "seed": seed,
+                        "gateways": args.gateway,
+                        "packets": args.packets,
+                        "interval": args.interval,
+                        "adr_node": args.adr_node,
+                        "adr_server": args.adr_server,
                     }
                 )
+
+    if args.workers > 1:
+        LOGGER.info("Using %d worker processes", args.workers)
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            future_to_task = {executor.submit(run_single_simulation, task): task for task in tasks}
+            for future in as_completed(future_to_task):
+                result = future.result()
+                results.append(result)
+    else:
+        for task in tasks:
+            result = run_single_simulation(task)
+            results.append(result)
+            LOGGER.info(
+                "Class %s, nodes %d replicate %d -> PDR %.3f, collisions %.3f, "
+                "avg delay %.3fs, energy/node %.4f J",
+                task["class"],
+                task["nodes"],
+                task["replicate"],
+                result["pdr"],
+                result["collision_rate"],
+                result["avg_delay_s"],
+                result["energy_per_node_J"],
+            )
+
+    results.sort(key=lambda row: (row["class"], row["nodes"], row["replicate"]))
 
     fieldnames = [
         "class",
