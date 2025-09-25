@@ -987,7 +987,7 @@ class Simulator:
             current_a = node.profile.get_tx_current(tx_power)
             energy_J = current_a * node.profile.voltage_v * duration
             prev = node.energy_consumed
-            node.add_energy(energy_J, "tx")
+            node.add_energy(energy_J, "tx", duration_s=duration)
             delta = node.energy_consumed - prev
             self.total_energy_J += delta
             self.energy_nodes_J += delta
@@ -1309,9 +1309,16 @@ class Simulator:
                     * node.profile.voltage_v
                     * node.profile.rx_window_duration
                 )
-                self.energy_nodes_J += energy_J
-                self.total_energy_J += energy_J
-                node.add_energy(energy_J, state)
+                prev_energy = node.energy_consumed
+                node.add_energy(
+                    energy_J,
+                    state,
+                    duration_s=node.profile.rx_window_duration,
+                )
+                delta = node.energy_consumed - prev_energy
+                if delta > 0.0:
+                    self.energy_nodes_J += delta
+                    self.total_energy_J += delta
             if not node.alive:
                 return True
             node.last_state_time = time + (
@@ -1363,9 +1370,16 @@ class Simulator:
                     extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
                     if extra_time > 0.0:
                         extra_energy = current * node.profile.voltage_v * extra_time
-                        self.energy_nodes_J += extra_energy
-                        self.total_energy_J += extra_energy
-                        node.add_energy(extra_energy, state)
+                        prev_energy = node.energy_consumed
+                        node.add_energy(
+                            extra_energy,
+                            state,
+                            duration_s=extra_time,
+                        )
+                        delta = node.energy_consumed - prev_energy
+                        if delta > 0.0:
+                            self.energy_nodes_J += delta
+                            self.total_energy_J += delta
                 distance = node.distance_to(gw)
                 kwargs = {
                     "freq_offset_hz": 0.0,
@@ -1466,9 +1480,16 @@ class Simulator:
                 * node.profile.voltage_v
                 * node.profile.rx_window_duration
             )
-            self.energy_nodes_J += energy_J
-            self.total_energy_J += energy_J
-            node.add_energy(energy_J, state)
+            prev_energy = node.energy_consumed
+            node.add_energy(
+                energy_J,
+                state,
+                duration_s=node.profile.rx_window_duration,
+            )
+            delta = node.energy_consumed - prev_energy
+            if delta > 0.0:
+                self.energy_nodes_J += delta
+                self.total_energy_J += delta
             if not node.alive:
                 return True
             node.last_state_time = time + node.profile.rx_window_duration
@@ -1519,9 +1540,16 @@ class Simulator:
                 extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
                 if extra_time > 0.0:
                     extra_energy = current * node.profile.voltage_v * extra_time
-                    self.energy_nodes_J += extra_energy
-                    self.total_energy_J += extra_energy
-                    node.add_energy(extra_energy, state)
+                    prev_energy = node.energy_consumed
+                    node.add_energy(
+                        extra_energy,
+                        state,
+                        duration_s=extra_time,
+                    )
+                    delta = node.energy_consumed - prev_energy
+                    if delta > 0.0:
+                        self.energy_nodes_J += delta
+                        self.total_energy_J += delta
                 distance = node.distance_to(gw)
                 kwargs = {"freq_offset_hz": 0.0, "sync_offset_s": 0.0}
                 if hasattr(node.channel, "_obstacle_loss"):

@@ -893,6 +893,7 @@ python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --allowed 50,1 200,3
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios n50_c1_static n50_c1_mobile
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
+python scripts/benchmark_energy_classes.py --nodes 20 --packets 5 --output results/energy_classes.csv
 ```
 
 `plot_sf_distribution.py` generates `sf_distribution` in PNG, JPG and EPS,
@@ -906,6 +907,11 @@ scenarios.
 `plot_mobility_latency_energy.py` creates `pdr_vs_scenario.svg`,
 `avg_delay_vs_scenario.svg` and `avg_energy_per_node_vs_scenario.svg` as
 vector graphics.
+
+`benchmark_energy_classes.py` exécute trois simulations dédiées (classes A,
+B et C) et exporte un fichier CSV contenant la consommation totale et la
+décomposition TX/RX/veille, ce qui permet de comparer rapidement les profils
+énergétiques.
 
 ## Calcul de l'airtime
 

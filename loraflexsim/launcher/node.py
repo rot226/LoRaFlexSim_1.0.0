@@ -390,76 +390,66 @@ class Node:
         if len(self.ack_history) > 32:
             self.ack_history.pop(0)
 
-    def add_energy(self, energy_joules: float, state: str = "tx"):
+    def add_energy(
+        self,
+        energy_joules: float,
+        state: str = "tx",
+        *,
+        duration_s: float | None = None,
+    ) -> None:
         """Ajoute de l'énergie consommée pour un état donné."""
+        state_key = state.lower()
+        base_energy = float(energy_joules)
+        if duration_s is not None:
+            power = self.tx_power if state_key in {"tx", "ramp"} else None
+            base_energy = self.profile.enforce_energy(
+                state_key, duration_s, base_energy, power_dBm=power
+            )
+
         ramp = 0.0
         startup = 0.0
         preamble = 0.0
-        if state == "tx":
-            current = self.profile.get_tx_current(self.tx_power)
-            ramp = (
-                current
-                * self.profile.voltage_v
-                * (self.profile.ramp_up_s + self.profile.ramp_down_s)
+        if state_key == "tx":
+            ramp_duration = self.profile.ramp_up_s + self.profile.ramp_down_s
+            if ramp_duration > 0.0:
+                ramp = self.profile.energy_for("ramp", ramp_duration, self.tx_power)
+            startup = self.profile.energy_for(
+                "startup", self.profile.startup_time_s
             )
-            if (
-                self.profile.startup_current_a > 0.0
-                and self.profile.startup_time_s > 0.0
-            ):
-                startup = (
-                    self.profile.startup_current_a
-                    * self.profile.voltage_v
-                    * self.profile.startup_time_s
-                )
-            if (
-                self.profile.preamble_current_a > 0.0
-                and self.profile.preamble_time_s > 0.0
-            ):
-                preamble = (
-                    self.profile.preamble_current_a
-                    * self.profile.voltage_v
-                    * self.profile.preamble_time_s
-                )
-        elif state == "rx" and (
-            self.profile.ramp_up_s > 0.0 or self.profile.ramp_down_s > 0.0
-        ):
-            current = (
-                self.profile.listen_current_a
-                if self.profile.listen_current_a > 0.0
-                else self.profile.rx_current_a
+            preamble = self.profile.energy_for(
+                "preamble", self.profile.preamble_time_s
             )
-            ramp = (
-                current
-                * self.profile.voltage_v
-                * (self.profile.ramp_up_s + self.profile.ramp_down_s)
-            )
+        elif state_key == "rx":
+            ramp_duration = self.profile.ramp_up_s + self.profile.ramp_down_s
+            if ramp_duration > 0.0:
+                ramp = self.profile.energy_for("ramp", ramp_duration)
 
-        total = energy_joules + ramp + startup + preamble
-        if state == "tx":
-            self.energy.add("tx", energy_joules)
-            self.energy_tx += energy_joules
+        total = base_energy + ramp + startup + preamble
+        if state_key == "tx":
+            self.energy.add("tx", base_energy)
+            self.energy_tx += base_energy
             if startup > 0.0:
                 self.energy.add("startup", startup)
                 self.energy_startup += startup
             if preamble > 0.0:
                 self.energy.add("preamble", preamble)
                 self.energy_preamble += preamble
-        elif state == "rx":
-            self.energy.add("rx", energy_joules)
-            self.energy_rx += energy_joules
-        elif state == "sleep":
+        elif state_key == "rx":
+            self.energy.add("rx", base_energy)
+            self.energy_rx += base_energy
+        elif state_key == "sleep":
             self.energy.add("sleep", total)
             self.energy_sleep += total
-        elif state == "processing":
+        elif state_key == "processing":
             self.energy.add("processing", total)
             self.energy_processing += total
-        elif state == "startup":
+        elif state_key == "startup":
             self.energy.add("startup", total)
             self.energy_startup += total
-        elif state == "listen":
-            self.energy.add("listen", energy_joules)
-            self.energy_listen += energy_joules
-        elif state == "preamble":
+        elif state_key == "listen":
+            self.energy.add("listen", base_energy)
+            self.energy_listen += base_energy
+        elif state_key == "preamble":
             self.energy.add("preamble", total)
             self.energy_preamble += total
         if ramp > 0.0:
@@ -492,8 +482,11 @@ class Node:
                 return
             spent = min(dt, remaining)
             self.add_energy(
-                self.profile.startup_current_a * self.profile.voltage_v * spent,
+                self.profile.startup_current_a
+                * self.profile.voltage_v
+                * spent,
                 "startup",
+                duration_s=spent,
             )
             self.last_state_time += spent
             if current_time > self.last_state_time:
@@ -502,30 +495,18 @@ class Node:
             return
 
         if self.state == "sleep":
-            self.add_energy(
-                self.profile.sleep_current_a * self.profile.voltage_v * dt,
-                "sleep",
-            )
+            energy = self.profile.energy_for("sleep", dt)
+            self.add_energy(energy, "sleep", duration_s=dt)
         elif self.state == "rx":
-            current = (
-                self.profile.listen_current_a
-                if self.profile.listen_current_a > 0.0
-                else self.profile.rx_current_a
-            )
             state_name = "listen" if self.profile.listen_current_a > 0.0 else "rx"
-            self.add_energy(current * self.profile.voltage_v * dt, state_name)
+            energy = self.profile.energy_for(state_name, dt)
+            self.add_energy(energy, state_name, duration_s=dt)
         elif self.state == "processing":
-            self.add_energy(
-                self.profile.process_current_a * self.profile.voltage_v * dt,
-                "processing",
-            )
+            energy = self.profile.energy_for("processing", dt)
+            self.add_energy(energy, "processing", duration_s=dt)
         elif self.state == "listen":
-            current = (
-                self.profile.listen_current_a
-                if self.profile.listen_current_a > 0.0
-                else self.profile.rx_current_a
-            )
-            self.add_energy(current * self.profile.voltage_v * dt, "listen")
+            energy = self.profile.energy_for("listen", dt)
+            self.add_energy(energy, "listen", duration_s=dt)
         self.last_state_time = current_time
 
     def ensure_poisson_arrivals(
