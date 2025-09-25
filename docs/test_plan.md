@@ -69,6 +69,24 @@ Ce document dresse la cartographie des modules critiques et des scénarios `pyte
   pytest tests/integration/test_validation_matrix.py
   ```
 
+## Vérification globale
+
+### Matrice `.sca`
+
+- La suite `tests/integration/test_validation_matrix.py` compare chaque scénario aux traces FLoRa et s'assure que la PDR, les collisions inter-SF et le SNR respectent les tolérances de capture définies dans les fichiers `.sca`.【F:tests/integration/test_validation_matrix.py†L13-L61】
+- Les tests unitaires de capture reproduisent fidèlement la matrice non orthogonale FLoRa et garantissent l'absence de régressions sur le filtrage fréquentiel entre spreading factors.【F:tests/test_flora_capture.py†L13-L55】
+- Les scénarios longue portée vérifient que les presets 10–15 km conservent les marges SF12 attendues et que les réceptions réussies restent au-dessus des sensibilités de référence.【F:tests/integration/test_long_range_large_area.py†L1-L83】
+
+### Scénarios multi-gateway
+
+- Le cas `multi_gw_multichannel_server_adr` valide le consensus de réception et la cohérence des fenêtres descendantes en confrontant les échantillons SNIR des passerelles aux références FLoRa.【F:loraflexsim/validation/__init__.py†L116-L169】【F:tests/integration/test_validation_matrix.py†L63-L83】
+
+### Tâches QA
+
+- **Revue code/test :** la configuration `pytest.ini` balise les suites lentes et d'intégration qui doivent être exécutées ou justifiées lors des revues.【F:pytest.ini†L1-L5】
+- **Analyse régression :** le script `scripts/run_validation.py` génère un rapport CSV consolidé et échoue si l'une des métriques PDR/collisions/SNR diverge de la référence, facilitant l'identification rapide des dérives.【F:scripts/run_validation.py†L1-L79】
+- **Correction de bugs :** les tests de capture FLoRa servent de garde-fous pour valider les correctifs sur la pile PHY et éviter les régressions sur l'effet capture ou le filtrage inter-canaux.【F:tests/test_flora_capture.py†L13-L55】
+
 ## Statut de la matrice de validation
 
 - Les tests `pytest` d'intégration sont pour l'instant marqués `skipped` tant que `pandas` n'est pas installé, il faut donc s'appuyer sur `python scripts/run_validation.py` pour suivre les dérives numériques.
