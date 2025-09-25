@@ -27,7 +27,7 @@ def test_explora_sf_assigns_uniform_groups():
     for node in sim.nodes:
         dl = gw.pop_downlink(node.id)
         if dl is not None:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
     sf_counts = {sf: 0 for sf in range(7, 13)}
     for node in sim.nodes:
         sf_counts[node.sf] += 1
@@ -74,7 +74,7 @@ def test_explora_sf_updates_with_new_node():
     for node in sim.nodes:
         dl = gw.pop_downlink(node.id)
         if dl is not None:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
     sf_counts = {sf: 0 for sf in range(7, 13)}
     for node in sim.nodes:
         sf_counts[node.sf] += 1
@@ -94,7 +94,7 @@ def test_explora_sf_updates_with_new_node():
     for node in sim.nodes:
         dl = gw.pop_downlink(node.id)
         if dl is not None:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
     sf_counts = {sf: 0 for sf in range(7, 13)}
     for node in sim.nodes:
         sf_counts[node.sf] += 1

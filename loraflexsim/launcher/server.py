@@ -458,13 +458,23 @@ class NetworkServer:
         tolerance = 0.1
         nxt = self.scheduler.next_time(node_id)
         if nxt is not None and nxt < current_time - tolerance:
-            frame, gw = self.scheduler.pop_ready(node_id, nxt)
-            if frame and gw:
-                gw.buffer_downlink(node_id, frame)
-        frame, gw = self.scheduler.pop_ready(node_id, current_time)
-        while frame and gw:
-            gw.buffer_downlink(node_id, frame)
-            frame, gw = self.scheduler.pop_ready(node_id, current_time)
+            entry = self.scheduler.pop_ready(node_id, nxt)
+            if entry:
+                entry.gateway.buffer_downlink(
+                    node_id,
+                    entry.frame,
+                    data_rate=entry.data_rate,
+                    tx_power=entry.tx_power,
+                )
+        entry = self.scheduler.pop_ready(node_id, current_time)
+        while entry:
+            entry.gateway.buffer_downlink(
+                node_id,
+                entry.frame,
+                data_rate=entry.data_rate,
+                tx_power=entry.tx_power,
+            )
+            entry = self.scheduler.pop_ready(node_id, current_time)
 
     def _apply_best_gateway_selection(
         self,

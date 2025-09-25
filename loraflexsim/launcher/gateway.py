@@ -444,9 +444,18 @@ class Gateway:
     # ------------------------------------------------------------------
     # Downlink handling
     # ------------------------------------------------------------------
-    def buffer_downlink(self, node_id: int, frame):
+    def buffer_downlink(
+        self,
+        node_id: int,
+        frame,
+        *,
+        data_rate: int | None = None,
+        tx_power: float | None = None,
+    ) -> None:
         """Store a downlink frame for a node until its RX window."""
-        self.downlink_buffer.setdefault(node_id, []).append(frame)
+        self.downlink_buffer.setdefault(node_id, []).append(
+            (frame, data_rate, tx_power)
+        )
 
     def pop_downlink(self, node_id: int):
         """Retrieve the next pending downlink for a node."""

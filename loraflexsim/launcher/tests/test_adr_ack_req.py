@@ -18,7 +18,7 @@ def test_adr_ack_req_resets_counter():
         server.receive(i, node.id, gw.id, -40, frame)
         dl = gw.pop_downlink(node.id)
         if dl:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
 
     assert node.adr_ack_cnt == 0
     assert node.sf == 7
