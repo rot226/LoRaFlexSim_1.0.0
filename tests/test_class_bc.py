@@ -2,7 +2,7 @@ import math
 
 from loraflexsim.launcher.downlink_scheduler import DownlinkScheduler
 from loraflexsim.launcher.gateway import Gateway
-from loraflexsim.launcher.lorawan import next_beacon_time
+from loraflexsim.launcher.lorawan import DR_TO_SF, next_beacon_time
 from loraflexsim.launcher.node import Node
 
 
@@ -11,8 +11,8 @@ def test_schedule_beacon_time():
     gw = Gateway(1, 0, 0)
     t = scheduler.schedule_beacon(62.0, b"x", gw, beacon_interval=10.0)
     assert math.isclose(t, 70.0)
-    frame, gw2 = scheduler.pop_ready(0, 70.0)
-    assert frame == b"x" and gw2 is gw
+    entry = scheduler.pop_ready(0, 70.0)
+    assert entry and entry.frame == b"x" and entry.gateway is gw
 
 
 def test_schedule_class_b():
@@ -29,8 +29,8 @@ def test_schedule_class_b():
         ping_slot_offset=2.0,
     )
     assert math.isclose(t, 2.0)
-    frame, gw2 = scheduler.pop_ready(node.id, t)
-    assert frame == b"a" and gw2 is gw
+    entry = scheduler.pop_ready(node.id, t)
+    assert entry and entry.frame == b"a" and entry.gateway is gw
 
 
 def test_schedule_class_c_delay():
@@ -39,8 +39,8 @@ def test_schedule_class_c_delay():
     node = Node(1, 0.0, 0.0, 7, 14, class_type="C")
     t = scheduler.schedule_class_c(node, 1.0, b"b", gw)
     assert math.isclose(t, 1.5)
-    frame, gw2 = scheduler.pop_ready(node.id, t)
-    assert frame == b"b" and gw2 is gw
+    entry = scheduler.pop_ready(node.id, t)
+    assert entry and entry.frame == b"b" and entry.gateway is gw
 
 
 def test_next_beacon_time_with_drift():
@@ -70,3 +70,68 @@ def test_node_clock_offset_after_missed_beacons():
     assert math.isclose(node.clock_offset, interval * drift, rel_tol=1e-9)
     node.miss_beacon(interval)
     assert math.isclose(node.clock_offset, 2 * interval * drift, rel_tol=1e-9)
+    node.miss_beacon(interval)
+    # Drift is capped after two consecutive losses
+    assert math.isclose(node.clock_offset, 2 * interval * drift, rel_tol=1e-9)
+
+
+def test_class_b_explicit_rate_and_gateway_congestion():
+    scheduler = DownlinkScheduler()
+    gw = Gateway(1, 0, 0)
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="B")
+    node.ping_slot_periodicity = 0
+    node.last_beacon_time = 0.0
+    frame_a = b"a"
+    frame_b = b"bb"
+    t1 = scheduler.schedule_class_b(
+        node,
+        0.0,
+        frame_a,
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+        data_rate=5,
+        tx_power=10.0,
+    )
+    duration_first = node.channel.airtime(DR_TO_SF[5], len(frame_a))
+    t2 = scheduler.schedule_class_b(
+        node,
+        0.0,
+        frame_b,
+        gw,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+        data_rate=4,
+    )
+    assert math.isclose(t1, 2.0)
+    assert math.isclose(t2, t1 + max(duration_first, 0.0))
+    entry1 = scheduler.pop_ready(node.id, t1)
+    assert entry1 and entry1.data_rate == 5 and entry1.tx_power == 10.0
+    entry2 = scheduler.pop_ready(node.id, t2)
+    assert entry2 and entry2.data_rate == 4 and entry2.tx_power is None
+
+
+def test_class_c_multi_gateway_latency_and_metadata():
+    scheduler = DownlinkScheduler(link_delay=0.2)
+    gw1 = Gateway(1, 0, 0)
+    gw2 = Gateway(2, 0, 0)
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="C")
+    frame1 = b"ping"
+    frame2 = b"pong"
+    t1 = scheduler.schedule_class_c(node, 1.0, frame1, gw1, data_rate=4, tx_power=6.0)
+    t2 = scheduler.schedule_class_c(node, 1.0, frame2, gw2, data_rate=3, tx_power=12.0)
+    assert math.isclose(t1, 1.2)
+    assert math.isclose(t2, 1.2)
+    entry1 = scheduler.pop_ready(node.id, t1)
+    assert entry1 and entry1.gateway is gw1 and entry1.data_rate == 4 and entry1.tx_power == 6.0
+    gw1.buffer_downlink(node.id, entry1.frame, data_rate=entry1.data_rate, tx_power=entry1.tx_power)
+    stored1 = gw1.pop_downlink(node.id)
+    assert stored1 == (frame1, 4, 6.0)
+    next_time = scheduler.next_time(node.id)
+    entry2 = scheduler.pop_ready(node.id, next_time)
+    assert entry2 and entry2.gateway is gw2 and entry2.data_rate == 3 and entry2.tx_power == 12.0
+    gw2.buffer_downlink(node.id, entry2.frame, data_rate=entry2.data_rate, tx_power=entry2.tx_power)
+    stored2 = gw2.pop_downlink(node.id)
+    assert stored2 == (frame2, 3, 12.0)

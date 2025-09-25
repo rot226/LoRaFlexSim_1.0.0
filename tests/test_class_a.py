@@ -14,8 +14,8 @@ def test_schedule_class_a():
     node = Node(1, 0.0, 0.0, 7, 14)
     t = scheduler.schedule_class_a(node, 0.0, 1.0, 2.0, b"a", gw)
     assert math.isclose(t, 1.0)
-    frame, gw2 = scheduler.pop_ready(node.id, t)
-    assert frame == b"a" and gw2 is gw
+    entry = scheduler.pop_ready(node.id, t)
+    assert entry and entry.frame == b"a" and entry.gateway is gw
 
 
 def test_schedule_class_a_after_delay():
@@ -25,8 +25,8 @@ def test_schedule_class_a_after_delay():
     scheduler._gateway_busy[gw.id] = 1.5
     t = scheduler.schedule_class_a(node, 0.0, 1.0, 2.0, b"b", gw)
     assert math.isclose(t, 2.0)
-    frame, gw2 = scheduler.pop_ready(node.id, t)
-    assert frame == b"b" and gw2 is gw
+    entry = scheduler.pop_ready(node.id, t)
+    assert entry and entry.frame == b"b" and entry.gateway is gw
 
 
 def test_downlink_with_server_delays():

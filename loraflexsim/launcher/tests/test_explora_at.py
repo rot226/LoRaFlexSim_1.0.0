@@ -68,7 +68,7 @@ def test_explora_at_uniform_airtime_groups():
     for node in sim.nodes:
         dl = gw.pop_downlink(node.id)
         if dl is not None:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
         counts[node.sf] += 1
     assert counts[7] == 6
     assert counts[8] == 3
@@ -108,7 +108,7 @@ def test_explora_at_airtime_balancing_varied_snr(payload_sizes):
     for node in sim.nodes:
         dl = gw.pop_downlink(node.id)
         if dl is not None:
-            node.handle_downlink(dl)
+            node.handle_downlink(dl[0])
 
     # Actual distribution across SFs
     counts = {sf: 0 for sf in range(7, 13)}

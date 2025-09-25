@@ -1323,9 +1323,10 @@ class Simulator:
                 node.state = "sleep"
             self.network_server.deliver_scheduled(node.id, time)
             for gw in self.gateways:
-                frame = gw.pop_downlink(node.id)
-                if not frame:
+                downlink = gw.pop_downlink(node.id)
+                if not downlink:
                     continue
+                frame, data_rate, tx_power = downlink
                 payload_len = 0
                 if hasattr(frame, "payload"):
                     try:
@@ -1337,8 +1338,15 @@ class Simulator:
                         payload_len = len(frame.to_bytes())
                     except Exception:
                         pass
-                duration_dl = node.channel.airtime(node.sf, payload_len)
-                tx_power_dl = gw.select_downlink_power(node)
+                sf = node.sf
+                if data_rate is not None:
+                    from .lorawan import DR_TO_SF
+
+                    sf = DR_TO_SF.get(data_rate, node.sf)
+                duration_dl = node.channel.airtime(sf, payload_len)
+                tx_power_dl = (
+                    tx_power if tx_power is not None else gw.select_downlink_power(node)
+                )
                 current_gw = gw.profile.get_tx_current(tx_power_dl)
                 energy_tx = current_gw * gw.profile.voltage_v * duration_dl
                 ramp = current_gw * gw.profile.voltage_v * (
@@ -1385,10 +1393,11 @@ class Simulator:
                         getattr(node, "orientation_az", 0.0),
                         getattr(node, "orientation_el", 0.0),
                     )
+                reference_power = tx_power_dl if tx_power_dl is not None else node.tx_power
                 rssi, snr = node.channel.compute_rssi(
-                    tx_power_dl,
+                    reference_power,
                     distance,
-                    node.sf,
+                    sf,
                     **kwargs,
                 )
                 noise_dBm = node.channel.last_noise_dBm
@@ -1397,7 +1406,7 @@ class Simulator:
                         node.downlink_pending = max(0, node.downlink_pending - 1)
                         continue
                     snr_threshold = (
-                        node.channel.sensitivity_dBm.get(node.sf, -float("inf"))
+                        node.channel.sensitivity_dBm.get(sf, -float("inf"))
                         - noise_dBm
                     )
                     if snr >= snr_threshold:
@@ -1431,8 +1440,7 @@ class Simulator:
                 if n.class_type.upper() == "B":
                     received = random.random() >= getattr(n, "beacon_loss_prob", 0.0)
                     if received:
-                        n.last_beacon_time = time
-                        n.clock_offset = 0.0
+                        n.register_beacon(time)
                     else:
                         n.miss_beacon(self.beacon_interval)
                     periodicity = 2 ** (getattr(n, "ping_slot_periodicity", 0) or 0)
@@ -1475,9 +1483,10 @@ class Simulator:
             node.state = "sleep"
             self.network_server.deliver_scheduled(node.id, time)
             for gw in self.gateways:
-                frame = gw.pop_downlink(node.id)
-                if not frame:
+                downlink = gw.pop_downlink(node.id)
+                if not downlink:
                     continue
+                frame, data_rate, tx_power = downlink
                 payload_len = 0
                 if hasattr(frame, "payload"):
                     try:
@@ -1490,12 +1499,15 @@ class Simulator:
                     except Exception:
                         pass
                 sf = node.sf
-                if node.ping_slot_dr is not None:
+                effective_dr = data_rate if data_rate is not None else node.ping_slot_dr
+                if effective_dr is not None:
                     from .lorawan import DR_TO_SF
 
-                    sf = DR_TO_SF.get(node.ping_slot_dr, node.sf)
+                    sf = DR_TO_SF.get(effective_dr, node.sf)
                 duration_dl = node.channel.airtime(sf, payload_len)
-                tx_power_dl = gw.select_downlink_power(node)
+                tx_power_dl = (
+                    tx_power if tx_power is not None else gw.select_downlink_power(node)
+                )
                 current_gw = gw.profile.get_tx_current(tx_power_dl)
                 energy_tx = current_gw * gw.profile.voltage_v * duration_dl
                 ramp = current_gw * gw.profile.voltage_v * (
@@ -1527,8 +1539,11 @@ class Simulator:
                 if hasattr(node.channel, "_obstacle_loss"):
                     kwargs["tx_pos"] = (gw.x, gw.y, getattr(gw, "altitude", 0.0))
                     kwargs["rx_pos"] = (node.x, node.y, getattr(node, "altitude", 0.0))
+                reference_power = (
+                    tx_power_dl if tx_power_dl is not None else node.tx_power
+                )
                 rssi, snr = node.channel.compute_rssi(
-                    node.tx_power,
+                    reference_power,
                     distance,
                     sf,
                     **kwargs,

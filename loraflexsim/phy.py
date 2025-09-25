@@ -69,16 +69,18 @@ class LoRaPHY:
                 per_model = getattr(channel, "flora_per_model", "logistic")
                 if per_model is not None:
                     per_kwargs["per_model"] = per_model
-        per = flora_phy.packet_error_rate(
-            snr,
-            self.node.sf,
-            payload_bytes=payload_size,
-            **per_kwargs,
+            per = flora_phy.packet_error_rate(
+                snr,
+                self.node.sf,
+                payload_bytes=payload_size,
+                **per_kwargs,
             )
-        if per is None:
+        if per is None and hasattr(channel, "packet_error_rate"):
             per = channel.packet_error_rate(
                 snr, self.node.sf, payload_bytes=payload_size
             )
+        if per is None:
+            per = 0.0
         rand = rng.random() if rng is not None else random.random()
         success = per < 1.0 and rand >= per
         return rssi, snr, self.airtime(payload_size), success

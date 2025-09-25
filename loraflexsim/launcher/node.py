@@ -216,6 +216,10 @@ class Node:
         self.last_beacon_time: float = 0.0
         # Cumulative clock offset when beacons are lost (seconds)
         self.clock_offset: float = 0.0
+        # Count of successive beacon losses to cap clock drift
+        self.beacon_loss_streak: int = 0
+        # Maximum number of consecutive losses before resynchronisation
+        self.beacon_resync_loss_limit: int = 2
 
         # ADR state (LoRaWAN specification)
         self.adr = True
@@ -301,7 +305,20 @@ class Node:
 
     def miss_beacon(self, interval: float) -> None:
         """Update internal clock when a beacon is missed."""
+        self.beacon_loss_streak += 1
         self.clock_offset += interval * self.beacon_drift
+        limit = max(self.beacon_resync_loss_limit, 1)
+        max_offset = interval * self.beacon_drift * limit
+        if self.beacon_drift >= 0.0:
+            self.clock_offset = min(self.clock_offset, max_offset)
+        else:
+            self.clock_offset = max(self.clock_offset, -max_offset)
+
+    def register_beacon(self, time: float) -> None:
+        """Record reception of a beacon and reset drift accumulators."""
+        self.last_beacon_time = time
+        self.clock_offset = 0.0
+        self.beacon_loss_streak = 0
 
     def __repr__(self):
         """

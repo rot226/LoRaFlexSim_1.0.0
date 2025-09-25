@@ -95,10 +95,12 @@ def test_adr_standard_alignment_with_flora_trace():
                     rel_tol=0.0,
                     abs_tol=1e-6,
                 )
-                frame, gateway = server.scheduler.pop_ready(
+                entry_ready = server.scheduler.pop_ready(
                     node.id, expected["downlink_time"] + 1e-6
                 )
-                assert frame is not None, "The downlink frame must be ready"
+                assert entry_ready is not None, "The downlink frame must be ready"
+                frame = entry_ready.frame
+                gateway = entry_ready.gateway
                 assert gateway.id == expected["gateway_id"]
 
                 req = LinkADRReq.from_bytes(frame.payload[:5])
