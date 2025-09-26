@@ -255,7 +255,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Return the parsed command line arguments."""
 
     parser = argparse.ArgumentParser(
-        description="Execute all MNE3SD article scenarios and/or plotting scripts.",
+        description=(
+            "Execute all MNE3SD article scenarios and/or plotting scripts. "
+            "Use '--profile fast' for quicker local iterations (recommended on "
+            "Windows 11)."
+        ),
     )
     add_execution_profile_argument(parser)
     parser.add_argument(

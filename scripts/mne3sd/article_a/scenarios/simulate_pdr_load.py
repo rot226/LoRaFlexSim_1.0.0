@@ -50,6 +50,10 @@ CI_INTERVALS = (600.0,)
 CI_MODES = ("random",)
 CI_REPLICATES = 1
 
+FAST_NODE_CAP = 150
+FAST_REPLICATES = 3
+FAST_PACKETS = 15
+
 
 def positive_int(value: str) -> int:
     """Return ``value`` converted to a strictly positive integer."""
@@ -268,6 +272,10 @@ def main() -> None:  # noqa: D401 - CLI entry point
         replicates = min(replicates, CI_REPLICATES)
         nodes = min(nodes, 30)
         packets = min(packets, 10)
+    elif profile == "fast":
+        replicates = min(replicates, FAST_REPLICATES)
+        packets = min(packets, FAST_PACKETS)
+        nodes = min(nodes, FAST_NODE_CAP)
 
     LOGGER.info(
         "Simulating PDR for %d nodes with intervals %s and modes %s",

@@ -24,6 +24,7 @@ Les scripts de `plots/` suivent la même logique :
 Tous les lanceurs de scénarios acceptent l'option commune `--profile` (ou la variable d'environnement `MNE3SD_PROFILE`) pour basculer entre des presets :
 
 - `full` *(valeur par défaut)* – conserve les paramètres de publication décrits dans chaque script.
+- `fast` – limite le nombre de nœuds à 150 et réduit le volume de paquets/répétitions pour accélérer les itérations locales. C'est le réglage conseillé pour des itérations rapides sous Windows 11.
 - `ci` – réduit le nombre de nœuds, de répétitions et l'étendue des paramètres explorés afin d'accélérer les tests automatisés et les vérifications rapides, tout en exerçant l'intégralité de la chaîne.
 
 ## Arborescence et artefacts

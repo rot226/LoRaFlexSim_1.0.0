@@ -75,12 +75,13 @@ def resolve_worker_count(workers: WorkerCount, task_count: int) -> int:
 
 import matplotlib.pyplot as plt
 
-PROFILE_CHOICES = ("full", "ci")
+PROFILE_CHOICES = ("full", "fast", "ci")
 PROFILE_ENV_VAR = "MNE3SD_PROFILE"
 PROFILE_HELP = (
     "Execution profile preset. 'full' keeps the publication-grade defaults while "
-    "'ci' minimises the workload for automated smoke tests. The preset can also be "
-    f"supplied through the {PROFILE_ENV_VAR} environment variable."
+    "'fast' trims simulation sizes for local iteration and 'ci' minimises the "
+    "workload for automated smoke tests. The preset can also be supplied through "
+    f"the {PROFILE_ENV_VAR} environment variable."
 )
 
 
