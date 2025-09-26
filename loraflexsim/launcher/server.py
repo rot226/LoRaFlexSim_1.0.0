@@ -360,6 +360,9 @@ class NetworkServer:
         if at_time is None:
             if node.class_type.upper() == "B":
                 after = self.simulator.current_time if self.simulator else 0.0
+                beacon_reference = getattr(node, "last_beacon_time", None)
+                if beacon_reference is not None:
+                    beacon_reference += getattr(node, "clock_offset", 0.0)
                 self.scheduler.schedule_class_b(
                     node,
                     after,
@@ -368,7 +371,7 @@ class NetworkServer:
                     self.beacon_interval,
                     self.ping_slot_interval,
                     self.ping_slot_offset,
-                    last_beacon_time=getattr(node, "last_beacon_time", None),
+                    last_beacon_time=beacon_reference,
                     priority=priority,
                 )
             elif node.class_type.upper() == "C":

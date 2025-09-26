@@ -4,6 +4,7 @@ from loraflexsim.launcher.downlink_scheduler import DownlinkScheduler
 from loraflexsim.launcher.gateway import Gateway
 from loraflexsim.launcher.lorawan import DR_TO_SF, next_beacon_time
 from loraflexsim.launcher.node import Node
+from loraflexsim.launcher.server import NetworkServer
 
 
 def test_schedule_beacon_time():
@@ -171,3 +172,36 @@ def test_class_c_multi_gateway_latency_and_metadata():
     gw2.buffer_downlink(node.id, entry2.frame, data_rate=entry2.data_rate, tx_power=entry2.tx_power)
     stored2 = gw2.pop_downlink(node.id)
     assert stored2 == (frame2, 3, 12.0)
+
+
+def test_network_server_class_b_uses_node_clock_offset():
+    server = NetworkServer()
+    gateway = Gateway(1, 0, 0)
+    server.gateways = [gateway]
+    server.beacon_interval = 128.0
+    server.ping_slot_interval = 1.0
+    server.ping_slot_offset = 2.0
+
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="B", beacon_drift=30e-6)
+    node.ping_slot_periodicity = 0
+    node.register_beacon(0.0)
+    node.miss_beacon(server.beacon_interval)
+    assert node.clock_offset != 0.0
+
+    after = server.simulator.current_time if server.simulator else 0.0
+    expected_slot = node.next_ping_slot_time(
+        after,
+        server.beacon_interval,
+        server.ping_slot_interval,
+        server.ping_slot_offset,
+    )
+
+    payload = b"offset-test"
+    server.send_downlink(node, payload)
+    scheduled_time = server.scheduler.next_time(node.id)
+
+    assert math.isclose(scheduled_time, expected_slot, rel_tol=1e-9)
+    entry = server.scheduler.pop_ready(node.id, scheduled_time)
+    assert entry and entry.gateway is gateway
+    delivered = entry.frame.payload if hasattr(entry.frame, "payload") else entry.frame
+    assert delivered == payload
