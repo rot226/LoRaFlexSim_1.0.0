@@ -8,8 +8,9 @@ import statistics
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable as TypingIterable, TypeVar
 
 import matplotlib.pyplot as plt
 
@@ -20,6 +21,10 @@ PROFILE_HELP = (
     "'ci' minimises the workload for automated smoke tests. The preset can also be "
     f"supplied through the {PROFILE_ENV_VAR} environment variable."
 )
+
+
+T_Task = TypeVar("T_Task")
+T_Result = TypeVar("T_Result")
 
 
 def ensure_directory(path: str | Path) -> Path:
@@ -144,6 +149,47 @@ def summarise_metrics(
                 summary[f"{value_key}_std"] = ""
         summaries.append(summary)
     return summaries
+
+
+def execute_simulation_tasks(
+    tasks: TypingIterable[T_Task],
+    worker: Callable[[T_Task], T_Result],
+    *,
+    max_workers: int = 1,
+    progress_callback: Callable[[T_Task, T_Result, int], None] | None = None,
+) -> list[T_Result]:
+    """Execute ``worker`` for every task with optional ``ProcessPoolExecutor`` support."""
+
+    task_list = list(tasks)
+    if not task_list:
+        return []
+
+    workers = max(1, int(max_workers))
+    workers = min(workers, len(task_list))
+
+    if workers == 1:
+        results: list[T_Result] = []
+        for index, task in enumerate(task_list):
+            result = worker(task)
+            results.append(result)
+            if progress_callback is not None:
+                progress_callback(task, result, index)
+        return results
+
+    results_buffer: dict[int, T_Result] = {}
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        future_map = {
+            executor.submit(worker, task): (index, task)
+            for index, task in enumerate(task_list)
+        }
+        for future in as_completed(future_map):
+            index, task = future_map[future]
+            result = future.result()
+            results_buffer[index] = result
+            if progress_callback is not None:
+                progress_callback(task, result, index)
+
+    return [results_buffer[index] for index in range(len(task_list))]
 
 
 def add_execution_profile_argument(parser) -> None:

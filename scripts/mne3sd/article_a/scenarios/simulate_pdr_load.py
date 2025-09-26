@@ -25,6 +25,7 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (  # noqa: E402
     add_execution_profile_argument,
+    execute_simulation_tasks,
     resolve_execution_profile,
     summarise_metrics,
     write_csv,
@@ -125,6 +126,61 @@ def configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=level, format="%(message)s")
 
 
+def run_single_configuration(task: dict[str, object]) -> dict[str, object]:
+    """Execute a single load/SF replicate and return the collected metrics."""
+
+    sim = Simulator(
+        num_nodes=int(task["nodes"]),
+        packets_to_send=int(task["packets"]),
+        packet_interval=float(task["interval_s"]),
+        transmission_mode=str(task["mode_capitalized"]),
+        fixed_sf=task["fixed_sf"],
+        adr_node=bool(task["adr_node_effective"]),
+        adr_server=bool(task["adr_server_effective"]),
+        seed=int(task["seed"]),
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    nodes = int(task["nodes"])
+    energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
+    delivered = int(metrics.get("delivered", 0))
+    collisions = int(metrics.get("collisions", 0))
+    pdr = float(metrics.get("PDR", 0.0))
+    avg_delay = float(metrics.get("avg_delay_s", 0.0))
+    throughput = float(metrics.get("throughput_bps", 0.0))
+    pdr_by_sf = metrics.get("pdr_by_sf", {})
+    pdr_by_class = metrics.get("pdr_by_class", {})
+    energy_per_node = energy_nodes / nodes if nodes else 0.0
+
+    row = {
+        "nodes": nodes,
+        "packets": task["packets"],
+        "interval_s": task["interval_s"],
+        "mode": task["mode_label"],
+        "sf_assignment": task["sf_assignment"],
+        "replicate": task["replicate"],
+        "seed": task["seed"],
+        "adr_node": int(task["adr_node_effective"]),
+        "adr_server": int(task["adr_server_effective"]),
+        "offered_load_pps": task["offered_load_pps"],
+        "pdr": pdr,
+        "delivered": delivered,
+        "collisions": collisions,
+        "avg_delay_s": avg_delay,
+        "throughput_bps": throughput,
+        "energy_per_node_J": energy_per_node,
+    }
+
+    for sf in range(7, 13):
+        row[f"pdr_sf{sf}"] = float(pdr_by_sf.get(sf, 0.0))
+
+    for class_type, class_pdr in pdr_by_class.items():
+        row[f"pdr_class_{class_type}"] = float(class_pdr)
+
+    return row
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description="Simulate PDR as a function of traffic load"
@@ -182,6 +238,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel worker processes to use",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -211,75 +273,53 @@ def main() -> None:  # noqa: D401 - CLI entry point
         ", ".join(modes),
     )
 
-    results: list[dict[str, object]] = []
-    summary_inputs: list[dict[str, object]] = []
-
+    tasks: list[dict[str, object]] = []
     seed_counter = args.seed
     for interval_s, mode, sf_value in product(intervals, modes, sf_values):
         config_label = "ADR" if sf_value is None else f"SF{sf_value}"
         LOGGER.info("Interval %.1fs, mode %s, %s", interval_s, mode, config_label)
 
+        adr_node_effective = adr_node if sf_value is None else False
+        adr_server_effective = adr_server if sf_value is None else False
+        offered_pps = nodes / interval_s
+
         for replicate in range(1, replicates + 1):
-            sim = Simulator(
-                num_nodes=nodes,
-                packets_to_send=packets,
-                packet_interval=interval_s,
-                transmission_mode=mode.capitalize(),
-                fixed_sf=sf_value,
-                adr_node=adr_node if sf_value is None else False,
-                adr_server=adr_server if sf_value is None else False,
-                seed=seed_counter,
+            tasks.append(
+                {
+                    "nodes": nodes,
+                    "packets": packets,
+                    "interval_s": interval_s,
+                    "mode_label": mode,
+                    "mode_capitalized": mode.capitalize(),
+                    "sf_assignment": config_label,
+                    "fixed_sf": sf_value,
+                    "adr_node_effective": adr_node_effective,
+                    "adr_server_effective": adr_server_effective,
+                    "replicate": replicate,
+                    "seed": seed_counter,
+                    "offered_load_pps": offered_pps,
+                }
             )
             seed_counter += 1
-            sim.run()
-            metrics = sim.get_metrics()
 
-            energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-            delivered = int(metrics.get("delivered", 0))
-            collisions = int(metrics.get("collisions", 0))
-            pdr = float(metrics.get("PDR", 0.0))
-            avg_delay = float(metrics.get("avg_delay_s", 0.0))
-            throughput = float(metrics.get("throughput_bps", 0.0))
-            pdr_by_sf = metrics.get("pdr_by_sf", {})
-            pdr_by_class = metrics.get("pdr_by_class", {})
-            energy_per_node = energy_nodes / nodes if nodes else 0.0
-            offered_pps = nodes / interval_s
+    if args.workers > 1:
+        LOGGER.info("Using %d worker processes", args.workers)
 
-            row = {
-                "nodes": nodes,
-                "packets": packets,
-                "interval_s": interval_s,
-                "mode": mode,
-                "sf_assignment": config_label,
-                "replicate": replicate,
-                "seed": seed_counter - 1,
-                "adr_node": int(adr_node if sf_value is None else False),
-                "adr_server": int(adr_server if sf_value is None else False),
-                "offered_load_pps": offered_pps,
-                "pdr": pdr,
-                "delivered": delivered,
-                "collisions": collisions,
-                "avg_delay_s": avg_delay,
-                "throughput_bps": throughput,
-                "energy_per_node_J": energy_per_node,
-            }
+    def log_progress(task: dict[str, object], result: dict[str, object], index: int) -> None:
+        LOGGER.debug(
+            "Replicate %d -> PDR %.3f, collisions %d, throughput %.2f bps",
+            task["replicate"],
+            result["pdr"],
+            result["collisions"],
+            result["throughput_bps"],
+        )
 
-            for sf in range(7, 13):
-                row[f"pdr_sf{sf}"] = float(pdr_by_sf.get(sf, 0.0))
-
-            for class_type, class_pdr in pdr_by_class.items():
-                row[f"pdr_class_{class_type}"] = float(class_pdr)
-
-            results.append(row)
-            summary_inputs.append(row)
-
-            LOGGER.debug(
-                "Replicate %d -> PDR %.3f, collisions %d, throughput %.2f bps",
-                replicate,
-                pdr,
-                collisions,
-                throughput,
-            )
+    results = execute_simulation_tasks(
+        tasks,
+        run_single_configuration,
+        max_workers=args.workers,
+        progress_callback=log_progress,
+    )
 
     if not results:
         LOGGER.warning("No simulations executed; skipping CSV generation")
@@ -312,7 +352,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     write_csv(DETAIL_CSV, fieldnames, results)
 
     summary_rows = summarise_metrics(
-        summary_inputs,
+        results,
         ["interval_s", "mode", "sf_assignment", "adr_node", "adr_server"],
         [
             "pdr",
