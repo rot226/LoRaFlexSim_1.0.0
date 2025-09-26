@@ -18,6 +18,8 @@ Activez systématiquement les options suivantes sur le constructeur `Simulator`�
 - `phy_model="flora"` ou `"flora_cpp"` (si la bibliothèque native est compilée) : garantit l'utilisation des équations de PER et du comportement de capture exacts du code C++.【F:loraflexsim/launcher/simulator.py†L446-L575】【F:README.md†L582-L662】
 - `environment="flora"` (ou `flora_hata`/`flora_oulu`) sur chaque canal pour reprendre les profils de perte log-normale validés par FLoRa.【F:loraflexsim/launcher/channel.py†L68-L114】
 
+Pensez également à verrouiller `energy_detection_dBm=-90` pour appliquer la détection d'énergie distincte du seuil de sensibilité et éviter les faux positifs, activer `capture_mode="aloha"` si vous validez les scénarios « pure ALOHA », et choisir explicitement le modèle de PER (`flora_per_model`) attendu par la campagne (logistique, Croce ou sans pertes) pour conserver la même probabilité de décodage que dans OMNeT++.【F:loraflexsim/launcher/channel.py†L330-L347】【F:loraflexsim/launcher/gateway.py†L162-L238】【F:loraflexsim/launcher/simulator.py†L411-L415】【F:loraflexsim/launcher/channel.py†L273-L278】【F:loraflexsim/launcher/flora_phy.py†L149-L161】
+
 ### Intervalle de trafic
 
 Lorsque les fichiers INI ne précisent pas `timeToNextPacket`, LoRaFlexSim ramène automatiquement `packet_interval` et `first_packet_interval` à `100 s` pour refléter la loi exponentielle utilisée par FLoRa. Vérifiez cette valeur si vous écrivez un scénario custom.【F:loraflexsim/launcher/simulator.py†L342-L385】
@@ -39,3 +41,5 @@ Lorsque les fichiers INI ne précisent pas `timeToNextPacket`, LoRaFlexSim ramè
 | Références FLoRa | Traces `.sca` présentes pour la comparaison | `ls tests/integration/data/*.sca` |
 
 En appliquant ces vérifications, chaque simulation LoRaFlexSim reproduit les métriques PDR, collisions et SNR documentées par FLoRa, assurant ainsi une validation croisée robuste.
+
+Pour une vérification complète, exécutez `python scripts/run_validation.py --output results/validation_matrix.csv` (script disponible via [scripts/run_validation.py](../scripts/run_validation.py)) afin de rejouer l'ensemble des scénarios listés dans `VALIDATION.md` et comparer automatiquement vos résultats aux traces de référence.【F:scripts/run_validation.py†L1-L112】【F:VALIDATION.md†L1-L83】

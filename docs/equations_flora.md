@@ -25,6 +25,16 @@ Le preset `flora` reproduit le profil log-normal de FLoRa (`γ = 2.08`, `σ = 3.
 Le bruit reste issu de la table statique de FLoRa : seules les combinaisons SF/BW définies héritent de valeurs spécifiques, les autres retombant sur le seuil `-110` dBm. Le parseur `parse_flora_noise_table` charge exactement `LoRaAnalogModel.cc`, ce qui garantit l'identité du bruit moyen tout en laissant à l'utilisateur la possibilité de fournir un autre fichier via `flora_noise_path`.【F:loraflexsim/launcher/channel.py†L93-L133】
 
 
+
+### Détection d'énergie vs sensibilité
+
+LoRaFlexSim sépare désormais le seuil de **sensibilité**
+(`detection_threshold_dBm`) du seuil de **détection d'énergie**
+(`energy_detection_dBm`) afin de reproduire fidèlement la logique du
+`LoRaReceiver`. En mode FLoRa, `Simulator` fixe ces valeurs à −110 dBm et
+−90 dBm respectivement, tandis que le canal applique automatiquement la valeur
+FLoRa lorsqu'un preset `flora*` est sélectionné.【F:loraflexsim/launcher/simulator.py†L384-L399】【F:loraflexsim/launcher/channel.py†L330-L347】 Les passerelles filtrent ensuite les signaux dont le RSSI reste sous `energy_detection_dBm` avant même d'évaluer la sensibilité, ce qui évite d'enregistrer des paquets fantômes en environnement bruité.【F:loraflexsim/launcher/gateway.py†L162-L238】
+
 ### Capture inter-SF FLoRa
 
 FLoRa impose une matrice de capture non orthogonale (`nonOrthDelta`) pour
@@ -147,6 +157,10 @@ permet toutefois de retrouver l'ancien comportement en ajoutant
 `10 * log10(2 ** sf)` lorsque le spreading factor est connu, tant pour le
 canal de base que pour les variantes OMNeT++ et avancées
 【F:loraflexsim/launcher/channel.py†L683-L707】【F:loraflexsim/launcher/omnet_phy.py†L349-L365】【F:loraflexsim/launcher/advanced_channel.py†L668-L692】.
+
+### Comportement ADR multi-gateway
+
+Le serveur réseau conserve les échantillons de SNR et de RSSI **par passerelle** pour chaque événement de transmission, puis sélectionne la meilleure passerelle en fonction du SNR le plus élevé avant d'alimenter les historiques ADR du nœud.【F:loraflexsim/launcher/server.py†L670-L721】 Chaque passerelle maintient sa propre fenêtre glissante `gateway_snr_history`, ce qui aligne la moyenne ADR sur les traces FLoRa tout en conservant la notion de « meilleure passerelle disponible » lorsqu'un paquet est reçu par plusieurs équipements.【F:loraflexsim/launcher/server.py†L600-L614】 Cette stratégie facilite la reproduction des campagnes multi-gateways en conservant à la fois les statistiques locales et la sélection finale utilisée pour calculer la marge ADR.
 
 ## Taux d'erreur paquet (PER)
 
