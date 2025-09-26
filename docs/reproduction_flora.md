@@ -19,6 +19,7 @@ Activez systématiquement les options suivantes sur le constructeur `Simulator`�
 - `environment="flora"` (ou `flora_hata`/`flora_oulu`) sur chaque canal pour reprendre les profils de perte log-normale validés par FLoRa.【F:loraflexsim/launcher/channel.py†L68-L114】
 
 Pensez également à verrouiller `energy_detection_dBm=-90` pour appliquer la détection d'énergie distincte du seuil de sensibilité et éviter les faux positifs, activer `capture_mode="aloha"` si vous validez les scénarios « pure ALOHA », et choisir explicitement le modèle de PER (`flora_per_model`) attendu par la campagne (logistique, Croce ou sans pertes) pour conserver la même probabilité de décodage que dans OMNeT++.【F:loraflexsim/launcher/channel.py†L330-L347】【F:loraflexsim/launcher/gateway.py†L162-L238】【F:loraflexsim/launcher/simulator.py†L411-L415】【F:loraflexsim/launcher/channel.py†L273-L278】【F:loraflexsim/launcher/flora_phy.py†L149-L161】
+> ℹ️ **Canal saturé pendant les collisions** : LoRaFlexSim conserve désormais les transmissions perdues dans `Gateway.active_map` jusqu'à l'appel d'`end_reception`. Le canal reste donc occupé tant que la durée simulée des signaux brouillés n'est pas écoulée, empêchant tout nouveau paquet d'être capturé avant la fin complète de la collision.【F:loraflexsim/launcher/gateway.py†L214-L276】
 
 ### Intervalle de trafic
 
