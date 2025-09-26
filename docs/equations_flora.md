@@ -180,6 +180,15 @@ permettant de basculer entre plusieurs approximations :
 - ``"none"`` — désactive les pertes aléatoires liées au PER et renvoie
   systématiquement 0【F:loraflexsim/launcher/flora_phy.py†L149-L161】.
 
+Le constructeur de :class:`~loraflexsim.launcher.channel.Channel` expose un
+paramètre ``flora_per_model`` permettant de sélectionner l'approximation
+souhaitée. Dès qu'un mode FLoRa est actif (``phy_model`` commençant par
+``"omnet"`` ou ``"flora"`` ou bien ``use_flora_curves=True``), la valeur
+``"logistic"`` reste imposée par défaut afin de suivre les traces OMNeT++.
+Toute tentative explicite d'utiliser un autre modèle déclenche un avertissement
+pour signaler cet écart tout en laissant la possibilité de poursuivre la
+simulation avec la courbe demandée.【F:loraflexsim/launcher/channel.py†L273-L276】【F:loraflexsim/launcher/channel.py†L568-L614】
+
 ## Calcul de l'airtime
 
 La durée d'un paquet LoRa est obtenue à partir de :

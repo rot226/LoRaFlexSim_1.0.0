@@ -2,6 +2,7 @@ import math
 import os
 from pathlib import Path
 import re
+import warnings
 
 import numpy as np
 
@@ -165,6 +166,7 @@ class Channel:
         flora_capture: bool = False,
         phy_model: str = "omnet",
         flora_loss_model: str = "lognorm",
+        flora_per_model: str | None = None,
         system_loss_dB: float = 0.0,
         rssi_offset_dB: float = 0.0,
         snr_offset_dB: float = 0.0,
@@ -268,6 +270,12 @@ class Channel:
             variations temporelles et la sélectivité de canal.
         :param flora_loss_model: Variante d'atténuation FLoRa à utiliser
             ("lognorm", "oulu" ou "hata").
+        :param flora_per_model: Modèle PER à appliquer dans les modes FLoRa.
+            La valeur "logistic" correspond à la sigmoïde OMNeT++ et reste
+            imposée par défaut dès que ``phy_model`` commence par "omnet" ou
+            "flora", ou que ``use_flora_curves`` est activé. Les autres
+            valeurs ("croce", "none" …) sont acceptées mais déclenchent un
+            avertissement car elles s'écartent des traces FLoRa historiques.
         :param system_loss_dB: Pertes fixes supplémentaires (par ex. pertes
             système) appliquées à la perte de parcours.
         :param rssi_offset_dB: Décalage appliqué au RSSI calculé (dB).
@@ -408,7 +416,7 @@ class Channel:
         self.impulsive_noise_dB = float(impulsive_noise_dB)
         self.adjacent_interference_dB = float(adjacent_interference_dB)
         self._use_flora_curves = False
-        self.flora_per_model: str | None = "logistic"
+        self._flora_per_model: str | None = "logistic"
         self.tx_current_a = float(tx_current_a)
         self.rx_current_a = float(rx_current_a)
         self.idle_current_a = float(idle_current_a)
@@ -497,6 +505,7 @@ class Channel:
 
         # Activer la logique FLoRa peut ajuster la fenêtre de capture.
         self.use_flora_curves = bool(use_flora_curves)
+        self._set_flora_per_model(flora_per_model, explicit=flora_per_model is not None)
 
         if self.phy_model in ("omnet", "omnet_full"):
             from .omnet_phy import OmnetPHY
@@ -556,6 +565,15 @@ class Channel:
             and self.energy_detection_dBm == -float("inf")
         ):
             self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
+        self._set_flora_per_model(self._flora_per_model, explicit=False)
+
+    @property
+    def flora_per_model(self) -> str | None:
+        return self._flora_per_model
+
+    @flora_per_model.setter
+    def flora_per_model(self, value: str | None) -> None:
+        self._set_flora_per_model(value, explicit=True)
 
     @property
     def capture_window_symbols(self) -> int:
@@ -575,6 +593,25 @@ class Channel:
             or phy.startswith("flora")
             or getattr(self, "flora_capture", False)
         )
+
+    def _set_flora_per_model(self, value: str | None, *, explicit: bool) -> None:
+        model = "logistic" if value is None else str(value)
+        phy = str(getattr(self, "phy_model", "") or "")
+        enforce = phy.startswith("flora") or phy.startswith("omnet") or self.use_flora_curves
+        if enforce and model != "logistic":
+            if explicit:
+                warnings.warn(
+                    (
+                        "Le mode PHY '%s' reproduit la sigmoïde FLoRa ; "
+                        "flora_per_model='%s' peut s'écarter des traces OMNeT++."
+                    )
+                    % (phy or "inconnu", model),
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+            else:
+                model = "logistic"
+        self._flora_per_model = model
 
     def _maybe_enforce_capture_window(self) -> None:
         if self._uses_flora_behaviour() and self.capture_window_symbols < 6:
