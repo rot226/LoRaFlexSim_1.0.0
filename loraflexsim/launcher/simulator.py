@@ -683,6 +683,7 @@ class Simulator:
                     gw_y,
                     downlink_power_dBm=gw_power,
                     energy_detection_dBm=energy_detection_dBm,
+                    enforce_energy_detection=self.channel.enforce_energy_detection,
                 )
             )
 
@@ -1091,10 +1092,15 @@ class Simulator:
                 snr = 10 * math.log10(signal_lin / avg_noise)
                 rssi += getattr(gw, "rx_gain_dB", 0.0)
                 snr += getattr(gw, "rx_gain_dB", 0.0)
-                energy_threshold = max(
-                    node.channel.energy_detection_dBm,
-                    getattr(gw, "energy_detection_dBm", -float("inf")),
+                channel_energy = (
+                    node.channel.energy_detection_dBm
+                    if getattr(node.channel, "enforce_energy_detection", True)
+                    else -float("inf")
                 )
+                gateway_energy = getattr(gw, "energy_detection_dBm", -float("inf"))
+                if not getattr(gw, "enforce_energy_detection", True):
+                    gateway_energy = -float("inf")
+                energy_threshold = max(channel_energy, gateway_energy)
                 if rssi < energy_threshold:
                     continue
                 # Enregistrer la transmission pour l'interférence future

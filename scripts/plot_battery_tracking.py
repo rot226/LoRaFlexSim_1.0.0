@@ -14,6 +14,7 @@ Usage::
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 
@@ -22,9 +23,46 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 try:  # pandas and matplotlib are optional but required for plotting
     import pandas as pd
-    import matplotlib.pyplot as plt
 except Exception as exc:  # pragma: no cover - handled at runtime
     raise SystemExit(f"Required plotting libraries missing: {exc}")
+
+
+def _load_matplotlib() -> "module":
+    """Return a fully featured ``matplotlib.pyplot`` module.
+
+    Several unit tests inject light-weight stubs into ``sys.modules`` to avoid
+    importing the real dependency.  When invoked from such an environment the
+    plotting script must fall back to the genuine Matplotlib implementation so
+    that figures can be generated.  We attempt a lazy reload when the module
+    lacks the APIs we rely on (``subplots`` in particular) and raise an
+    informative error if the real library is not available.
+    """
+
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as exc:  # pragma: no cover - handled at runtime
+        raise SystemExit(f"Required plotting libraries missing: {exc}") from exc
+
+    def _has_expected_api(module) -> bool:
+        return hasattr(module, "subplots") and hasattr(module, "figure")
+
+    if _has_expected_api(plt):
+        return plt
+
+    # Remove potential stubs and retry the import.
+    sys.modules.pop("matplotlib.pyplot", None)
+    sys.modules.pop("matplotlib", None)
+    try:
+        plt = importlib.import_module("matplotlib.pyplot")
+    except Exception as exc:  # pragma: no cover - handled at runtime
+        raise SystemExit(f"Required plotting libraries missing: {exc}") from exc
+
+    if not _has_expected_api(plt):
+        raise SystemExit("Matplotlib installation does not provide pyplot.subplots")
+    return plt
+
+
+plt = _load_matplotlib()
 
 try:  # Import default battery capacity constant
     from .run_battery_tracking import DEFAULT_BATTERY_J

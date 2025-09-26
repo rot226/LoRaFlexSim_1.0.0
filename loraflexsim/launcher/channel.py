@@ -213,6 +213,7 @@ class Channel:
         interference_dB: float = 0.0,
         detection_threshold_dBm: float = -float("inf"),
         energy_detection_dBm: float = -float("inf"),
+        enforce_energy_detection: bool = True,
         sensitivity_margin_dB: float = 0.0,
         band_interference: list[tuple[float, float, float]] | None = None,
         environment: str | None = None,
@@ -251,6 +252,10 @@ class Channel:
         :param energy_detection_dBm: Seuil de détection d'énergie (dBm).
             FLoRa applique −90 dBm par défaut afin d'ignorer les canaux trop
             silencieux avant d'engager la chaîne de réception.
+        :param enforce_energy_detection: Lorsque ``True`` (par défaut), le
+            seuil précédent est strictement appliqué avant toute tentative de
+            réception. Le désactiver permet de s'appuyer uniquement sur la
+            sensibilité radio, utile pour les scénarios très longue portée.
         :param sensitivity_margin_dB: Marge ajoutée aux seuils de détection
             FLoRa pour ajuster la sensibilité (dB).
         :param band_interference: Liste optionnelle de tuples ``(freq, bw, dB)``
@@ -328,6 +333,7 @@ class Channel:
         """
 
         self.energy_detection_dBm = energy_detection_dBm
+        self.enforce_energy_detection = enforce_energy_detection
 
         if environment is not None:
             env = environment.lower()
@@ -345,6 +351,11 @@ class Channel:
                 and env.startswith("flora")
             ):
                 self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
+            if (
+                self.enforce_energy_detection
+                and env in {"flora_oulu", "very_long_range"}
+            ):
+                self.enforce_energy_detection = False
         else:
             self.environment = None
 

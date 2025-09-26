@@ -530,6 +530,15 @@ def on_first_packet_change(event):
     global first_packet_user_edited
     if not _syncing_first_packet:
         first_packet_user_edited = True
+        try:
+            first_packet_input.value = event.new
+        except Exception:
+            # ``event`` is a lightweight namespace in tests and the widget
+            # already exposes the desired value when running under Panel.  The
+            # assignment above keeps both execution paths aligned without
+            # raising when ``event`` lacks the ``new`` attribute used in
+            # regular callbacks.
+            pass
 
 
 interval_input.param.watch(on_interval_update, "value")

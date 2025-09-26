@@ -241,6 +241,7 @@ def create_long_range_channels(preset: str) -> List[Channel]:
         channel.tx_antenna_gain_dB = params.tx_antenna_gain_dB
         channel.rx_antenna_gain_dB = params.rx_antenna_gain_dB
         channel.cable_loss_dB = params.cable_loss_dB
+        channel.enforce_energy_detection = False
         channels.append(channel)
     return channels
 
@@ -286,6 +287,37 @@ def _build_simulator_from_params(
         channels=channels,
     )
     configure_long_range_nodes(simulator, params)
+
+    # Éviter que le seuil de détection d'énergie ne soit plus strict que la
+    # sensibilité radio la plus basse utilisée dans le scénario.  Les presets
+    # longue portée attribuent des SF élevés à des distances importantes ;
+    # conserver le seuil FLoRa par défaut (−90 dBm) empêcherait toute réception
+    # au-delà de 8 km.  On rabaisse donc ``energy_detection_dBm`` au minimum des
+    # seuils de détection appliqués aux nœuds, tout en respectant les valeurs
+    # personnalisées lorsque celles-ci sont explicitement désactivées
+    # (``-inf``).
+    min_detection: float | None = None
+    for node in simulator.nodes:
+        threshold = Channel.flora_detection_threshold(
+            node.sf, node.channel.bandwidth
+        ) + node.channel.sensitivity_margin_dB
+        if not math.isfinite(threshold):
+            continue
+        if min_detection is None or threshold < min_detection:
+            min_detection = threshold
+    if min_detection is not None:
+        for ch in channels:
+            if ch.energy_detection_dBm != -float("inf") and ch.energy_detection_dBm > min_detection:
+                ch.energy_detection_dBm = min_detection
+        for gw in simulator.gateways:
+            if (
+                getattr(gw, "energy_detection_dBm", -float("inf")) != -float("inf")
+                and gw.energy_detection_dBm > min_detection
+            ):
+                gw.energy_detection_dBm = min_detection
+    for gw in simulator.gateways:
+        gw.enforce_energy_detection = False
+
     return simulator
 
 
