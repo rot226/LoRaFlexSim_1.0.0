@@ -240,7 +240,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
-    add_worker_argument(parser)
+    add_worker_argument(parser, default="auto")
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
