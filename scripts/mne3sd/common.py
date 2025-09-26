@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import os
 import statistics
@@ -10,7 +11,67 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable, Iterable as TypingIterable, TypeVar
+from typing import Any, Callable, Iterable as TypingIterable, Literal, TypeVar
+
+
+WorkerCount = int | Literal["auto"]
+
+
+def _parse_worker_argument(value: str) -> WorkerCount:
+    """Return a worker specification parsed from ``value``."""
+
+    if value.lower() == "auto":
+        return "auto"
+    try:
+        workers = int(value)
+    except ValueError as exc:  # pragma: no cover - defensive programming
+        raise argparse.ArgumentTypeError(
+            "--workers must be a positive integer or 'auto'"
+        ) from exc
+    if workers <= 0:
+        raise argparse.ArgumentTypeError("--workers must be a positive integer")
+    return workers
+
+
+def _normalise_worker_default(default: WorkerCount) -> WorkerCount:
+    """Validate and normalise the default ``--workers`` value."""
+
+    if isinstance(default, str):
+        if default.lower() != "auto":
+            raise ValueError("default must be a positive integer or 'auto'")
+        return "auto"
+    if default <= 0:
+        raise ValueError("default must be a positive integer")
+    return int(default)
+
+
+def add_worker_argument(parser, *, default: WorkerCount = 1) -> None:
+    """Attach a shared ``--workers`` option that accepts integers or ``'auto'``."""
+
+    parser.add_argument(
+        "--workers",
+        type=_parse_worker_argument,
+        default=_normalise_worker_default(default),
+        help="Number of parallel worker processes to use (integer or 'auto')",
+    )
+
+
+def resolve_worker_count(workers: WorkerCount, task_count: int) -> int:
+    """Return the effective worker count limited by ``task_count``."""
+
+    limited_tasks = max(0, int(task_count))
+    if limited_tasks == 0:
+        return 0
+
+    if isinstance(workers, str):
+        if workers != "auto":  # pragma: no cover - defensive programming
+            raise ValueError("workers must be an integer or 'auto'")
+        available = os.cpu_count() or 1
+        return max(1, min(available, limited_tasks))
+
+    if workers <= 0:  # pragma: no cover - defensive programming
+        raise ValueError("workers must be positive")
+    return max(1, min(int(workers), limited_tasks))
 
 import matplotlib.pyplot as plt
 
