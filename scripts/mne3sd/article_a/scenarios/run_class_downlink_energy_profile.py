@@ -50,6 +50,10 @@ RESULTS_PATH = (
 CI_RUNS = 1
 CI_DURATION_S = 900.0
 CI_NODES = 25
+FAST_RUNS = 3
+FAST_NODE_CAP = 150
+FAST_PAYLOAD_SIZE = 12
+FAST_DOWNLINK_PAYLOAD = 6
 
 FIELDNAMES = [
     "class",
@@ -444,7 +448,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     profile = resolve_execution_profile(args.profile)
     args.profile = profile
 
-    if profile != "ci" and args.runs < 5:
+    if profile == "fast":
+        args.runs = max(1, min(args.runs, FAST_RUNS))
+        args.nodes = min(args.nodes, FAST_NODE_CAP)
+        args.payload_size = min(args.payload_size, FAST_PAYLOAD_SIZE)
+        args.downlink_payload = min(args.downlink_payload, FAST_DOWNLINK_PAYLOAD)
+    elif profile != "ci" and args.runs < 5:
         parser.error("--runs must be at least 5 to ensure statistical confidence")
 
     if profile == "ci":

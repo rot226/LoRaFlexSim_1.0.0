@@ -52,6 +52,10 @@ CI_NODE_COUNTS = (50,)
 CI_SF_MODES = ("adaptive",)
 CI_REPLICATES = 1
 
+FAST_NODE_CAP = 150
+FAST_REPLICATES = 3
+FAST_PACKETS = 10
+
 
 def positive_float(value: str) -> float:
     """Return ``value`` converted to a strictly positive float."""
@@ -283,6 +287,17 @@ def main() -> None:  # noqa: D401 - CLI entry point
         sf_modes = list(CI_SF_MODES)
         replicates = min(replicates, CI_REPLICATES)
         packets = min(packets, 5)
+    elif profile == "fast":
+        replicates = min(replicates, FAST_REPLICATES)
+        packets = min(packets, FAST_PACKETS)
+        clamped_nodes: list[int] = []
+        seen_nodes: set[int] = set()
+        for count in node_counts:
+            limited = min(count, FAST_NODE_CAP)
+            if limited not in seen_nodes:
+                clamped_nodes.append(limited)
+                seen_nodes.add(limited)
+        node_counts = clamped_nodes
 
     side_m = area_side_from_surface(area_km2)
     LOGGER.info(

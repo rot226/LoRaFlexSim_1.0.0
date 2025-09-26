@@ -42,6 +42,9 @@ from scripts.mne3sd.common import (
 
 LOGGER = logging.getLogger("class_density_sweep")
 DEFAULT_NODE_COUNTS = [50, 100, 250, 500]
+FAST_NODE_COUNTS = [50, 100, 150]
+FAST_REPLICATES = 3
+FAST_PACKETS_PER_NODE = 20
 CI_NODE_COUNTS = [20]
 CI_REPLICATES = 1
 CI_PACKETS_PER_NODE = 5
@@ -199,13 +202,34 @@ def main() -> None:  # noqa: D401 - CLI entry point
     configure_logging(args.verbose, args.quiet)
 
     profile = resolve_execution_profile(args.profile)
-    node_defaults = DEFAULT_NODE_COUNTS if profile != "ci" else CI_NODE_COUNTS
+    if profile == "ci":
+        node_defaults = CI_NODE_COUNTS
+    elif profile == "fast":
+        node_defaults = FAST_NODE_COUNTS
+    else:
+        node_defaults = DEFAULT_NODE_COUNTS
     node_counts = parse_nodes_list(args.nodes_list, default=node_defaults)
     if profile == "ci" and args.nodes_list:
         node_counts = node_counts[:1]
+    if profile == "fast":
+        clamped: list[int] = []
+        seen: set[int] = set()
+        for count in node_counts:
+            limited = min(count, FAST_NODE_COUNTS[-1])
+            if limited not in seen:
+                clamped.append(limited)
+                seen.add(limited)
+        node_counts = clamped
 
-    replicates = args.replicates if profile != "ci" else CI_REPLICATES
-    packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS_PER_NODE)
+    if profile == "ci":
+        replicates = CI_REPLICATES
+        packets = min(args.packets, CI_PACKETS_PER_NODE)
+    elif profile == "fast":
+        replicates = min(args.replicates, FAST_REPLICATES)
+        packets = min(args.packets, FAST_PACKETS_PER_NODE)
+    else:
+        replicates = args.replicates
+        packets = args.packets
 
     classes = ["A", "B", "C"]
     results: list[dict[str, object]] = []

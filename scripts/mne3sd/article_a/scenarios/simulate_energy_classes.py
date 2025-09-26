@@ -69,6 +69,10 @@ CI_REPLICATES = 1
 CI_CLASSES = ("A",)
 CI_DUTY_CYCLES = (0.01,)
 
+FAST_NODE_CAP = 150
+FAST_PACKETS = 20
+FAST_REPLICATES = 3
+
 
 def positive_int(value: str) -> int:
     """Return ``value`` converted to a strictly positive integer."""
@@ -286,6 +290,10 @@ def main() -> None:  # noqa: D401 - CLI entry point
         nodes = min(nodes, CI_NODES)
         packets = min(packets, CI_PACKETS)
         replicates = min(replicates, CI_REPLICATES)
+    elif profile == "fast":
+        nodes = min(nodes, FAST_NODE_CAP)
+        packets = min(packets, FAST_PACKETS)
+        replicates = min(replicates, FAST_REPLICATES)
 
     LOGGER.info(
         "Simulating energy consumption for classes %s with duty cycles %s",
