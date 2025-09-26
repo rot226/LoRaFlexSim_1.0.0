@@ -138,4 +138,6 @@ python -m scripts.mne3sd.run_all_article_outputs --article b
 
 Cette commande orchestre tous les scénarios `run_mobility_*`, puis les modules `plot_*`, et se termine en affichant la liste des CSV et figures générés. Combinez-la avec `--skip-scenarios` ou `--skip-plots` lorsque seule une partie du workflow doit être régénérée.
 
+Pour accélérer les itérations successives (par exemple lors de séries de tracés), ajoutez `--reuse` : chaque tâche vérifiera que toutes ses sorties existent et sont plus récentes que le script exécuté avant de lancer un nouveau calcul.
+
 Maintenez ce README synchronisé avec les scripts disponibles lorsque de nouveaux scénarios ou graphiques sont ajoutés.

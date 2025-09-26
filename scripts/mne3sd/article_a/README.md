@@ -85,4 +85,6 @@ python -m scripts.mne3sd.run_all_article_outputs --article a
 
 Ce script enchaîne toutes les commandes `run_class_*`, puis les modules `plot_*`, et affiche un résumé des CSV et figures générés. Utilisez `--skip-scenarios` ou `--skip-plots` pour limiter l'exécution à une seule étape, par exemple lorsque seules les figures doivent être régénérées à partir de données existantes.
 
+Lorsque vous répétez des séries de tracés, pensez à ajouter `--reuse` : les tâches dont toutes les sorties sont déjà présentes et plus récentes que le script associé seront alors ignorées, ce qui accélère significativement les itérations successives.
+
 Gardez ce README à jour au fur et à mesure que de nouveaux scénarios ou graphiques sont ajoutés afin de garantir une utilisation homogène entre collaborateur·rice·s.
