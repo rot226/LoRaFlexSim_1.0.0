@@ -8,11 +8,17 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from scripts.mne3sd.common import apply_ieee_style, save_figure
+from scripts.mne3sd.common import (
+    apply_ieee_style,
+    prepare_figure_directory,
+    save_figure,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_INPUT = ROOT / "results" / "mne3sd" / "article_a" / "energy_consumption_summary.csv"
 DEFAULT_FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_a"
+ARTICLE = "article_a"
+SCENARIO = "energy_duty_cycle"
 REQUIRED_COLUMNS = {
     "class",
     "duty_cycle",
@@ -101,7 +107,13 @@ def load_summary(path: Path) -> pd.DataFrame:
     return df.sort_values(["class", "duty_cycle"]).reset_index(drop=True)
 
 
-def plot_energy_per_node_vs_duty_cycle(df: pd.DataFrame, output_dir: Path) -> None:
+def _resolve_figures_base(path: Path) -> Path:
+    if path.name == ARTICLE:
+        return path.parent
+    return path
+
+
+def plot_energy_per_node_vs_duty_cycle(df: pd.DataFrame, figures_base: Path) -> None:
     """Tracer l'énergie moyenne par nœud en fonction du duty-cycle."""
 
     fig, ax = plt.subplots()
@@ -124,10 +136,16 @@ def plot_energy_per_node_vs_duty_cycle(df: pd.DataFrame, output_dir: Path) -> No
     ax.legend(title="Classe")
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="energy_per_node_vs_duty_cycle",
+        base_dir=figures_base,
+    )
     save_figure(fig, "energy_per_node_vs_duty_cycle", output_dir)
 
 
-def plot_pdr_vs_duty_cycle(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_pdr_vs_duty_cycle(df: pd.DataFrame, figures_base: Path) -> None:
     """Tracer le PDR moyen en fonction du duty-cycle."""
 
     fig, ax = plt.subplots()
@@ -153,10 +171,16 @@ def plot_pdr_vs_duty_cycle(df: pd.DataFrame, output_dir: Path) -> None:
     ax.legend(title="Classe")
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="pdr_vs_duty_cycle",
+        base_dir=figures_base,
+    )
     save_figure(fig, "pdr_vs_duty_cycle", output_dir)
 
 
-def plot_energy_breakdown(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_energy_breakdown(df: pd.DataFrame, figures_base: Path) -> None:
     """Tracer la décomposition énergétique (TX/RX/Sommeil) par classe et duty-cycle."""
 
     ordered = df.sort_values(["class", "duty_cycle"])  # garantir l'ordre sur l'axe X
@@ -184,6 +208,12 @@ def plot_energy_breakdown(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="energy_breakdown_vs_duty_cycle",
+        base_dir=figures_base,
+    )
     save_figure(fig, "energy_breakdown_vs_duty_cycle", output_dir)
 
 
@@ -196,9 +226,11 @@ def main() -> None:
 
     summary = load_summary(args.input)
 
-    plot_energy_per_node_vs_duty_cycle(summary, args.figures_dir)
-    plot_pdr_vs_duty_cycle(summary, args.figures_dir)
-    plot_energy_breakdown(summary, args.figures_dir)
+    figures_base = _resolve_figures_base(args.figures_dir)
+
+    plot_energy_per_node_vs_duty_cycle(summary, figures_base)
+    plot_pdr_vs_duty_cycle(summary, figures_base)
+    plot_energy_breakdown(summary, figures_base)
 
     if args.show:
         plt.show()

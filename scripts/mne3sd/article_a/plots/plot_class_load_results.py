@@ -13,10 +13,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, os.fspath(ROOT))
 
-from scripts.mne3sd.common import apply_ieee_style, save_figure
+from scripts.mne3sd.common import (
+    apply_ieee_style,
+    prepare_figure_directory,
+    save_figure,
+)
 
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_load_metrics.csv"
-FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_a"
+ARTICLE = "article_a"
+SCENARIO = "class_load"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -64,7 +69,7 @@ def load_metrics(path: Path) -> pd.DataFrame:
     return df
 
 
-def plot_energy_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_energy_by_interval(df: pd.DataFrame) -> None:
     """Plot the average per-node energy versus interval for each class."""
     grouped = (
         df.groupby(["class", "interval_s"], as_index=False)["energy_per_node_J"].mean()
@@ -88,10 +93,15 @@ def plot_energy_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="energy_vs_interval",
+    )
     save_figure(fig, "class_energy_vs_interval", output_dir)
 
 
-def plot_pdr_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_pdr_by_interval(df: pd.DataFrame) -> None:
     """Plot the packet delivery ratio versus interval with error bars."""
     stats = (
         df.groupby(["class", "interval_s"], as_index=False)["pdr"]
@@ -123,6 +133,11 @@ def plot_pdr_by_interval(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="pdr_vs_interval",
+    )
     save_figure(fig, "class_pdr_vs_interval", output_dir)
 
 
@@ -135,8 +150,8 @@ def main() -> None:
 
     metrics = load_metrics(args.results)
 
-    plot_energy_by_interval(metrics, FIGURES_DIR)
-    plot_pdr_by_interval(metrics, FIGURES_DIR)
+    plot_energy_by_interval(metrics)
+    plot_pdr_by_interval(metrics)
 
     if args.show:
         plt.show()
