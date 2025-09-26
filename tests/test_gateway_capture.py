@@ -200,3 +200,20 @@ def test_flora_capture_requires_six_symbols():
     # The weaker packet still overlaps when only five symbols were clean, so
     # FLoRa's receiver (which requires six symbols) reports a collision.
     assert server.packets_received == 0
+
+
+def test_aloha_mode_disables_capture_effect():
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    # First packet is strong and would normally win a capture.
+    gw.start_reception(1, 1, 7, -50, 1.0, 6.0, 0.0, 868e6, capture_mode="aloha")
+    # Second packet overlaps after a short delay with a much weaker power.
+    gw.start_reception(2, 2, 7, -70, 1.0, 6.0, 0.1, 868e6, capture_mode="aloha")
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    # Pure ALOHA mode destroys both packets regardless of the RSSI delta.
+    assert server.packets_received == 0

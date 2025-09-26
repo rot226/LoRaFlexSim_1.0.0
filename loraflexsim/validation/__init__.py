@@ -55,6 +55,7 @@ class ValidationScenario:
             kwargs["channels"] = self.channels_factory()
         elif self.channel_plan is not None:
             kwargs["channels"] = MultiChannel(list(self.channel_plan))
+        kwargs.setdefault("validation_mode", "flora")
         sim = Simulator(**kwargs)
         for hook in self.setup:
             hook(sim)

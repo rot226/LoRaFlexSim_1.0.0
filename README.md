@@ -825,6 +825,15 @@ Un paquet est conservé si `signalRSSI - interferenceRSSI` est supérieur ou ég
 interférence SF9 à `-90` dBm reste décodable car `-97 - (-90) = -7` dB ≥ `-9` dB
 【F:flora-master/src/LoRaPhy/LoRaReceiver.h†L60-L67】.
 
+Lorsque vous devez reproduire les scénarios « pure ALOHA » historiques de
+FLoRa, forcez la désactivation de tout effet capture avec
+`Simulator(capture_mode="aloha")` (ou
+`Gateway.start_reception(..., capture_mode="aloha")`). Les scénarios de
+validation FLoRa l'activent automatiquement via
+`Simulator(validation_mode="flora")`, ce qui court-circuite immédiatement toute
+réception dès qu'un chevauchement est détecté, quel que soit l'écart de
+puissance.【F:loraflexsim/launcher/simulator.py†L232-L308】【F:loraflexsim/launcher/gateway.py†L197-L236】【F:loraflexsim/validation/__init__.py†L38-L54】
+
 Pour reproduire un scénario FLoRa :
 1. Passez `flora_mode=True` et `flora_timing=True` lors de la création du
    `Simulator` (ou activez **Mode FLoRa complet**). Le canal radio utilise alors

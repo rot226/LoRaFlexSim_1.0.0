@@ -253,6 +253,8 @@ class Simulator:
         clock_jitter_std_s: float = 0.0,
         pa_ramp_up_s: float = 0.0,
         pa_ramp_down_s: float = 0.0,
+        capture_mode: str | None = None,
+        validation_mode: str | None = None,
         tick_ns: int | None = None,
     ):
         """
@@ -339,6 +341,13 @@ class Simulator:
         :param clock_jitter_std_s: Gigue d'horloge ajoutée à chaque calcul (s).
         :param pa_ramp_up_s: Temps de montée du PA (s).
         :param pa_ramp_down_s: Temps de descente du PA (s).
+        :param capture_mode: Force un mode de capture spécifique pour toutes
+            les passerelles (``"basic"``, ``"advanced"``, ``"flora"``,
+            ``"omnet"`` ou ``"aloha"``). ``None`` conserve la sélection
+            automatique basée sur le canal.
+        :param validation_mode: Active des réglages additionnels dédiés aux
+            campagnes de validation (``"flora"`` déclenche le mode capture
+            ``"aloha"`` par défaut).
         :param tick_ns: Quand défini, quantifie chaque instant à des entiers de
             ``tick_ns`` nanosecondes pour la file d'événements.
         """
@@ -398,6 +407,12 @@ class Simulator:
         self.flora_loss_model = flora_loss_model
         self.phase_noise_std_dB = phase_noise_std_dB
         self.clock_jitter_std_s = clock_jitter_std_s
+        self.validation_mode = validation_mode.lower() if isinstance(validation_mode, str) else validation_mode
+        if isinstance(capture_mode, str):
+            capture_mode = capture_mode.lower()
+        if capture_mode is None and self.validation_mode == "flora":
+            capture_mode = "aloha"
+        self.capture_mode = capture_mode
         self.pa_ramp_up_s = pa_ramp_up_s
         self.pa_ramp_down_s = pa_ramp_down_s
         # Activation ou non de la mobilité des nœuds
@@ -611,6 +626,7 @@ class Simulator:
             network_delay=net_delay,
             adr_method=self.adr_method,
             energy_detection_dBm=energy_detection_dBm,
+            capture_mode=self.capture_mode,
         )
         self.network_server.beacon_interval = self.beacon_interval
         self.network_server.beacon_drift = self.beacon_drift
@@ -1105,6 +1121,21 @@ class Simulator:
                 if best_snr is None or snr > best_snr:
                     best_snr = snr
                 # Démarrer la réception à la passerelle (gestion des collisions et capture)
+                if self.capture_mode is not None:
+                    capture_mode = self.capture_mode
+                else:
+                    capture_mode = (
+                        "omnet"
+                        if node.channel.phy_model == "omnet"
+                        else (
+                            "flora"
+                            if node.channel.phy_model.startswith("flora")
+                            else (
+                                "advanced" if node.channel.advanced_capture else "basic"
+                            )
+                        )
+                    )
+
                 gw.start_reception(
                     event_id,
                     node_id,
@@ -1119,17 +1150,7 @@ class Simulator:
                     sync_offset=getattr(node, "current_sync_offset", 0.0),
                     bandwidth=node.channel.bandwidth,
                     noise_floor=noise_dBm,
-                    capture_mode=(
-                        "omnet"
-                        if node.channel.phy_model == "omnet"
-                        else (
-                            "flora"
-                            if node.channel.phy_model.startswith("flora")
-                            else (
-                                "advanced" if node.channel.advanced_capture else "basic"
-                            )
-                        )
-                    ),
+                    capture_mode=capture_mode,
                     flora_phy=(
                         node.channel.flora_phy
                         if node.channel.phy_model.startswith("flora")
