@@ -25,6 +25,7 @@ import argparse
 import os
 import statistics
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Iterable
 
@@ -152,6 +153,62 @@ def compute_latency_jitter(sim: Simulator) -> float:
     return 0.0
 
 
+def _run_speed_replicate(task: tuple) -> dict[str, float | str]:
+    """Execute a single mobility speed replicate and return its metrics."""
+
+    (
+        model_name,
+        model_factory,
+        profile_name,
+        speed_min,
+        speed_max,
+        area_size,
+        replicate,
+        seed,
+        nodes,
+        packets,
+        interval,
+        adr_node,
+        adr_server,
+    ) = task
+
+    mobility_model = model_factory(
+        area_size,
+        min_speed=speed_min,
+        max_speed=speed_max,
+    )
+    sim = Simulator(
+        num_nodes=nodes,
+        num_gateways=1,
+        packets_to_send=packets,
+        seed=seed,
+        mobility=True,
+        mobility_model=mobility_model,
+        area_size=area_size,
+        mobility_speed=(speed_min, speed_max),
+        packet_interval=interval,
+        adr_node=adr_node,
+        adr_server=adr_server,
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
+    energy_per_node = energy_nodes / nodes if nodes else 0.0
+
+    return {
+        "model": model_name,
+        "speed_profile": profile_name,
+        "speed_min_mps": speed_min,
+        "speed_max_mps": speed_max,
+        "replicate": replicate,
+        "pdr": float(metrics.get("PDR", 0.0)),
+        "avg_delay_s": float(metrics.get("avg_delay_s", 0.0)),
+        "jitter_s": compute_latency_jitter(sim),
+        "energy_per_node_J": energy_per_node,
+    }
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description=(
@@ -194,6 +251,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel workers used to execute simulation replicates",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -211,6 +274,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
     packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
     replicates = args.replicates if profile != "ci" else CI_REPLICATES
+    workers = min(args.workers, replicates)
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -220,71 +284,63 @@ def main() -> None:  # noqa: D401 - CLI entry point
     results: list[dict[str, float | str]] = []
     combination_index = 0
 
-    for model_name, model_factory in models:
-        for profile_name, (speed_min, speed_max) in speed_profiles:
-            replicate_rows: list[dict[str, float | str]] = []
+    executor: ProcessPoolExecutor | None = None
+    if workers > 1:
+        executor = ProcessPoolExecutor(max_workers=workers)
 
-            for replicate in range(1, replicates + 1):
-                seed = args.seed + combination_index * replicates + replicate - 1
-                mobility_model = model_factory(
-                    area_size,
-                    min_speed=speed_min,
-                    max_speed=speed_max,
+    try:
+        for model_name, model_factory in models:
+            for profile_name, (speed_min, speed_max) in speed_profiles:
+                tasks = [
+                    (
+                        model_name,
+                        model_factory,
+                        profile_name,
+                        speed_min,
+                        speed_max,
+                        area_size,
+                        replicate,
+                        args.seed + combination_index * replicates + replicate - 1,
+                        nodes,
+                        packets,
+                        args.interval,
+                        args.adr_node,
+                        args.adr_server,
+                    )
+                    for replicate in range(1, replicates + 1)
+                ]
+
+                if executor is not None:
+                    replicate_rows = list(executor.map(_run_speed_replicate, tasks, chunksize=1))
+                else:
+                    replicate_rows = [_run_speed_replicate(task) for task in tasks]
+
+                replicate_rows.sort(key=lambda row: int(row["replicate"]))
+
+                combination_index += 1
+
+                results.extend(replicate_rows)
+
+                summary_entries = summarise_metrics(
+                    replicate_rows,
+                    ["model", "speed_profile", "speed_min_mps", "speed_max_mps"],
+                    ["pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"],
                 )
-                sim = Simulator(
-                    num_nodes=nodes,
-                    num_gateways=1,
-                    packets_to_send=packets,
-                    seed=seed,
-                    mobility=True,
-                    mobility_model=mobility_model,
-                    area_size=area_size,
-                    mobility_speed=(speed_min, speed_max),
-                    packet_interval=args.interval,
-                    adr_node=args.adr_node,
-                    adr_server=args.adr_server,
-                )
-                sim.run()
-                metrics = sim.get_metrics()
-
-                energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-                energy_per_node = energy_nodes / nodes if nodes else 0.0
-
-                replicate_rows.append(
-                    {
-                        "model": model_name,
-                        "speed_profile": profile_name,
-                        "speed_min_mps": speed_min,
-                        "speed_max_mps": speed_max,
-                        "replicate": replicate,
-                        "pdr": float(metrics.get("PDR", 0.0)),
-                        "avg_delay_s": float(metrics.get("avg_delay_s", 0.0)),
-                        "jitter_s": compute_latency_jitter(sim),
-                        "energy_per_node_J": energy_per_node,
+                for entry in summary_entries:
+                    aggregate_row: dict[str, float | str] = {
+                        "model": entry["model"],
+                        "speed_profile": entry["speed_profile"],
+                        "speed_min_mps": entry["speed_min_mps"],
+                        "speed_max_mps": entry["speed_max_mps"],
+                        "replicate": "aggregate",
                     }
-                )
-
-            combination_index += 1
-
-            results.extend(replicate_rows)
-
-            summary_entries = summarise_metrics(
-                replicate_rows,
-                ["model", "speed_profile", "speed_min_mps", "speed_max_mps"],
-                ["pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"],
-            )
-            for entry in summary_entries:
-                aggregate_row: dict[str, float | str] = {
-                    "model": entry["model"],
-                    "speed_profile": entry["speed_profile"],
-                    "speed_min_mps": entry["speed_min_mps"],
-                    "speed_max_mps": entry["speed_max_mps"],
-                    "replicate": "aggregate",
-                }
-                for metric in ("pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"):
-                    aggregate_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
-                    aggregate_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
-                results.append(aggregate_row)
+                    for metric in ("pdr", "avg_delay_s", "jitter_s", "energy_per_node_J"):
+                        aggregate_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                        aggregate_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                    results.append(aggregate_row)
+    finally:
+        if executor is not None:
+            executor.shutdown()
 
     write_csv(RESULTS_PATH, FIELDNAMES, results)
 
