@@ -36,6 +36,7 @@ class NetworkServer:
         network_delay: float = 0.0,
         adr_method: str = "max",
         energy_detection_dBm: float = -float("inf"),
+        capture_mode: str | None = None,
     ):
         """Initialise le serveur réseau.
 
@@ -49,6 +50,8 @@ class NetworkServer:
         :param energy_detection_dBm: Seuil de détection d'énergie appliqué aux
             configurations FLoRa (−90 dBm par défaut lorsque fourni par le
             simulateur).
+        :param capture_mode: Mode de capture imposé par le simulateur
+            (``None`` pour laisser chaque passerelle décider).
         """
         # Ensemble des identifiants d'événements déjà reçus (pour éviter les doublons)
         self.received_events = set()
@@ -75,6 +78,7 @@ class NetworkServer:
         self.network_delay = network_delay
         self.adr_method = adr_method
         self.energy_detection_dBm = energy_detection_dBm
+        self.capture_mode = capture_mode
         self.pending_process: dict[
             int,
             tuple[int, int, int, float | None, float | None, object, float | None],

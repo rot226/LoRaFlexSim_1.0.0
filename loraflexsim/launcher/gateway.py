@@ -216,6 +216,27 @@ class Gateway:
             new_transmission['snir'] = rssi - noise_floor
         colliders.append(new_transmission)
 
+        if capture_mode == "aloha" and interfering_transmissions:
+            logger.debug(
+                "Gateway %s: pure ALOHA collision detected with packets %s and new event %s.",
+                self.id,
+                [t["event_id"] for t in interfering_transmissions],
+                event_id,
+            )
+            diag_logger.info(
+                f"t={current_time:.2f} gw={self.id} aloha_collision="
+                f"{[t['event_id'] for t in interfering_transmissions] + [event_id]}"
+            )
+            for t in interfering_transmissions:
+                t["lost_flag"] = True
+                t_key = (t["sf"], t["frequency"])
+                try:
+                    self.active_map[t_key].remove(t)
+                    self.active_by_event.pop(t["event_id"], None)
+                except (ValueError, KeyError):
+                    pass
+            return
+
         if not interfering_transmissions:
             # Aucun paquet actif (ou chevauchement inférieur au seuil)
             self.active_map.setdefault(key, []).append(new_transmission)
