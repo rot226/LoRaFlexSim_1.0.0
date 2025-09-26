@@ -545,7 +545,7 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
             "downlink_period_s": sample.get("downlink_period_s", ""),
             "downlink_payload_bytes": sample.get("downlink_payload_bytes", ""),
         }
-        for label, suffix in ("mean", "std"):
+        for label, suffix in (("mean", "mean"), ("std", "std")):
             summary_row = {"replicate": label, **base_data}
             for metric in (
                 "uplink_pdr",
