@@ -381,11 +381,40 @@ class Simulator:
         self.battery_capacity_j = battery_capacity_j
         self.payload_size_bytes = payload_size_bytes
         self.node_class = node_class
+        provided_channels: list[Channel] = []
+        if isinstance(channels, MultiChannel):
+            provided_channels = [
+                ch for ch in channels.channels if isinstance(ch, Channel)
+            ]
+        elif isinstance(channels, (list, tuple, set)):
+            provided_channels = [ch for ch in channels if isinstance(ch, Channel)]
+        elif isinstance(channels, Channel):
+            provided_channels = [channels]
+
         if flora_mode:
             if detection_threshold_dBm == -float("inf"):
-                detection_threshold_dBm = -110.0
+                if provided_channels:
+                    thresholds = [
+                        ch.detection_threshold_dBm
+                        for ch in provided_channels
+                        if ch.detection_threshold_dBm != -float("inf")
+                    ]
+                    detection_threshold_dBm = (
+                        min(thresholds) if thresholds else -110.0
+                    )
+                else:
+                    detection_threshold_dBm = Channel.flora_energy_threshold(125000.0)
             if energy_detection_dBm == -float("inf"):
-                energy_detection_dBm = Channel.FLORA_ENERGY_DETECTION_DBM
+                if provided_channels:
+                    floors = [
+                        ch.energy_detection_dBm
+                        if ch.energy_detection_dBm != -float("inf")
+                        else Channel.flora_energy_threshold(ch.bandwidth)
+                        for ch in provided_channels
+                    ]
+                    energy_detection_dBm = min(floors) if floors else Channel.FLORA_ENERGY_DETECTION_DBM
+                else:
+                    energy_detection_dBm = Channel.flora_energy_threshold(125000.0)
             if min_interference_time == 0.0:
                 min_interference_time = 5.0
             if self.first_packet_min_delay == 0.0:

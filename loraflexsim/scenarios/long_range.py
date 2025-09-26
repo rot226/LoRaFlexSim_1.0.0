@@ -237,10 +237,31 @@ def create_long_range_channels(preset: str) -> List[Channel]:
     for bandwidth in LONG_RANGE_BANDWIDTHS:
         channel = Channel(environment=preset, flora_loss_model=_loss_model(preset))
         channel.shadowing_std = params.shadowing_std_dB
-        channel.bandwidth = bandwidth
+        channel.bandwidth = float(bandwidth)
         channel.tx_antenna_gain_dB = params.tx_antenna_gain_dB
         channel.rx_antenna_gain_dB = params.rx_antenna_gain_dB
         channel.cable_loss_dB = params.cable_loss_dB
+
+        # LoRaWAN coverage at 10–15 km hinges on the simulator being able to
+        # detect signals close to the theoretical sensitivity limits.  FLoRa
+        # exposes these limits via ``Channel.FLORA_SENSITIVITY`` but the
+        # default channel constructor keeps a conservative −90 dBm energy
+        # threshold.  The long range presets therefore ended up discarding
+        # every SF12 transmission as "NoCoverage", driving the PDR to zero.
+        #
+        # Align the detection logic with the underlying FLoRa tables so that
+        # the gateway accepts any frame that is within the published
+        # sensitivity budget for the configured bandwidth.
+        available = [
+            Channel.FLORA_SENSITIVITY[sf][int(bandwidth)]
+            for sf in Channel.FLORA_SENSITIVITY
+            if int(bandwidth) in Channel.FLORA_SENSITIVITY[sf]
+        ]
+        if available:
+            detection_floor = min(available)
+            channel.energy_detection_dBm = detection_floor
+            channel.detection_threshold_dBm = detection_floor
+
         channels.append(channel)
     return channels
 
@@ -273,6 +294,8 @@ def _build_simulator_from_params(
         packets_per_node if packets_per_node is not None else params.packets_per_node
     )
 
+    detection_floor = min(ch.energy_detection_dBm for ch in channels)
+
     simulator = Simulator(
         num_nodes=len(distances),
         num_gateways=1,
@@ -284,6 +307,8 @@ def _build_simulator_from_params(
         seed=seed,
         flora_mode=True,
         channels=channels,
+        energy_detection_dBm=detection_floor,
+        detection_threshold_dBm=detection_floor,
     )
     configure_long_range_nodes(simulator, params)
     return simulator

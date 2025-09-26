@@ -22,16 +22,17 @@ def test_flora_simulator_uses_non_orthogonal_capture():
     # The main channel and all nodes should immediately use the FLoRa matrix
     assert sim.channel.orthogonal_sf is False
     assert sim.channel.non_orth_delta == FLORA_NON_ORTH_DELTA
-    assert sim.channel.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
+    expected_floor = Channel.flora_energy_threshold(sim.channel.bandwidth)
+    assert sim.channel.energy_detection_dBm == expected_floor
 
     node = sim.nodes[0]
     assert node.channel.orthogonal_sf is False
     assert node.channel.non_orth_delta == FLORA_NON_ORTH_DELTA
-    assert node.channel.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
+    assert node.channel.energy_detection_dBm == expected_floor
 
     gw = sim.gateways[0]
-    assert gw.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
-    assert sim.network_server.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
+    assert gw.energy_detection_dBm == expected_floor
+    assert sim.network_server.energy_detection_dBm == expected_floor
 
 
 def test_flora_energy_detection_filters_frames():
@@ -51,8 +52,9 @@ def test_flora_energy_detection_filters_frames():
     node = sim.nodes[0]
     gateway = sim.gateways[0]
 
-    assert node.channel.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
-    assert gateway.energy_detection_dBm == Channel.FLORA_ENERGY_DETECTION_DBM
+    floor = Channel.flora_energy_threshold(node.channel.bandwidth)
+    assert node.channel.energy_detection_dBm == floor
+    assert gateway.energy_detection_dBm == floor
 
     add_called = False
     start_called = False

@@ -105,6 +105,20 @@ class Channel:
     }
 
     @classmethod
+    def flora_energy_threshold(cls, bandwidth: float) -> float:
+        """Return the most permissive FLoRa detection threshold for ``bandwidth``."""
+
+        bw = int(bandwidth)
+        candidates = [
+            tables.get(bw)
+            for tables in cls.FLORA_SENSITIVITY.values()
+            if bw in tables
+        ]
+        if candidates:
+            return min(candidates)
+        return cls.FLORA_ENERGY_DETECTION_DBM
+
+    @classmethod
     def flora_detection_threshold(cls, sf: int, bandwidth: float) -> float:
         """Return sensitivity in dBm for ``sf`` and ``bandwidth``.
 
@@ -344,7 +358,7 @@ class Channel:
                 self.energy_detection_dBm == -float("inf")
                 and env.startswith("flora")
             ):
-                self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
+                self.energy_detection_dBm = self.flora_energy_threshold(bandwidth)
         else:
             self.environment = None
 
@@ -478,7 +492,7 @@ class Channel:
                 or use_flora_curves
             )
         ):
-            self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
+            self.energy_detection_dBm = self.flora_energy_threshold(bandwidth)
         self.flora_loss_model = flora_loss_model
         self.system_loss_dB = system_loss_dB
         self.rssi_offset_dB = rssi_offset_dB
@@ -564,7 +578,7 @@ class Channel:
             self._use_flora_curves
             and self.energy_detection_dBm == -float("inf")
         ):
-            self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
+            self.energy_detection_dBm = self.flora_energy_threshold(self.bandwidth)
         self._set_flora_per_model(self._flora_per_model, explicit=False)
 
     @property
