@@ -18,6 +18,14 @@ Activez systématiquement les options suivantes sur le constructeur `Simulator`�
 - `phy_model="flora"` ou `"flora_cpp"` (si la bibliothèque native est compilée) : garantit l'utilisation des équations de PER et du comportement de capture exacts du code C++.【F:loraflexsim/launcher/simulator.py†L446-L575】【F:README.md†L582-L662】
 - `environment="flora"` (ou `flora_hata`/`flora_oulu`) sur chaque canal pour reprendre les profils de perte log-normale validés par FLoRa.【F:loraflexsim/launcher/channel.py†L68-L114】
 
+Gardez également en tête les interrupteurs suivants : `energy_detection_dBm`
+complète le seuil de sensibilité pour couper les écoutes sous −90 dBm en mode
+FLoRa, `capture_mode="aloha"` force les collisions destructives de l'option
+`alohaChannelModel`, et `flora_per_model` sélectionne la courbe de PER utilisée
+par le canal (`"logistic"`, `"croce"`, `"none"`). Ils héritent des valeurs
+historiques quand `flora_mode=True`, mais restent modifiables pour analyser des
+variantes de validation ou des scénarios bruités.【F:loraflexsim/launcher/channel.py†L360-L481】【F:loraflexsim/launcher/channel.py†L520-L614】【F:loraflexsim/launcher/gateway.py†L150-L219】【F:loraflexsim/launcher/simulator.py†L360-L415】
+
 ### Intervalle de trafic
 
 Lorsque les fichiers INI ne précisent pas `timeToNextPacket`, LoRaFlexSim ramène automatiquement `packet_interval` et `first_packet_interval` à `100 s` pour refléter la loi exponentielle utilisée par FLoRa. Vérifiez cette valeur si vous écrivez un scénario custom.【F:loraflexsim/launcher/simulator.py†L342-L385】

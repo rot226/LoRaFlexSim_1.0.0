@@ -51,6 +51,19 @@ Les passerelles en mode `capture_mode="flora"` reproduisent ainsi la logique du
 `LoRaReceiver` original, garantissant la parité avec les traces FLoRa lors des
 collisions entre signaux de même SF.
 
+### Seuil d'énergie et sensibilité
+
+Le canal sépare désormais deux notions : la sensibilité radio
+`detection_threshold_dBm`, pilotée par la table `FLORA_SENSITIVITY`, et le seuil
+d'énergie `energy_detection_dBm`, qui coupe toute tentative de réception sous
+−90 dBm lorsque `flora_mode=True`, qu'un PHY FLoRa est actif ou que les courbes
+historiques sont demandées.【F:loraflexsim/launcher/channel.py†L360-L481】【F:loraflexsim/launcher/simulator.py†L360-L399】 Les
+passerelles appliquent ce seuil avant même de vérifier le SF ou la capture, ce
+qui évite d'enregistrer des collisions fantômes en environnement très
+bruité.【F:loraflexsim/launcher/gateway.py†L150-L219】 Les réglages liés aux
+courbes (`use_flora_curves`) et au choix du PER (`flora_per_model`) héritent
+également automatiquement de cette valeur, clarifiant la séparation entre
+détection d'énergie et comparaison au seuil de sensibilité.【F:loraflexsim/launcher/channel.py†L520-L614】
 
 ### Modèle Hata‑Okumura
 
@@ -147,6 +160,18 @@ permet toutefois de retrouver l'ancien comportement en ajoutant
 `10 * log10(2 ** sf)` lorsque le spreading factor est connu, tant pour le
 canal de base que pour les variantes OMNeT++ et avancées
 【F:loraflexsim/launcher/channel.py†L683-L707】【F:loraflexsim/launcher/omnet_phy.py†L349-L365】【F:loraflexsim/launcher/advanced_channel.py†L668-L692】.
+
+### ADR multi-gateway
+
+Lorsqu'un uplink arrive via plusieurs passerelles, le serveur enregistre les
+SNR individuels par événement (`gateway_snr_samples`), sélectionne dynamiquement
+la meilleure passerelle puis pousse les échantillons dans
+`gateway_snr_history` afin de maintenir une fenêtre glissante sur 20
+valeurs par passerelle, comme dans FLoRa.【F:loraflexsim/launcher/server.py†L120-L176】【F:loraflexsim/launcher/server.py†L562-L614】【F:loraflexsim/launcher/server.py†L634-L678】 Les statistiques moyennes et maximales
+sont ensuite agrégées par `_gateway_snr_statistics` pour alimenter les calculs
+ADR (`adr-max`, `adr_method="avg"`, etc.), ce qui garantit que la décision
+prend en compte la diversité spatiale plutôt que le seul meilleur lien
+instantané.【F:loraflexsim/launcher/server.py†L720-L818】
 
 ## Taux d'erreur paquet (PER)
 

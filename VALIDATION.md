@@ -44,39 +44,39 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 ### Automatisation
 
-- `pytest tests/integration/test_validation_matrix.py` exécute la matrice pour l'intégration continue.
-- `python scripts/run_validation.py` génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
+- `pytest` [`tests/integration/test_validation_matrix.py`](tests/integration/test_validation_matrix.py) exécute la matrice pour l'intégration continue.
+- `python` [`scripts/run_validation.py`](scripts/run_validation.py) génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
 - `python scripts/run_rssi_snr_regression.py --output results/rssi_snr_regression.csv` compare les courbes RSSI/SNR (SF7–SF12) avec et sans obstacles aux traces FLoRa.【F:scripts/run_rssi_snr_regression.py†L1-L197】
 - `python scripts/run_per_monte_carlo.py --output results/per_campaign.csv` exécute une campagne Monte-Carlo pour confronter les modèles PER logistique et Croce selon SNR/SF/payload.【F:scripts/run_per_monte_carlo.py†L1-L135】
 - `docs/test_plan.md` récapitule la couverture par module et liste les tests marqués `xfail` pour les fonctionnalités manquantes.
-- `pytest tests/test_rest_api_gap.py tests/test_energy_breakdown_gap.py tests/test_duty_cycle_gap.py` vérifie que les scénarios décrivant les lacunes identifiées restent exécutables avant une livraison.
+- `pytest` [`tests/test_rest_api_gap.py`](tests/test_rest_api_gap.py) [`tests/test_energy_breakdown_gap.py`](tests/test_energy_breakdown_gap.py) [`tests/test_duty_cycle_gap.py`](tests/test_duty_cycle_gap.py) vérifie que les scénarios décrivant les lacunes identifiées restent exécutables avant une livraison.
 
 ### Checklists de validation
 
 #### Propagation
 
-- [ ] `pytest tests/integration/test_long_range_large_area.py` : confirme les marges RSSI/SNR des presets longue portée et la cohérence des profils `flora_*` au-delà de 10 km.【F:tests/integration/test_long_range_large_area.py†L1-L88】
-- [ ] `python scripts/run_validation.py --output results/validation_matrix.csv` : surveille les dérives de perte de parcours et de sensibilité sur l'ensemble des scénarios FLoRa.【F:scripts/run_validation.py†L1-L112】
+- [ ] `pytest` [`tests/integration/test_long_range_large_area.py`](tests/integration/test_long_range_large_area.py) : confirme les marges RSSI/SNR des presets longue portée et la cohérence des profils `flora_*` au-delà de 10 km.【F:tests/integration/test_long_range_large_area.py†L1-L88】
+- [ ] `python` [`scripts/run_validation.py`](scripts/run_validation.py) `--output results/validation_matrix.csv` : surveille les dérives de perte de parcours et de sensibilité sur l'ensemble des scénarios FLoRa.【F:scripts/run_validation.py†L1-L112】
 
 #### Collisions
 
-- [ ] `pytest tests/integration/test_validation_matrix.py` : compare collisions et PDR aux traces `.sca` de référence pour chaque mode (mono/multi-canaux, classes B/C).【F:tests/integration/test_validation_matrix.py†L1-L113】
-- [ ] `pytest tests/test_flora_defaults.py` : vérifie le seuil de détection, la matrice non orthogonale et la fenêtre de capture appliqués en mode FLoRa.【F:tests/test_flora_defaults.py†L1-L26】
+- [ ] `pytest` [`tests/integration/test_validation_matrix.py`](tests/integration/test_validation_matrix.py) : compare collisions et PDR aux traces `.sca` de référence pour chaque mode (mono/multi-canaux, classes B/C).【F:tests/integration/test_validation_matrix.py†L1-L113】
+- [ ] `pytest` [`tests/test_flora_defaults.py`](tests/test_flora_defaults.py) : vérifie le seuil de détection, la matrice non orthogonale et la fenêtre de capture appliqués en mode FLoRa.【F:tests/test_flora_defaults.py†L1-L26】
 
 #### ADR
 
-- [ ] `pytest tests/integration/test_adr_standard_alignment.py` : valide que la méthode `avg` reproduit les décisions ADR serveur historiques, y compris les fenêtres RX spécifiques aux classes.【F:tests/integration/test_adr_standard_alignment.py†L1-L79】
-- [ ] `pytest tests/test_flora_sca.py` : contrôle l'alignement des métriques PDR/SNR et des commandes ADR sur les fichiers `.sca` produits par FLoRa.【F:tests/test_flora_sca.py†L1-L60】
+- [ ] `pytest` [`tests/integration/test_adr_standard_alignment.py`](tests/integration/test_adr_standard_alignment.py) : valide que la méthode `avg` reproduit les décisions ADR serveur historiques, y compris les fenêtres RX spécifiques aux classes.【F:tests/integration/test_adr_standard_alignment.py†L1-L79】
+- [ ] `pytest` [`tests/test_flora_sca.py`](tests/test_flora_sca.py) : contrôle l'alignement des métriques PDR/SNR et des commandes ADR sur les fichiers `.sca` produits par FLoRa.【F:tests/test_flora_sca.py†L1-L60】
 
 #### Énergie
 
-- [ ] `pytest tests/test_flora_energy.py` : compare l'énergie cumulée aux traces OMNeT++ pour assurer la parité du modèle énergétique FLoRa.【F:tests/test_flora_energy.py†L1-L34】
-- [ ] `pytest tests/test_energy_breakdown_gap.py` : garantit que les régressions identifiées restent détectées via le suivi détaillé de l'énergie par état radio.【F:tests/test_energy_breakdown_gap.py†L1-L79】
+- [ ] `pytest` [`tests/test_flora_energy.py`](tests/test_flora_energy.py) : compare l'énergie cumulée aux traces OMNeT++ pour assurer la parité du modèle énergétique FLoRa.【F:tests/test_flora_energy.py†L1-L34】
+- [ ] `pytest` [`tests/test_energy_breakdown_gap.py`](tests/test_energy_breakdown_gap.py) : garantit que les régressions identifiées restent détectées via le suivi détaillé de l'énergie par état radio.【F:tests/test_energy_breakdown_gap.py†L1-L79】
 
 #### Downlink
 
-- [ ] `pytest tests/test_class_bc.py` : couvre la planification des beacons, ping slots et délais de classe C via le `DownlinkScheduler`.【F:tests/test_class_bc.py†L1-L60】
-- [ ] `pytest tests/test_node_classes.py` : vérifie les comportements par défaut des nœuds classes B/C (états radio, transitions sleep/RX).【F:tests/test_node_classes.py†L1-L68】
+- [ ] `pytest` [`tests/test_class_bc.py`](tests/test_class_bc.py) : couvre la planification des beacons, ping slots et délais de classe C via le `DownlinkScheduler`.【F:tests/test_class_bc.py†L1-L60】
+- [ ] `pytest` [`tests/test_node_classes.py`](tests/test_node_classes.py) : vérifie les comportements par défaut des nœuds classes B/C (états radio, transitions sleep/RX).【F:tests/test_node_classes.py†L1-L68】
 
 ## Résultats récents
 

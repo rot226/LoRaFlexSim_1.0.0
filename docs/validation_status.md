@@ -4,7 +4,7 @@ Ce mémo synthétise l'état de la matrice de validation comparant LoRaFlexSim a
 
 ## Résumé
 
-- **Dernière exécution :** `python scripts/run_validation.py --output results/validation_matrix.csv`.
+- **Dernière exécution :** `python` [`scripts/run_validation.py`](scripts/run_validation.py) `--output results/validation_matrix.csv`.
 - **Couverture :** 11 scénarios fonctionnels + 1 preset longue portée.
 - **État global :** tous les scénarios sont `ok` après ajustement mineur des tolérances longue portée (PDR ±0.015, SNR ±0.22 dB).【F:results/validation_matrix.csv†L2-L16】【F:loraflexsim/validation/__init__.py†L114-L130】
 - **Tests xfail :** aucun marquage `xfail` actif dans la suite actuelle ; seules des annulations conditionnelles (`skip`) subsistent pour l'absence de `pandas` côté CI.

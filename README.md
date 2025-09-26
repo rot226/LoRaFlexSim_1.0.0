@@ -97,6 +97,15 @@ les paramètres suivants sont appliqués lors de la création du `Simulator` ou 
   paramètre supplémentaire n'est nécessaire pour retrouver les collisions
   inter-SF et l'effet capture historiques.【F:loraflexsim/launcher/simulator.py†L392-L470】【F:loraflexsim/launcher/channel.py†L454-L520】
 
+Ces réglages s'accompagnent désormais de trois interrupteurs dédiés : le seuil
+`energy_detection_dBm` complète la sensibilité radio pour ignorer les signaux
+faibles avant tout décodage, `capture_mode="aloha"` impose le comportement
+« pure ALOHA » qui annule toute capture lorsqu'un chevauchement survient, et
+`flora_per_model` autorise le choix explicite de la courbe de PER (`"logistic"`,
+`"croce"`, `"none"`). Ils sont initialisés automatiquement en mode FLoRa mais
+peuvent être ajustés pour comparer différents scénarios de réception et de
+validation.【F:loraflexsim/launcher/channel.py†L360-L481】【F:loraflexsim/launcher/channel.py†L520-L614】【F:loraflexsim/launcher/gateway.py†L150-L219】【F:loraflexsim/launcher/simulator.py†L360-L415】
+
 Pour étendre fidèlement les scénarios FLoRa au-delà de 10 km, utilisez les
 presets longue portée fournis par `run.py`. Par exemple :
 
@@ -216,12 +225,12 @@ en restant dans l'enveloppe des presets existants.【F:tests/integration/test_lo
 Deux commandes permettent de rejouer la matrice de validation et de suivre les
 écarts par rapport aux références FLoRa décrites dans `VALIDATION.md` :
 
-1. `pytest tests/integration/test_validation_matrix.py` exécute chaque scénario
+1. `pytest` [`tests/integration/test_validation_matrix.py`](tests/integration/test_validation_matrix.py) exécute chaque scénario
    et vérifie que les écarts de PDR, de collisions et de SNR restent dans les
    tolérances définies par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】
-2. `python scripts/run_validation.py --output results/validation_matrix.csv`
-   génère un rapport synthétique et retourne un code de sortie non nul si une
-   dérive dépasse une tolérance.【F:scripts/run_validation.py†L1-L112】
+2. `python` [`scripts/run_validation.py`](scripts/run_validation.py) `--output
+   results/validation_matrix.csv` génère un rapport synthétique et retourne un
+   code de sortie non nul si une dérive dépasse une tolérance.【F:scripts/run_validation.py†L1-L112】
 
 Le fichier `results/validation_matrix.csv` regroupe pour chaque scénario les
 valeurs simulées (`*_sim`), les références FLoRa (`*_ref`), les écarts (`*_delta`)
