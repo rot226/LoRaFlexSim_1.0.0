@@ -47,10 +47,17 @@ class ValidationScenario:
     setup: Sequence[Callable[[Simulator], None]] = field(default_factory=tuple)
     channels_factory: Callable[[], list[Channel]] | None = None
 
-    def build_simulator(self) -> Simulator:
-        """Instantiate :class:`Simulator` for the scenario."""
+    def build_simulator(self, **overrides: Any) -> Simulator:
+        """Instantiate :class:`Simulator` for the scenario.
+
+        Parameters passed via ``overrides`` allow callers to tweak specific
+        simulator keyword arguments (e.g. ``seed``) without mutating the
+        scenario definition.  They take precedence over the baseline
+        ``sim_kwargs`` supplied when constructing the scenario.
+        """
 
         kwargs = dict(self.sim_kwargs)
+        kwargs.update(overrides)
         if self.channels_factory is not None:
             kwargs["channels"] = self.channels_factory()
         elif self.channel_plan is not None:
