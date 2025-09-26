@@ -13,10 +13,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, os.fspath(ROOT))
 
-from scripts.mne3sd.common import apply_ieee_style, save_figure
+from scripts.mne3sd.common import (
+    apply_ieee_style,
+    prepare_figure_directory,
+    save_figure,
+)
 
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_range_metrics.csv"
-FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_b"
+ARTICLE = "article_b"
+SCENARIO = "mobility_range"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -90,7 +95,7 @@ def load_metrics(path: Path) -> pd.DataFrame:
 
 
 def plot_pdr_vs_range(
-    df: pd.DataFrame, output_dir: Path, highlight_threshold: float | None
+    df: pd.DataFrame, highlight_threshold: float | None
 ) -> None:
     """Plot aggregated PDR versus communication range with error bars."""
 
@@ -134,10 +139,15 @@ def plot_pdr_vs_range(
     ax.legend()
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="pdr_vs_range",
+    )
     save_figure(fig, "pdr_vs_communication_range", output_dir)
 
 
-def plot_delay_vs_range(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_delay_vs_range(df: pd.DataFrame) -> None:
     """Plot aggregated average delay versus communication range."""
 
     fig, ax = plt.subplots()
@@ -158,6 +168,11 @@ def plot_delay_vs_range(df: pd.DataFrame, output_dir: Path) -> None:
     ax.legend()
     fig.tight_layout()
 
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="average_delay_vs_range",
+    )
     save_figure(fig, "average_delay_vs_communication_range", output_dir)
 
 
@@ -170,8 +185,8 @@ def main() -> None:  # pragma: no cover - CLI entry point
 
     metrics = load_metrics(args.results)
 
-    plot_pdr_vs_range(metrics, FIGURES_DIR, args.highlight_threshold)
-    plot_delay_vs_range(metrics, FIGURES_DIR)
+    plot_pdr_vs_range(metrics, args.highlight_threshold)
+    plot_delay_vs_range(metrics)
 
     if args.show:
         plt.show()

@@ -8,9 +8,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from scripts.mne3sd.common import prepare_figure_directory, save_figure
+
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_a" / "class_density_metrics.csv"
-FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_a"
+ARTICLE = "article_a"
+SCENARIO = "class_density"
 
 
 def apply_plot_style(style: str | None) -> None:
@@ -96,7 +99,7 @@ def summarise_metric(df: pd.DataFrame, column: str) -> pd.DataFrame:
     return summary.sort_values(["class", "nodes"])  # keep ordering deterministic
 
 
-def plot_pdr_vs_nodes(df: pd.DataFrame, output_dir: Path) -> None:
+def plot_pdr_vs_nodes(df: pd.DataFrame) -> None:
     """Plot the packet delivery ratio versus node count for each class."""
     stats = summarise_metric(df, "pdr")
     stats["pdr_mean"] *= 100.0
@@ -123,10 +126,15 @@ def plot_pdr_vs_nodes(df: pd.DataFrame, output_dir: Path) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
     fig.tight_layout()
 
-    save_figure(fig, output_dir / "class_pdr_vs_nodes")
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="pdr_vs_nodes",
+    )
+    save_figure(fig, "class_pdr_vs_nodes", output_dir)
 
 
-def plot_energy_vs_nodes(df: pd.DataFrame, output_dir: Path) -> bool:
+def plot_energy_vs_nodes(df: pd.DataFrame) -> bool:
     """Plot average per-node energy versus node count if data is available."""
     if "energy_per_node_J" not in df.columns:
         return False
@@ -156,19 +164,13 @@ def plot_energy_vs_nodes(df: pd.DataFrame, output_dir: Path) -> bool:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
     fig.tight_layout()
 
-    save_figure(fig, output_dir / "class_energy_vs_nodes")
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric="energy_vs_nodes",
+    )
+    save_figure(fig, "class_energy_vs_nodes", output_dir)
     return True
-
-
-def save_figure(fig: plt.Figure, base_path: Path) -> None:
-    """Save ``fig`` to ``base_path`` as PNG and EPS files."""
-    base_path.parent.mkdir(parents=True, exist_ok=True)
-    png_path = base_path.with_suffix(".png")
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    print(f"Saved {png_path}")
-    eps_path = base_path.with_suffix(".eps")
-    fig.savefig(eps_path, dpi=300, format="eps", bbox_inches="tight")
-    print(f"Saved {eps_path}")
 
 
 def main() -> None:
@@ -178,8 +180,8 @@ def main() -> None:
 
     metrics = load_metrics(args.results)
 
-    plot_pdr_vs_nodes(metrics, FIGURES_DIR)
-    energy_created = plot_energy_vs_nodes(metrics, FIGURES_DIR)
+    plot_pdr_vs_nodes(metrics)
+    energy_created = plot_energy_vs_nodes(metrics)
 
     if not energy_created:
         print("Energy per node data not available; skipping energy plot.")

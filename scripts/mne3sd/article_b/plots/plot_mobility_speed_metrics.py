@@ -15,10 +15,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, os.fspath(ROOT))
 
-from scripts.mne3sd.common import apply_ieee_style, save_figure
+from scripts.mne3sd.common import (
+    apply_ieee_style,
+    prepare_figure_directory,
+    save_figure,
+)
 
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_speed_metrics.csv"
-FIGURES_DIR = ROOT / "figures" / "mne3sd" / "article_b"
+ARTICLE = "article_b"
+SCENARIO = "mobility_speed"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -152,7 +157,6 @@ def plot_grouped_bars(
     ylabel: str,
     title: str,
     output_name: str,
-    output_dir: Path,
     dpi: int,
     value_format: str,
     ylim: tuple[float, float] | None = None,
@@ -186,11 +190,16 @@ def plot_grouped_bars(
         ax.bar_label(container, fmt=value_format, padding=2, fontsize=7)
 
     fig.tight_layout()
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric=output_name,
+    )
     save_figure(fig, output_name, output_dir, dpi=dpi)
     plt.close(fig)
 
 
-def plot_heatmap(df: pd.DataFrame, output_name: str, output_dir: Path, dpi: int) -> None:
+def plot_heatmap(df: pd.DataFrame, output_name: str, dpi: int) -> None:
     """Plot a heatmap of PDR versus communication range when available."""
 
     if "range_km" not in df.columns:
@@ -238,6 +247,11 @@ def plot_heatmap(df: pd.DataFrame, output_name: str, output_dir: Path, dpi: int)
     cbar.set_label("PDR (%)")
 
     fig.tight_layout()
+    output_dir = prepare_figure_directory(
+        article=ARTICLE,
+        scenario=SCENARIO,
+        metric=output_name,
+    )
     save_figure(fig, output_name, output_dir, dpi=dpi)
     plt.close(fig)
 
@@ -262,7 +276,6 @@ def main() -> None:  # pragma: no cover - CLI entry point
         pdr_label,
         "PDR by speed profile",
         "pdr_by_speed_profile",
-        FIGURES_DIR,
         args.dpi,
         pdr_format,
         ylim=pdr_ylim,
@@ -274,7 +287,6 @@ def main() -> None:  # pragma: no cover - CLI entry point
         "Average delay (s)",
         "Average delay by speed profile",
         "average_delay_by_speed_profile",
-        FIGURES_DIR,
         args.dpi,
         "{:.2f}",
     )
@@ -282,7 +294,6 @@ def main() -> None:  # pragma: no cover - CLI entry point
     plot_heatmap(
         metrics,
         "pdr_heatmap_speed_profile_range",
-        FIGURES_DIR,
         args.dpi,
     )
 

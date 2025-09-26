@@ -32,6 +32,29 @@ def ensure_directory(path: str | Path) -> Path:
     return directory
 
 
+def prepare_figure_directory(
+    *,
+    article: str,
+    scenario: str,
+    metric: str,
+    base_dir: str | Path | None = None,
+) -> Path:
+    """Return the output directory for the given article/scenario/metric trio."""
+
+    components = {"article": article, "scenario": scenario, "metric": metric}
+    missing = [name for name, value in components.items() if not value]
+    if missing:
+        joined = ", ".join(missing)
+        raise ValueError(f"Missing figure directory component(s): {joined}")
+
+    if base_dir is None:
+        base_path = Path(__file__).resolve().parents[2] / "figures" / "mne3sd"
+    else:
+        base_path = Path(base_dir)
+
+    return ensure_directory(base_path / article / scenario / metric)
+
+
 def apply_ieee_style(figsize: tuple[float, float] = (3.5, 2.2)) -> None:
     """Apply a compact IEEE-friendly Matplotlib style."""
 

@@ -68,18 +68,56 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
             module="scripts.mne3sd.article_a.plots.plot_class_load_results",
             description="Class load plots",
             outputs=(
-                Path("figures/mne3sd/article_a/class_energy_vs_interval.png"),
-                Path("figures/mne3sd/article_a/class_energy_vs_interval.eps"),
-                Path("figures/mne3sd/article_a/class_pdr_vs_interval.png"),
-                Path("figures/mne3sd/article_a/class_pdr_vs_interval.eps"),
+                Path(
+                    "figures/mne3sd/article_a/class_load/energy_vs_interval/"
+                    "class_energy_vs_interval.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_load/energy_vs_interval/"
+                    "class_energy_vs_interval.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_load/pdr_vs_interval/"
+                    "class_pdr_vs_interval.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_load/pdr_vs_interval/"
+                    "class_pdr_vs_interval.eps"
+                ),
             ),
         ),
         Task(
             module="scripts.mne3sd.article_a.plots.plot_energy_duty_cycle",
             description="Energy consumption versus duty cycle plots",
             outputs=(
-                Path("figures/mne3sd/article_a/energy_per_node_vs_duty_cycle.png"),
-                Path("figures/mne3sd/article_a/energy_per_node_vs_duty_cycle.eps"),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/"
+                    "energy_per_node_vs_duty_cycle/"
+                    "energy_per_node_vs_duty_cycle.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/"
+                    "energy_per_node_vs_duty_cycle/"
+                    "energy_per_node_vs_duty_cycle.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/pdr_vs_duty_cycle/"
+                    "pdr_vs_duty_cycle.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/pdr_vs_duty_cycle/"
+                    "pdr_vs_duty_cycle.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/"
+                    "energy_breakdown_vs_duty_cycle/"
+                    "energy_breakdown_vs_duty_cycle.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/energy_duty_cycle/"
+                    "energy_breakdown_vs_duty_cycle/"
+                    "energy_breakdown_vs_duty_cycle.eps"
+                ),
             ),
         ),
     ),
@@ -89,16 +127,20 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
             description="Mobility range plots",
             outputs=(
                 Path(
-                    "figures/mne3sd/article_b/pdr_vs_communication_range.png"
+                    "figures/mne3sd/article_b/mobility_range/pdr_vs_range/"
+                    "pdr_vs_communication_range.png"
                 ),
                 Path(
-                    "figures/mne3sd/article_b/pdr_vs_communication_range.eps"
+                    "figures/mne3sd/article_b/mobility_range/pdr_vs_range/"
+                    "pdr_vs_communication_range.eps"
                 ),
                 Path(
-                    "figures/mne3sd/article_b/average_delay_vs_communication_range.png"
+                    "figures/mne3sd/article_b/mobility_range/average_delay_vs_range/"
+                    "average_delay_vs_communication_range.png"
                 ),
                 Path(
-                    "figures/mne3sd/article_b/average_delay_vs_communication_range.eps"
+                    "figures/mne3sd/article_b/mobility_range/average_delay_vs_range/"
+                    "average_delay_vs_communication_range.eps"
                 ),
             ),
         ),
@@ -106,15 +148,33 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
             module="scripts.mne3sd.article_b.plots.plot_mobility_speed_metrics",
             description="Mobility speed plots",
             outputs=(
-                Path("figures/mne3sd/article_b/pdr_by_speed_profile.png"),
-                Path("figures/mne3sd/article_b/pdr_by_speed_profile.eps"),
-                Path("figures/mne3sd/article_b/average_delay_by_speed_profile.png"),
-                Path("figures/mne3sd/article_b/average_delay_by_speed_profile.eps"),
                 Path(
-                    "figures/mne3sd/article_b/pdr_heatmap_speed_profile_range.png"
+                    "figures/mne3sd/article_b/mobility_speed/pdr_by_speed_profile/"
+                    "pdr_by_speed_profile.png"
                 ),
                 Path(
-                    "figures/mne3sd/article_b/pdr_heatmap_speed_profile_range.eps"
+                    "figures/mne3sd/article_b/mobility_speed/pdr_by_speed_profile/"
+                    "pdr_by_speed_profile.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_speed/"
+                    "average_delay_by_speed_profile/"
+                    "average_delay_by_speed_profile.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_speed/"
+                    "average_delay_by_speed_profile/"
+                    "average_delay_by_speed_profile.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_speed/"
+                    "pdr_heatmap_speed_profile_range/"
+                    "pdr_heatmap_speed_profile_range.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_speed/"
+                    "pdr_heatmap_speed_profile_range/"
+                    "pdr_heatmap_speed_profile_range.eps"
                 ),
             ),
         ),
