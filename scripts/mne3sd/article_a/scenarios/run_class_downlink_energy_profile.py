@@ -432,7 +432,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable verbose logging",
     )
-    add_worker_argument(parser)
+    add_worker_argument(parser, default="auto")
 
     args = parser.parse_args(argv)
     profile = resolve_execution_profile(args.profile)
