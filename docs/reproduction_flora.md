@@ -12,7 +12,7 @@ Ce guide rassemble les réglages indispensables pour aligner un scénario LoRaFl
 
 Activez systématiquement les options suivantes sur le constructeur `Simulator` :
 
-- `flora_mode=True` : applique automatiquement le modèle physique `omnet_full`, charge la matrice de collisions non orthogonales, force le shadowing log-normal de FLoRa et verrouille le seuil de détection à `-110 dBm` sur tous les canaux.【F:loraflexsim/launcher/simulator.py†L354-L470】【F:loraflexsim/launcher/channel.py†L454-L520】
+- `flora_mode=True` : applique automatiquement le modèle physique `omnet_full`, charge la matrice de collisions non orthogonales, force le shadowing log-normal de FLoRa et verrouille les seuils radio (`detection_threshold_dBm=-110`, `energy_detection_dBm=-90`) sur tous les canaux et passerelles.【F:loraflexsim/launcher/simulator.py†L354-L575】【F:loraflexsim/launcher/channel.py†L454-L560】
 - `flora_timing=True` : aligne les temporisations MAC (RX1/RX2, latence serveur, traitement réseau) sur celles d'OMNeT++ pour garantir des fenêtres descendantes identiques.【F:loraflexsim/launcher/simulator.py†L231-L388】【F:loraflexsim/launcher/server.py†L72-L321】
 - `adr_method="avg"` : reproduit la stratégie ADR historique basée sur la moyenne glissante des 20 derniers SNR remontés par chaque nœud.【F:loraflexsim/launcher/server.py†L216-L321】【F:tests/test_flora_sca.py†L18-L39】
 - `phy_model="flora"` ou `"flora_cpp"` (si la bibliothèque native est compilée) : garantit l'utilisation des équations de PER et du comportement de capture exacts du code C++.【F:loraflexsim/launcher/simulator.py†L446-L575】【F:README.md†L582-L662】

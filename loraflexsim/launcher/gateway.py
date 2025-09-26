@@ -28,6 +28,7 @@ class Gateway:
         orientation_el: float = 0.0,
         energy_profile: EnergyProfile | str | None = None,
         downlink_power_dBm: float | None = None,
+        energy_detection_dBm: float = -float("inf"),
     ):
         """
         Initialise une passerelle LoRa.
@@ -41,6 +42,7 @@ class Gateway:
         :param altitude: Altitude de l'antenne (mètres).
         :param rx_gain_dB: Gain d’antenne additionnel (dB).
         :param energy_profile: Profil énergétique utilisé pour la consommation.
+        :param energy_detection_dBm: Seuil minimal de détection d'énergie.
         """
         self.id = gateway_id
         self.x = x
@@ -66,6 +68,7 @@ class Gateway:
         self.energy_sleep = 0.0
         self.energy_processing = 0.0
         self.energy_ramp = 0.0
+        self.energy_detection_dBm = energy_detection_dBm
         # Accumulateur d'énergie par état
         self.energy = EnergyAccumulator()
         # Transmissions en cours indexées par (sf, frequency)
@@ -156,6 +159,14 @@ class Gateway:
             ΔRSSI (dB) minimal entre ``SF_signal`` (ligne) et
             ``SF_interférence`` (colonne) pour autoriser la capture.
         """
+        if rssi < getattr(self, "energy_detection_dBm", -float("inf")):
+            logger.debug(
+                "Gateway %s: ignore un paquet sous le seuil d'énergie (RSSI=%.1f dBm)",
+                self.id,
+                rssi,
+            )
+            return
+
         key = (sf, frequency)
         symbol_duration = (2 ** sf) / bandwidth
         # Gather all active transmissions that share the same frequency. When

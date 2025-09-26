@@ -66,6 +66,7 @@ class _CorrelatedValue:
 class Channel:
     """Représente le canal de propagation radio pour LoRa."""
 
+    FLORA_ENERGY_DETECTION_DBM = -90.0
     ENV_PRESETS = {
         "urban": (2.08, 3.57, 127.41, 40.0),
         "suburban": (2.32, 7.08, 128.95, 1000.0),
@@ -209,6 +210,7 @@ class Channel:
         tx_power_std: float = 0.0,
         interference_dB: float = 0.0,
         detection_threshold_dBm: float = -float("inf"),
+        energy_detection_dBm: float = -float("inf"),
         sensitivity_margin_dB: float = 0.0,
         band_interference: list[tuple[float, float, float]] | None = None,
         environment: str | None = None,
@@ -244,6 +246,9 @@ class Channel:
         :param interference_dB: Bruit supplémentaire moyen dû aux interférences.
         :param detection_threshold_dBm: RSSI minimal détectable (dBm). Les
             signaux plus faibles sont ignorés.
+        :param energy_detection_dBm: Seuil de détection d'énergie (dBm).
+            FLoRa applique −90 dBm par défaut afin d'ignorer les canaux trop
+            silencieux avant d'engager la chaîne de réception.
         :param sensitivity_margin_dB: Marge ajoutée aux seuils de détection
             FLoRa pour ajuster la sensibilité (dB).
         :param band_interference: Liste optionnelle de tuples ``(freq, bw, dB)``
@@ -314,6 +319,8 @@ class Channel:
         :param obstacle_loss: Instance préconfigurée de :class:`ObstacleLoss`.
         """
 
+        self.energy_detection_dBm = energy_detection_dBm
+
         if environment is not None:
             env = environment.lower()
             if env not in self.ENV_PRESETS:
@@ -325,6 +332,11 @@ class Channel:
                 reference_distance,
             ) = self.ENV_PRESETS[env]
             self.environment = env
+            if (
+                self.energy_detection_dBm == -float("inf")
+                and env.startswith("flora")
+            ):
+                self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
         else:
             self.environment = None
 
@@ -450,6 +462,15 @@ class Channel:
         self.advanced_capture = advanced_capture
         self.flora_capture = flora_capture
         self.phy_model = phy_model
+        if (
+            self.energy_detection_dBm == -float("inf")
+            and (
+                bool(phy_model) and str(phy_model).startswith("flora")
+                or flora_capture
+                or use_flora_curves
+            )
+        ):
+            self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
         self.flora_loss_model = flora_loss_model
         self.system_loss_dB = system_loss_dB
         self.rssi_offset_dB = rssi_offset_dB
@@ -530,6 +551,11 @@ class Channel:
     def use_flora_curves(self, value: bool) -> None:
         self._use_flora_curves = bool(value)
         self._maybe_enforce_capture_window()
+        if (
+            self._use_flora_curves
+            and self.energy_detection_dBm == -float("inf")
+        ):
+            self.energy_detection_dBm = self.FLORA_ENERGY_DETECTION_DBM
 
     @property
     def capture_window_symbols(self) -> int:
