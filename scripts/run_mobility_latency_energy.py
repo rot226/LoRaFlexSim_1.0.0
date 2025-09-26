@@ -56,6 +56,10 @@ def run_scenario(
     )
     sim.run()
     metrics = sim.get_metrics()
+    sf_dist = metrics.get("sf_distribution", {})
+    total_sf = sum(sf * count for sf, count in sf_dist.items())
+    total_nodes = sum(sf_dist.values())
+    avg_sf = total_sf / total_nodes if total_nodes else 0.0
     total_packets = metrics["delivered"] + metrics["collisions"]
     return {
         "scenario": name,
@@ -65,6 +69,7 @@ def run_scenario(
         "collision_rate": metrics["collisions"] / total_packets * 100
         if total_packets
         else 0.0,
+        "avg_sf": avg_sf,
     }
 
 
@@ -219,7 +224,7 @@ def main() -> None:
             "speed": speed,
             "channels": ch_count,
         }
-        for key in ["pdr", "avg_delay", "energy_per_node", "collision_rate"]:
+        for key in ["pdr", "avg_delay", "energy_per_node", "collision_rate", "avg_sf"]:
             values = [row[key] for row in rep_rows]
             agg[f"{key}_mean"] = statistics.mean(values)
             agg[f"{key}_std"] = statistics.pstdev(values)
@@ -242,6 +247,8 @@ def main() -> None:
         "energy_per_node_std",
         "collision_rate_mean",
         "collision_rate_std",
+        "avg_sf_mean",
+        "avg_sf_std",
     ]
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
