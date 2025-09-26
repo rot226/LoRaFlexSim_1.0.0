@@ -26,6 +26,7 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (  # noqa: E402
     add_execution_profile_argument,
+    execute_simulation_tasks,
     resolve_execution_profile,
     summarise_metrics,
     write_csv,
@@ -144,6 +145,61 @@ def area_side_from_surface(area_km2: float) -> float:
     return math.sqrt(area_km2 * 1_000_000.0)
 
 
+def run_single_configuration(task: dict[str, object]) -> dict[str, object]:
+    """Execute a single density/node/SF replicate and return the collected metrics."""
+
+    gateways = int(task["gateways"])
+    node_count = int(task["nodes"])
+    sim = Simulator(
+        num_nodes=node_count,
+        num_gateways=gateways,
+        area_size=float(task["area_side_m"]),
+        packets_to_send=int(task["packets"]),
+        packet_interval=float(task["interval_s"]),
+        transmission_mode="Random",
+        seed=int(task["seed"]),
+        **task["sf_kwargs"],
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    delivered = int(metrics.get("delivered", 0))
+    collisions = int(metrics.get("collisions", 0))
+    pdr = float(metrics.get("PDR", 0.0))
+    avg_delay = float(metrics.get("avg_delay_s", 0.0))
+    throughput = float(metrics.get("throughput_bps", 0.0))
+    pdr_by_sf = metrics.get("pdr_by_sf", {})
+    pdr_by_class = metrics.get("pdr_by_class", {})
+    energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
+    energy_per_node = energy_nodes / node_count if node_count else 0.0
+
+    row = {
+        "area_km2": task["area_km2"],
+        "density_gw_per_km2": task["density"],
+        "gateways": gateways,
+        "nodes": node_count,
+        "sf_mode": task["sf_mode"],
+        "packets": task["packets"],
+        "interval_s": task["interval_s"],
+        "replicate": task["replicate"],
+        "seed": task["seed"],
+        "pdr": pdr,
+        "delivered": delivered,
+        "collisions": collisions,
+        "avg_delay_s": avg_delay,
+        "throughput_bps": throughput,
+        "energy_per_node_J": energy_per_node,
+    }
+
+    for sf in range(7, 13):
+        row[f"pdr_sf{sf}"] = float(pdr_by_sf.get(sf, 0.0))
+
+    for class_type, class_pdr in pdr_by_class.items():
+        row[f"pdr_class_{class_type}"] = float(class_pdr)
+
+    return row
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description="Simulate PDR as a function of base-station density"
@@ -198,6 +254,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel worker processes to use",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -228,9 +290,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
         ", ".join(str(n) for n in node_counts),
     )
 
-    results: list[dict[str, object]] = []
-    summary_inputs: list[dict[str, object]] = []
-
+    tasks: list[dict[str, object]] = []
     seed_counter = args.seed
     for density, node_count, sf_mode in product(densities, node_counts, sf_modes):
         gateways = gateways_from_density(density, area_km2)
@@ -249,64 +309,41 @@ def main() -> None:  # noqa: D401 - CLI entry point
         )
 
         for replicate in range(1, replicates + 1):
-            sim = Simulator(
-                num_nodes=node_count,
-                num_gateways=gateways,
-                area_size=side_m,
-                packets_to_send=packets,
-                packet_interval=interval_s,
-                transmission_mode="Random",
-                seed=seed_counter,
-                **sf_kwargs,
+            tasks.append(
+                {
+                    "area_km2": area_km2,
+                    "area_side_m": side_m,
+                    "density": density,
+                    "gateways": gateways,
+                    "nodes": node_count,
+                    "sf_mode": sf_mode,
+                    "sf_kwargs": dict(sf_kwargs),
+                    "packets": packets,
+                    "interval_s": interval_s,
+                    "replicate": replicate,
+                    "seed": seed_counter,
+                }
             )
             seed_counter += 1
-            sim.run()
-            metrics = sim.get_metrics()
 
-            delivered = int(metrics.get("delivered", 0))
-            collisions = int(metrics.get("collisions", 0))
-            pdr = float(metrics.get("PDR", 0.0))
-            avg_delay = float(metrics.get("avg_delay_s", 0.0))
-            throughput = float(metrics.get("throughput_bps", 0.0))
-            pdr_by_sf = metrics.get("pdr_by_sf", {})
-            pdr_by_class = metrics.get("pdr_by_class", {})
-            energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-            energy_per_node = energy_nodes / node_count if node_count else 0.0
+    if args.workers > 1:
+        LOGGER.info("Using %d worker processes", args.workers)
 
-            row = {
-                "area_km2": area_km2,
-                "density_gw_per_km2": density,
-                "gateways": gateways,
-                "nodes": node_count,
-                "sf_mode": sf_mode,
-                "packets": packets,
-                "interval_s": interval_s,
-                "replicate": replicate,
-                "seed": seed_counter - 1,
-                "pdr": pdr,
-                "delivered": delivered,
-                "collisions": collisions,
-                "avg_delay_s": avg_delay,
-                "throughput_bps": throughput,
-                "energy_per_node_J": energy_per_node,
-            }
+    def log_progress(task: dict[str, object], result: dict[str, object], index: int) -> None:
+        LOGGER.debug(
+            "Replicate %d -> PDR %.3f, collisions %d, avg delay %.3fs",
+            task["replicate"],
+            result["pdr"],
+            result["collisions"],
+            result["avg_delay_s"],
+        )
 
-            for sf in range(7, 13):
-                row[f"pdr_sf{sf}"] = float(pdr_by_sf.get(sf, 0.0))
-
-            for class_type, class_pdr in pdr_by_class.items():
-                row[f"pdr_class_{class_type}"] = float(class_pdr)
-
-            results.append(row)
-            summary_inputs.append(row)
-
-            LOGGER.debug(
-                "Replicate %d -> PDR %.3f, collisions %d, avg delay %.3fs",
-                replicate,
-                pdr,
-                collisions,
-                avg_delay,
-            )
+    results = execute_simulation_tasks(
+        tasks,
+        run_single_configuration,
+        max_workers=args.workers,
+        progress_callback=log_progress,
+    )
 
     if not results:
         LOGGER.warning("No simulations executed; skipping CSV generation")
@@ -338,7 +375,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     write_csv(DETAIL_CSV, fieldnames, results)
 
     summary_rows = summarise_metrics(
-        summary_inputs,
+        results,
         ["density_gw_per_km2", "nodes", "sf_mode"],
         [
             "pdr",

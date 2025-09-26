@@ -32,6 +32,7 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    execute_simulation_tasks,
     resolve_execution_profile,
     summarise_metrics,
     write_csv,
@@ -243,6 +244,82 @@ def compute_energy_metrics(
     return energy_tx, energy_rx, energy_idle, time_tx, time_rx, time_idle
 
 
+def run_single_configuration(task: dict[str, Any]) -> dict[str, Any]:
+    """Execute one class/run configuration and return the collected metrics."""
+
+    simulator_kwargs: dict[str, Any] = {
+        "num_nodes": int(task["nodes"]),
+        "num_gateways": int(task["gateways"]),
+        "packet_interval": float(task["packet_interval_s"]),
+        "packets_to_send": 0,
+        "payload_size_bytes": int(task["uplink_payload_bytes"]),
+        "node_class": str(task["class"]),
+        "seed": int(task["seed"]),
+        "class_c_rx_interval": float(task["class_c_rx_interval_s"]),
+        "adr_node": bool(task["adr_node"]),
+        "adr_server": bool(task["adr_server"]),
+        "duty_cycle": task["duty_cycle"],
+        "mobility": bool(task["mobility"]),
+        "transmission_mode": str(task["transmission_mode"]),
+    }
+    if task.get("config_file"):
+        simulator_kwargs["config_file"] = task["config_file"]
+
+    sim = Simulator(**simulator_kwargs)
+    sim.beacon_interval = float(task["beacon_interval_s"])
+    sim.network_server.beacon_interval = float(task["beacon_interval_s"])
+    track_downlinks(sim)
+
+    schedule_downlinks(
+        sim,
+        period_s=float(task["downlink_period_s"]),
+        duration_s=float(task["duration_s"]),
+        payload_size=int(task["downlink_payload_bytes"]),
+    )
+
+    run_for_duration(sim, float(task["duration_s"]))
+    metrics = sim.get_metrics()
+
+    (
+        energy_tx,
+        energy_rx,
+        energy_idle,
+        time_tx,
+        time_rx,
+        time_idle,
+    ) = compute_energy_metrics(sim, metrics, float(task["duration_s"]))
+
+    downlink_attempted = getattr(sim.network_server, "downlink_scheduled", 0)
+    downlink_delivered = getattr(sim.network_server, "downlink_delivered", 0)
+    downlink_pdr = (
+        downlink_delivered / downlink_attempted if downlink_attempted else 0.0
+    )
+
+    return {
+        "class": task["class"],
+        "replicate": task["replicate"],
+        "seed": task["seed"],
+        "nodes": task["nodes"],
+        "gateways": task["gateways"],
+        "duration_s": task["duration_s"],
+        "packet_interval_s": task["packet_interval_s"],
+        "beacon_interval_s": task["beacon_interval_s"],
+        "class_c_rx_interval_s": task["class_c_rx_interval_s"],
+        "downlink_period_s": task["downlink_period_s"],
+        "downlink_payload_bytes": task["downlink_payload_bytes"],
+        "uplink_pdr": float(metrics.get("PDR", 0.0)),
+        "downlink_pdr": downlink_pdr,
+        "downlink_attempted": downlink_attempted,
+        "downlink_delivered": downlink_delivered,
+        "energy_tx_J": energy_tx,
+        "energy_rx_J": energy_rx,
+        "energy_idle_J": energy_idle,
+        "time_tx_s": time_tx,
+        "time_rx_s": time_rx,
+        "time_idle_s": time_idle,
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Return parsed command line arguments."""
 
@@ -353,6 +430,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel worker processes to use",
+    )
 
     args = parser.parse_args(argv)
     profile = resolve_execution_profile(args.profile)
@@ -376,94 +459,56 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
     output_path = Path(args.output)
 
     classes = ["B", "C"]
-    rows: list[dict[str, Any]] = []
 
+    transmission_mode = "Periodic" if args.mode == "periodic" else "Random"
+    duty_cycle_value: float | None = None if args.duty_cycle == 0 else args.duty_cycle
+
+    tasks: list[dict[str, Any]] = []
     for class_index, class_type in enumerate(classes):
         LOGGER.info("=== Simulating class %s ===", class_type)
         for replicate in range(1, args.runs + 1):
             seed_offset = class_index * args.runs + (replicate - 1)
             seed = args.seed + seed_offset
-            LOGGER.info("Replicate %d/%d (seed=%d)", replicate, args.runs, seed)
-
-            simulator_kwargs: dict[str, Any] = {
-                "num_nodes": args.nodes,
-                "num_gateways": args.gateways,
-                "packet_interval": args.packet_interval,
-                "packets_to_send": 0,
-                "payload_size_bytes": args.payload_size,
-                "node_class": class_type,
-                "seed": seed,
-                "class_c_rx_interval": args.class_c_rx_interval,
-                "adr_node": args.adr_node,
-                "adr_server": args.adr_server,
-                "duty_cycle": None if args.duty_cycle == 0 else args.duty_cycle,
-                "mobility": args.mobility,
-            }
-            if args.mode == "periodic":
-                simulator_kwargs["transmission_mode"] = "Periodic"
-            else:
-                simulator_kwargs["transmission_mode"] = "Random"
-            if args.config:
-                simulator_kwargs["config_file"] = args.config
-
-            sim = Simulator(**simulator_kwargs)
-
-            # Align beacon configuration and track downlink metrics
-            sim.beacon_interval = args.beacon_interval
-            sim.network_server.beacon_interval = args.beacon_interval
-            track_downlinks(sim)
-
-            schedule_downlinks(
-                sim,
-                period_s=args.downlink_period,
-                duration_s=args.duration,
-                payload_size=args.downlink_payload,
+            tasks.append(
+                {
+                    "class": class_type,
+                    "replicate": replicate,
+                    "seed": seed,
+                    "nodes": args.nodes,
+                    "gateways": args.gateways,
+                    "duration_s": args.duration,
+                    "packet_interval_s": args.packet_interval,
+                    "beacon_interval_s": args.beacon_interval,
+                    "class_c_rx_interval_s": args.class_c_rx_interval,
+                    "downlink_period_s": args.downlink_period,
+                    "downlink_payload_bytes": args.downlink_payload,
+                    "uplink_payload_bytes": args.payload_size,
+                    "adr_node": args.adr_node,
+                    "adr_server": args.adr_server,
+                    "duty_cycle": duty_cycle_value,
+                    "mobility": args.mobility,
+                    "transmission_mode": transmission_mode,
+                    "config_file": args.config,
+                }
             )
 
-            run_for_duration(sim, args.duration)
-            metrics = sim.get_metrics()
+    if args.workers > 1:
+        LOGGER.info("Using %d worker processes", args.workers)
 
-            (
-                energy_tx,
-                energy_rx,
-                energy_idle,
-                time_tx,
-                time_rx,
-                time_idle,
-            ) = compute_energy_metrics(sim, metrics, args.duration)
+    def log_progress(task: dict[str, Any], result: dict[str, Any], index: int) -> None:
+        LOGGER.info(
+            "Replicate %d/%d (seed=%d)",
+            task["replicate"],
+            args.runs,
+            task["seed"],
+        )
 
-            downlink_attempted = getattr(sim.network_server, "downlink_scheduled", 0)
-            downlink_delivered = getattr(sim.network_server, "downlink_delivered", 0)
-            downlink_pdr = (
-                downlink_delivered / downlink_attempted
-                if downlink_attempted
-                else 0.0
-            )
-
-            row: dict[str, Any] = {
-                "class": class_type,
-                "replicate": replicate,
-                "seed": seed,
-                "nodes": args.nodes,
-                "gateways": args.gateways,
-                "duration_s": args.duration,
-                "packet_interval_s": args.packet_interval,
-                "beacon_interval_s": args.beacon_interval,
-                "class_c_rx_interval_s": args.class_c_rx_interval,
-                "downlink_period_s": args.downlink_period,
-                "downlink_payload_bytes": args.downlink_payload,
-                "uplink_pdr": float(metrics.get("PDR", 0.0)),
-                "downlink_pdr": downlink_pdr,
-                "downlink_attempted": downlink_attempted,
-                "downlink_delivered": downlink_delivered,
-                "energy_tx_J": energy_tx,
-                "energy_rx_J": energy_rx,
-                "energy_idle_J": energy_idle,
-                "time_tx_s": time_tx,
-                "time_rx_s": time_rx,
-                "time_idle_s": time_idle,
-            }
-            rows.append(row)
+    rows = execute_simulation_tasks(
+        tasks,
+        run_single_configuration,
+        max_workers=args.workers,
+        progress_callback=log_progress,
+    )
 
     summary_entries = summarise_metrics(
         rows,

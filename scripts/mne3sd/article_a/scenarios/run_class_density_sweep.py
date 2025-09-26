@@ -19,7 +19,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Iterable
 
 # Allow running the script from a clone without installation
@@ -31,6 +30,7 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    execute_simulation_tasks,
     resolve_execution_profile,
     summarise_metrics,
     write_csv,
@@ -235,26 +235,26 @@ def main() -> None:  # noqa: D401 - CLI entry point
 
     if args.workers > 1:
         LOGGER.info("Using %d worker processes", args.workers)
-        with ProcessPoolExecutor(max_workers=args.workers) as executor:
-            future_to_task = {executor.submit(run_single_simulation, task): task for task in tasks}
-            for future in as_completed(future_to_task):
-                result = future.result()
-                results.append(result)
-    else:
-        for task in tasks:
-            result = run_single_simulation(task)
-            results.append(result)
-            LOGGER.info(
-                "Class %s, nodes %d replicate %d -> PDR %.3f, collisions %.3f, "
-                "avg delay %.3fs, energy/node %.4f J",
-                task["class"],
-                task["nodes"],
-                task["replicate"],
-                result["pdr"],
-                result["collision_rate"],
-                result["avg_delay_s"],
-                result["energy_per_node_J"],
-            )
+
+    def log_progress(task: dict[str, object], result: dict[str, object], index: int) -> None:
+        LOGGER.info(
+            "Class %s, nodes %d replicate %d -> PDR %.3f, collisions %.3f, avg delay %.3fs, "
+            "energy/node %.4f J",
+            task["class"],
+            task["nodes"],
+            task["replicate"],
+            result["pdr"],
+            result["collision_rate"],
+            result["avg_delay_s"],
+            result["energy_per_node_J"],
+        )
+
+    results = execute_simulation_tasks(
+        tasks,
+        run_single_simulation,
+        max_workers=args.workers,
+        progress_callback=log_progress if args.workers == 1 else None,
+    )
 
     results.sort(key=lambda row: (row["class"], row["nodes"], row["replicate"]))
 

@@ -31,6 +31,7 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    execute_simulation_tasks,
     resolve_execution_profile,
     summarise_metrics,
     write_csv,
@@ -97,6 +98,49 @@ def compute_energy_breakdown(metrics: dict, num_nodes: int) -> tuple[float, floa
     return total_tx / num_nodes, total_rx / num_nodes, total_sleep / num_nodes
 
 
+def run_single_simulation(task: dict[str, object]) -> dict[str, object]:
+    """Execute one class/interval replicate and return the collected metrics."""
+
+    sim = Simulator(
+        num_nodes=int(task["nodes"]),
+        num_gateways=int(task["gateways"]),
+        packets_to_send=int(task["packets"]),
+        seed=int(task["seed"]),
+        node_class=str(task["class"]),
+        packet_interval=float(task["interval_s"]),
+        adr_node=bool(task["adr_node"]),
+        adr_server=bool(task["adr_server"]),
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    num_nodes = int(task["nodes"])
+    energy_per_node = metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
+    energy_tx, energy_rx, energy_sleep = compute_energy_breakdown(metrics, num_nodes)
+    collisions = int(metrics.get("collisions", 0))
+
+    energy_class = {
+        key: metrics[key]
+        for key in metrics
+        if key.startswith("energy_class_")
+    }
+
+    result: dict[str, object] = {
+        "class": task["class"],
+        "interval_s": task["interval_s"],
+        "replicate": task["replicate"],
+        "pdr": float(metrics.get("PDR", 0.0)),
+        "energy_per_node_J": energy_per_node,
+        "energy_tx_J": energy_tx,
+        "energy_rx_J": energy_rx,
+        "energy_sleep_J": energy_sleep,
+        "collisions": float(collisions),
+        "avg_delay_s": float(metrics.get("avg_delay_s", 0.0)),
+        "_log_energy_class": energy_class,
+    }
+    return result
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description="Run class load simulations for LoRaWAN classes A/B/C"
@@ -147,6 +191,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel worker processes to use",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -166,75 +216,58 @@ def main() -> None:  # noqa: D401 - CLI entry point
     packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
 
     classes = ["A", "B", "C"]
-    results: list[dict[str, object]] = []
     summary_rows: list[dict[str, float | str]] = []
 
+    tasks: list[dict[str, object]] = []
     for class_type in classes:
         LOGGER.info("=== Simulating class %s ===", class_type)
         for interval_s in intervals:
-            replicate_rows: list[dict[str, float | str]] = []
             LOGGER.info("Interval %.1f s", interval_s)
             for replicate in range(1, replicates + 1):
                 seed = args.seed + replicate - 1
-                sim = Simulator(
-                    num_nodes=num_nodes,
-                    num_gateways=args.gateway,
-                    packets_to_send=packets,
-                    seed=seed,
-                    node_class=class_type,
-                    packet_interval=interval_s,
-                    adr_node=args.adr_node,
-                    adr_server=args.adr_server,
-                )
-                sim.run()
-                metrics = sim.get_metrics()
-
-                energy_per_node = (
-                    metrics.get("energy_nodes_J", 0.0) / num_nodes if num_nodes else 0.0
-                )
-                energy_tx, energy_rx, energy_sleep = compute_energy_breakdown(
-                    metrics, num_nodes
-                )
-                pdr = float(metrics.get("PDR", 0.0))
-                collisions = int(metrics.get("collisions", 0))
-                avg_delay = float(metrics.get("avg_delay_s", 0.0))
-                energy_class = {
-                    key: metrics[key]
-                    for key in metrics
-                    if key.startswith("energy_class_")
-                }
-
-                LOGGER.info(
-                    (
-                        "Replicate %d -> PDR %.3f, collisions %d, energy/node %.4f J "
-                        "(tx %.4f J, rx %.4f J, sleep %.4f J), class energy %s"
-                    ),
-                    replicate,
-                    pdr,
-                    collisions,
-                    energy_per_node,
-                    energy_tx,
-                    energy_rx,
-                    energy_sleep,
-                    energy_class,
-                )
-
-                replicate_rows.append(
+                tasks.append(
                     {
                         "class": class_type,
                         "interval_s": interval_s,
                         "replicate": replicate,
-                        "pdr": pdr,
-                        "energy_per_node_J": energy_per_node,
-                        "energy_tx_J": energy_tx,
-                        "energy_rx_J": energy_rx,
-                        "energy_sleep_J": energy_sleep,
-                        "collisions": float(collisions),
-                        "avg_delay_s": avg_delay,
+                        "seed": seed,
+                        "nodes": num_nodes,
+                        "gateways": args.gateway,
+                        "packets": packets,
+                        "adr_node": args.adr_node,
+                        "adr_server": args.adr_server,
                     }
                 )
 
-            results.extend(replicate_rows)
+    if args.workers > 1:
+        LOGGER.info("Using %d worker processes", args.workers)
+
+    def log_progress(task: dict[str, object], result: dict[str, object], index: int) -> None:
+        energy_class = result.get("_log_energy_class", {})
+        LOGGER.info(
+            (
+                "Replicate %d -> PDR %.3f, collisions %.0f, energy/node %.4f J "
+                "(tx %.4f J, rx %.4f J, sleep %.4f J), class energy %s"
+            ),
+            task["replicate"],
+            result["pdr"],
+            result["collisions"],
+            result["energy_per_node_J"],
+            result["energy_tx_J"],
+            result["energy_rx_J"],
+            result["energy_sleep_J"],
+            energy_class,
+        )
+
+    results = execute_simulation_tasks(
+        tasks,
+        run_single_simulation,
+        max_workers=args.workers,
+        progress_callback=log_progress if args.workers == 1 else None,
+    )
+
+    for row in results:
+        row.pop("_log_energy_class", None)
 
     fieldnames = [
         "class",
