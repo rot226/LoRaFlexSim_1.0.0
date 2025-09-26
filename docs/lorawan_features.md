@@ -22,6 +22,10 @@ Ce document résume les différences entre la simulation FLoRa d'origine
   (``LinkADRReq``, ``DeviceTimeReq``, ``PingSlotChannelReq``…).
 - Procédure d’activation OTAA via un serveur de join (`JoinServer`).
 - Historique SNR et ajustement ADR conforme à la spécification.
+- Agrégation ADR multi-passerelle : chaque passerelle alimente une fenêtre
+  glissante de SNIR (`gateway_snr_history`) puis le serveur calcule les
+  marges `avg`/`max` par passerelle avant de fusionner les recommandations,
+  reproduisant les décisions FLoRa même en présence de doublons.【F:loraflexsim/launcher/server.py†L117-L192】【F:tests/integration/test_adr_standard_alignment.py†L32-L96】
 - Sélection automatique des data rates de downlink (RX2 et ping slots) en
   fonction de la région LoRaWAN configurée, couverte par des tests unitaires
   dédiés.【F:loraflexsim/launcher/lorawan.py†L9-L22】【F:tests/test_downlink_dr_regions.py†L1-L13】

@@ -24,11 +24,11 @@ def test_server_uses_margin_and_rounding_for_positive_steps(monkeypatch):
     server.adr_method = "avg"
     server.MARGIN_DB = 10.0
 
-    node = _make_node(1, 9, 14.0)
-    node.snr_history = [5.0] * 19
-    node.frames_since_last_adr_command = 19
-
     gw = Gateway(0, 0.0, 0.0)
+
+    node = _make_node(1, 9, 14.0)
+    node.snr_history = [(gw.id, 5.0)] * 19
+    node.frames_since_last_adr_command = 19
     server.nodes = [node]
     server.gateways = [gw]
 
@@ -50,11 +50,11 @@ def test_server_rounding_matches_flora_for_negative_steps(monkeypatch):
     server.adr_method = "avg"
     server.MARGIN_DB = 10.0
 
-    node = _make_node(2, 9, 8.0)
-    node.snr_history = [-10.0] * 19
-    node.frames_since_last_adr_command = 19
-
     gw = Gateway(1, 0.0, 0.0)
+
+    node = _make_node(2, 9, 8.0)
+    node.snr_history = [(gw.id, -10.0)] * 19
+    node.frames_since_last_adr_command = 19
     server.nodes = [node]
     server.gateways = [gw]
 

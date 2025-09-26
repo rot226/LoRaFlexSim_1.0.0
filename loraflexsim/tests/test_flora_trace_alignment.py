@@ -133,7 +133,8 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
     server.channel = node.channel
 
     # Simulate a history of SNR samples as would be available after a previous command.
-    node.snr_history = [30.0] * ADR_WINDOW_SIZE
+    gateway_id = sim.gateways[0].id
+    node.snr_history = [(gateway_id, 30.0)] * ADR_WINDOW_SIZE
     node.frames_since_last_adr_command = 0
 
     commands: list[tuple[int, float, int, int]] = []
@@ -146,7 +147,6 @@ def test_link_adr_waits_for_twenty_frames_without_adr_ack_req():
     server.send_downlink = record_command  # type: ignore[assignment]
 
     noise_floor = node.channel.noise_floor_dBm()
-    gateway_id = sim.gateways[0].id
     rssi = noise_floor + 30.0
 
     window = ADR_WINDOW_SIZE
@@ -218,10 +218,11 @@ def test_adr_metric_matches_flora_log(trace):
             return
         history = tuple(target_node.snr_history)
         assert len(history) == ADR_WINDOW_SIZE
+        values = [snr for _, snr in history]
         if trace.method == "avg":
-            metric = sum(history) / len(history)
+            metric = sum(values) / len(values)
         else:
-            metric = max(history)
+            metric = max(values)
         required = REQUIRED_SNR.get(current_sf_for_margin, -20.0)
         margin = metric - required - MARGIN_DB
         recorded_metrics.append((metric, margin))

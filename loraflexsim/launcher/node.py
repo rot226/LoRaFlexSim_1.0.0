@@ -235,7 +235,15 @@ class Node:
         # Additional state used by the simulator
         self.history: list[dict] = []
         self.rssi_history: list[float] = []
-        self.snr_history: list[float] = []
+        # Historique des derniers SNIR utilisés pour l'ADR.
+        # ``snr_history`` conserve les 20 derniers couples (passerelle, SNIR)
+        # effectivement pris en compte pour les décisions ADR, ce qui permet
+        # de reproduire le comportement de FLoRa lorsque plusieurs
+        # passerelles reçoivent un même uplink.
+        self.snr_history: list[tuple[int | None, float]] = []
+        # Historique agrégé par passerelle.  Chaque liste est tenue en accord
+        # avec ``snr_history`` afin de pouvoir calculer des marges ADR par
+        # passerelle avant de fusionner les recommandations.
         self.gateway_snr_history: dict[int, list[float]] = {}
         self.in_transmission: bool = False
         self.current_end_time: float | None = None
