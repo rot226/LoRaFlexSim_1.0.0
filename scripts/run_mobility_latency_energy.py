@@ -18,6 +18,7 @@ import os
 import sys
 import csv
 import statistics
+from typing import Mapping
 
 # Allow running the script from a clone without installation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -25,6 +26,31 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from loraflexsim.launcher import MultiChannel, Simulator  # noqa: E402
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
+AGGREGATED_KEYS = [
+    "pdr",
+    "avg_delay",
+    "energy_per_node",
+    "collision_rate",
+    "avg_sf",
+]
+
+
+def compute_average_sf(sf_distribution: Mapping[object, int | float]) -> float:
+    """Return the average spreading factor from a raw distribution."""
+
+    total_weighted = 0.0
+    total_nodes = 0
+    for sf, count in sf_distribution.items():
+        try:
+            sf_value = int(sf)
+        except (TypeError, ValueError):
+            # Ignore malformed keys and continue with the remaining values.
+            continue
+        total_weighted += sf_value * float(count)
+        total_nodes += float(count)
+    if total_nodes == 0:
+        return 0.0
+    return total_weighted / total_nodes
 
 
 def run_scenario(
@@ -56,10 +82,7 @@ def run_scenario(
     )
     sim.run()
     metrics = sim.get_metrics()
-    sf_dist = metrics.get("sf_distribution", {})
-    total_sf = sum(sf * count for sf, count in sf_dist.items())
-    total_nodes = sum(sf_dist.values())
-    avg_sf = total_sf / total_nodes if total_nodes else 0.0
+    avg_sf = compute_average_sf(metrics.get("sf_distribution", {}))
     total_packets = metrics["delivered"] + metrics["collisions"]
     return {
         "scenario": name,
@@ -224,7 +247,7 @@ def main() -> None:
             "speed": speed,
             "channels": ch_count,
         }
-        for key in ["pdr", "avg_delay", "energy_per_node", "collision_rate", "avg_sf"]:
+        for key in AGGREGATED_KEYS:
             values = [row[key] for row in rep_rows]
             agg[f"{key}_mean"] = statistics.mean(values)
             agg[f"{key}_std"] = statistics.pstdev(values)
@@ -239,17 +262,9 @@ def main() -> None:
         "area_size",
         "speed",
         "channels",
-        "pdr_mean",
-        "pdr_std",
-        "avg_delay_mean",
-        "avg_delay_std",
-        "energy_per_node_mean",
-        "energy_per_node_std",
-        "collision_rate_mean",
-        "collision_rate_std",
-        "avg_sf_mean",
-        "avg_sf_std",
     ]
+    for key in AGGREGATED_KEYS:
+        fieldnames.extend([f"{key}_mean", f"{key}_std"])
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
