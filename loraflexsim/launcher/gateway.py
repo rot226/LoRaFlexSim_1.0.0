@@ -263,19 +263,34 @@ class Gateway:
             return 10 * math.log10(1.0 + freq_factor ** 2 + time_factor ** 2)
 
         def _enough_preamble(winner, others) -> bool:
-            """Return ``True`` if ``winner`` may capture according to the
-            configurable preamble rule."""
-            sym_time = (2 ** winner.get('sf', sf)) / bandwidth
-            limit = capture_window_symbols * sym_time
+            """Return ``True`` if ``winner`` collects enough clean preamble."""
+
+            sym_time = winner.get('symbol_duration')
+            if sym_time is None:
+                bw_w = winner.get('bandwidth', bandwidth)
+                sf_w = winner.get('sf', sf)
+                sym_time = (2 ** sf_w) / bw_w
+
+            default_preamble = capture_window_symbols + 6 if capture_window_symbols is not None else 8
+            n_preamble = winner.get('preamble_symbols', default_preamble)
+            try:
+                n_preamble_val = float(n_preamble)
+            except (TypeError, ValueError):
+                n_preamble_val = float(default_preamble)
+            n_preamble_val = max(n_preamble_val, 0.0)
+            cs_begin = winner['start_time'] + sym_time * max(n_preamble_val - 6.0, 0.0)
+
             for other in others:
                 if other is winner:
                     continue
-                dt = other['start_time'] - winner['start_time']
-                if dt < 0:
-                    # another transmission started before the winner
+
+                overlap_start = max(winner['start_time'], other.get('start_time', -float('inf')))
+                overlap_end = min(winner['end_time'], other.get('end_time', float('inf')))
+                if overlap_end <= overlap_start:
+                    continue
+                if overlap_start < cs_begin and overlap_end > cs_begin:
                     return False
-                if dt < limit:
-                    return False
+
             return True
 
         flora_mode = False
@@ -384,11 +399,16 @@ class Gateway:
         if capture:
             # Apply preamble rule: the winning packet must have started
             # at least ``capture_window_symbols`` symbols before the new one.
-            capture_allowed = False
+            capture_allowed = True
             if strongest is not new_transmission:
+                winner_sym_time = strongest.get('symbol_duration')
+                if winner_sym_time is None:
+                    bw_w = strongest.get('bandwidth', bandwidth)
+                    sf_w = strongest.get('sf', sf)
+                    winner_sym_time = (2 ** sf_w) / bw_w
                 elapsed = current_time - strongest.get('start_time', current_time)
-                if elapsed >= capture_window_symbols * symbol_duration:
-                    capture_allowed = True
+                if elapsed < capture_window_symbols * winner_sym_time:
+                    capture_allowed = False
             if not capture_allowed:
                 capture = False
 

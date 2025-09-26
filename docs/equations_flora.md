@@ -61,6 +61,11 @@ Les passerelles en mode `capture_mode="flora"` reproduisent ainsi la logique du
 `LoRaReceiver` original, garantissant la parité avec les traces FLoRa lors des
 collisions entre signaux de même SF.
 
+Par ailleurs, la règle de capture des passerelles suit strictement le calcul
+``csBegin = start + T_sym · (nPreamble - 6)`` : une transmission ne bloque plus
+un paquet plus fort si son recouvrement se termine avant cette borne, ce qui
+aligne la fenêtre de capture sur celle du récepteur FLoRa historique.【F:loraflexsim/launcher/gateway.py†L259-L295】
+
 
 ### Modèle Hata‑Okumura
 
