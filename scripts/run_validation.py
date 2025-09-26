@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import statistics
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -21,7 +22,7 @@ from loraflexsim.validation import (
 )
 
 
-def run_matrix(output: Path) -> bool:
+def run_matrix(output: Path, repeat: int) -> bool:
     """Execute all validation scenarios and persist a summary CSV."""
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -29,8 +30,26 @@ def run_matrix(output: Path) -> bool:
     overall_success = True
 
     for scenario in SCENARIOS:
-        sim = scenario.build_simulator()
-        metrics = run_validation(sim, scenario.run_steps)
+        run_count = repeat if scenario.name == "long_range" else 1
+        metrics_runs: list[dict[str, float]] = []
+        for idx in range(run_count):
+            overrides: dict[str, float | int | None] = {}
+            if scenario.name == "long_range" and run_count > 1:
+                base_seed = scenario.sim_kwargs.get("seed")
+                if base_seed is not None:
+                    overrides["seed"] = int(base_seed) + idx
+            sim = scenario.build_simulator(**overrides)
+            metrics_runs.append(run_validation(sim, scenario.run_steps))
+
+        metrics = {
+            key: sum(run[key] for run in metrics_runs) / len(metrics_runs)
+            for key in metrics_runs[0]
+        }
+        pdr_std = (
+            statistics.pstdev(run["PDR"] for run in metrics_runs)
+            if len(metrics_runs) > 1
+            else 0.0
+        )
         reference = load_flora_reference(scenario.flora_reference)
         deltas = compare_to_reference(metrics, reference, scenario.tolerances)
 
@@ -48,6 +67,7 @@ def run_matrix(output: Path) -> bool:
                 "pdr_sim": metrics["PDR"],
                 "pdr_ref": reference["PDR"],
                 "pdr_delta": deltas["PDR"],
+                "pdr_std": pdr_std,
                 "collisions_sim": metrics["collisions"],
                 "collisions_ref": reference["collisions"],
                 "collisions_delta": deltas["collisions"],
@@ -68,8 +88,11 @@ def run_matrix(output: Path) -> bool:
         writer.writerows(rows)
 
     for row in rows:
+        pdr_value = f"{row['pdr_sim']:.3f}"
+        if row.get("pdr_std", 0.0):
+            pdr_value += f"±{row['pdr_std']:.3f}"
         print(
-            f"{row['scenario']}: PDR={row['pdr_sim']:.3f} (ref {row['pdr_ref']:.3f}, Δ{row['pdr_delta']:.3f}) | "
+            f"{row['scenario']}: PDR={pdr_value} (ref {row['pdr_ref']:.3f}, Δ{row['pdr_delta']:.3f}) | "
             f"Collisions={row['collisions_sim']:.1f} (ref {row['collisions_ref']:.1f}, Δ{row['collisions_delta']:.1f}) | "
             f"SNR={row['snr_sim']:.2f} dB (ref {row['snr_ref']:.2f}, Δ{row['snr_delta']:.2f}) -> {row['status']}"
         )
@@ -86,10 +109,22 @@ def main() -> int:
         default=Path("results/validation_matrix.csv"),
         help="Destination CSV file for the summary table.",
     )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help=(
+            "Nombre d'exécutions pour le scénario long_range afin de calculer la "
+            "moyenne et l'écart-type du PDR."
+        ),
+    )
     args = parser.parse_args()
 
+    if args.repeat < 1:
+        parser.error("--repeat doit être supérieur ou égal à 1")
+
     try:
-        success = run_matrix(args.output)
+        success = run_matrix(args.output, args.repeat)
     except RuntimeError as exc:  # pragma: no cover - propagates optional deps errors
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
