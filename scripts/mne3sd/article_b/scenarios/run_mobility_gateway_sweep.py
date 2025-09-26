@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import statistics
 import sys
@@ -44,6 +45,7 @@ from loraflexsim.launcher import (  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
     add_worker_argument,
+    filter_completed_tasks,
     resolve_execution_profile,
     resolve_worker_count,
     summarise_metrics,
@@ -63,6 +65,8 @@ CI_NODES = 40
 CI_PACKETS = 10
 CI_REPLICATES = 1
 CI_RANGE_KM = 5.0
+
+LOGGER = logging.getLogger("mobility_gateway_sweep")
 
 FIELDNAMES = [
     "model",
@@ -238,24 +242,22 @@ class DownlinkDelayTracker:
         self.scheduler.pop_ready = types.MethodType(self._pop_ready_func, self.scheduler)  # type: ignore[assignment]
 
 
-def _run_gateway_replicate(task: tuple) -> dict[str, object]:
+def _run_gateway_replicate(task: dict[str, object]) -> dict[str, object]:
     """Execute a single gateway sweep replicate and return its metrics."""
 
-    (
-        model_name,
-        model_factory,
-        num_gateways,
-        channel_plan,
-        range_km,
-        area_size,
-        nodes,
-        packets,
-        interval,
-        adr_node,
-        adr_server,
-        replicate,
-        seed,
-    ) = task
+    model_name = str(task["model"])
+    model_factory = task["model_factory"]
+    num_gateways = int(task["gateways"])
+    channel_plan = task["channels_plan"]
+    range_km = float(task["range_km"])
+    area_size = float(task["area_size"])
+    nodes = int(task["nodes"])
+    packets = int(task["packets"])
+    interval = float(task["interval"])
+    adr_node = bool(task["adr_node"])
+    adr_server = bool(task["adr_server"])
+    replicate = int(task["replicate"])
+    seed = int(task["seed"])
 
     mobility_model = model_factory(area_size)
     sim = Simulator(
@@ -355,11 +357,18 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip simulations that already exist in the detailed CSV",
+    )
     add_worker_argument(parser, default="auto")
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
     profile = resolve_execution_profile(args.profile)
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     gateway_values = parse_gateways_list(args.gateways_list)
     if profile == "ci":
         if args.gateways_list:
@@ -391,24 +400,40 @@ def main() -> None:  # noqa: D401 - CLI entry point
     try:
         for num_gateways in gateway_values:
             for model_name, model_factory in models:
+                base_seed = args.seed + combination_index * replicates
                 tasks = [
-                    (
-                        model_name,
-                        model_factory,
-                        num_gateways,
-                        channel_plan,
-                        range_km,
-                        area_size,
-                        nodes,
-                        packets,
-                        args.interval,
-                        args.adr_node,
-                        args.adr_server,
-                        replicate,
-                        args.seed + combination_index * replicates + replicate - 1,
-                    )
+                    {
+                        "model": model_name,
+                        "model_factory": model_factory,
+                        "gateways": num_gateways,
+                        "channels_plan": list(channel_plan),
+                        "range_km": range_km,
+                        "area_size": area_size,
+                        "nodes": nodes,
+                        "packets": packets,
+                        "interval": args.interval,
+                        "adr_node": args.adr_node,
+                        "adr_server": args.adr_server,
+                        "replicate": replicate,
+                        "seed": base_seed + replicate - 1,
+                    }
                     for replicate in range(1, replicates + 1)
                 ]
+
+                if args.resume and RESULTS_PATH.exists():
+                    original_count = len(tasks)
+                    tasks = filter_completed_tasks(
+                        RESULTS_PATH, ("model", "gateways", "replicate"), tasks
+                    )
+                    skipped = original_count - len(tasks)
+                    LOGGER.info(
+                        "Skipping %d previously completed task(s) thanks to --resume",
+                        skipped,
+                    )
+
+                if not tasks:
+                    combination_index += 1
+                    continue
 
                 if executor is not None:
                     replicate_rows = list(executor.map(_run_gateway_replicate, tasks, chunksize=1))

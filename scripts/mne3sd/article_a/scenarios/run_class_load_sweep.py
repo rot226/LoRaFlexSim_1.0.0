@@ -33,6 +33,7 @@ from scripts.mne3sd.common import (
     add_execution_profile_argument,
     add_worker_argument,
     execute_simulation_tasks,
+    filter_completed_tasks,
     resolve_execution_profile,
     resolve_worker_count,
     summarise_metrics,
@@ -193,6 +194,11 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip simulations that already exist in the detailed CSV",
+    )
     add_worker_argument(parser, default="auto")
     add_execution_profile_argument(parser)
     args = parser.parse_args()
@@ -235,6 +241,14 @@ def main() -> None:  # noqa: D401 - CLI entry point
                         "adr_server": args.adr_server,
                     }
                 )
+
+    if args.resume and RESULTS_PATH.exists():
+        original_count = len(tasks)
+        tasks = filter_completed_tasks(
+            RESULTS_PATH, ("class", "interval_s", "replicate"), tasks
+        )
+        skipped = original_count - len(tasks)
+        LOGGER.info("Skipping %d previously completed task(s) thanks to --resume", skipped)
 
     worker_count = resolve_worker_count(args.workers, len(tasks))
     if worker_count > 1:

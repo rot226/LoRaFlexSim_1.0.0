@@ -22,6 +22,7 @@ Example usage::
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import statistics
 import sys
@@ -39,6 +40,7 @@ from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # no
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
     add_worker_argument,
+    filter_completed_tasks,
     resolve_execution_profile,
     resolve_worker_count,
     summarise_metrics,
@@ -58,6 +60,8 @@ CI_REPLICATES = 1
 
 ROOT = Path(__file__).resolve().parents[4]
 RESULTS_PATH = ROOT / "results" / "mne3sd" / "article_b" / "mobility_speed_metrics.csv"
+
+LOGGER = logging.getLogger("mobility_speed_sweep")
 
 FIELDNAMES = [
     "model",
@@ -155,24 +159,22 @@ def compute_latency_jitter(sim: Simulator) -> float:
     return 0.0
 
 
-def _run_speed_replicate(task: tuple) -> dict[str, float | str]:
+def _run_speed_replicate(task: dict[str, object]) -> dict[str, float | str]:
     """Execute a single mobility speed replicate and return its metrics."""
 
-    (
-        model_name,
-        model_factory,
-        profile_name,
-        speed_min,
-        speed_max,
-        area_size,
-        replicate,
-        seed,
-        nodes,
-        packets,
-        interval,
-        adr_node,
-        adr_server,
-    ) = task
+    model_name = str(task["model"])
+    model_factory = task["model_factory"]
+    profile_name = str(task["speed_profile"])
+    speed_min = float(task["speed_min_mps"])
+    speed_max = float(task["speed_max_mps"])
+    area_size = float(task["area_size"])
+    replicate = int(task["replicate"])
+    seed = int(task["seed"])
+    nodes = int(task["nodes"])
+    packets = int(task["packets"])
+    interval = float(task["interval"])
+    adr_node = bool(task["adr_node"])
+    adr_server = bool(task["adr_server"])
 
     mobility_model = model_factory(
         area_size,
@@ -253,11 +255,18 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip simulations that already exist in the detailed CSV",
+    )
     add_worker_argument(parser, default="auto")
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
     profile = resolve_execution_profile(args.profile)
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     speed_profiles = parse_speed_profiles(args.speed_profiles)
     if profile == "ci":
         if args.speed_profiles:
@@ -288,24 +297,40 @@ def main() -> None:  # noqa: D401 - CLI entry point
     try:
         for model_name, model_factory in models:
             for profile_name, (speed_min, speed_max) in speed_profiles:
+                base_seed = args.seed + combination_index * replicates
                 tasks = [
-                    (
-                        model_name,
-                        model_factory,
-                        profile_name,
-                        speed_min,
-                        speed_max,
-                        area_size,
-                        replicate,
-                        args.seed + combination_index * replicates + replicate - 1,
-                        nodes,
-                        packets,
-                        args.interval,
-                        args.adr_node,
-                        args.adr_server,
-                    )
+                    {
+                        "model": model_name,
+                        "model_factory": model_factory,
+                        "speed_profile": profile_name,
+                        "speed_min_mps": speed_min,
+                        "speed_max_mps": speed_max,
+                        "area_size": area_size,
+                        "replicate": replicate,
+                        "seed": base_seed + replicate - 1,
+                        "nodes": nodes,
+                        "packets": packets,
+                        "interval": args.interval,
+                        "adr_node": args.adr_node,
+                        "adr_server": args.adr_server,
+                    }
                     for replicate in range(1, replicates + 1)
                 ]
+
+                if args.resume and RESULTS_PATH.exists():
+                    original_count = len(tasks)
+                    tasks = filter_completed_tasks(
+                        RESULTS_PATH, ("model", "speed_profile", "replicate"), tasks
+                    )
+                    skipped = original_count - len(tasks)
+                    LOGGER.info(
+                        "Skipping %d previously completed task(s) thanks to --resume",
+                        skipped,
+                    )
+
+                if not tasks:
+                    combination_index += 1
+                    continue
 
                 if executor is not None:
                     replicate_rows = list(executor.map(_run_speed_replicate, tasks, chunksize=1))

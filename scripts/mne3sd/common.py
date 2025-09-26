@@ -172,6 +172,47 @@ def write_csv(
     return file_path
 
 
+def filter_completed_tasks(
+    csv_path: Path,
+    keys: tuple[str, ...],
+    tasks: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Return ``tasks`` without entries already present in ``csv_path``.
+
+    The CSV is read using :class:`csv.DictReader` and the provided ``keys`` are
+    used to identify completed replicates.  Both CSV and task values are
+    coerced to strings to ensure consistent comparisons regardless of the
+    original types used when scheduling the simulations.
+    """
+
+    if not tasks:
+        return []
+
+    csv_file = Path(csv_path)
+    if not csv_file.exists():
+        return tasks
+
+    with csv_file.open("r", newline="") as handle:
+        reader = csv.DictReader(handle)
+        completed = {
+            tuple("" if row.get(key) is None else str(row.get(key)) for key in keys)
+            for row in reader
+        }
+
+    if not completed:
+        return tasks
+
+    filtered_tasks: list[dict[str, object]] = []
+    for task in tasks:
+        signature = tuple(
+            "" if task.get(key) is None else str(task.get(key)) for key in keys
+        )
+        if signature not in completed:
+            filtered_tasks.append(task)
+
+    return filtered_tasks
+
+
 def summarise_metrics(
     data: Iterable[Mapping[str, Any]],
     group_keys: Sequence[str],
