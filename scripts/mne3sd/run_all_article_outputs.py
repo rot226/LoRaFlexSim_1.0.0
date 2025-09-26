@@ -37,6 +37,14 @@ ARTICLE_SCENARIOS: dict[str, tuple[Task, ...]] = {
             outputs=(Path("results/mne3sd/article_a/class_downlink_energy.csv"),),
         ),
         Task(
+            module="scripts.mne3sd.article_a.scenarios.simulate_energy_classes",
+            description="Class energy consumption simulation",
+            outputs=(
+                Path("results/mne3sd/article_a/energy_consumption.csv"),
+                Path("results/mne3sd/article_a/energy_consumption_summary.csv"),
+            ),
+        ),
+        Task(
             module="scripts.mne3sd.article_a.scenarios.run_class_load_sweep",
             description="Class load sweep",
             outputs=(Path("results/mne3sd/article_a/class_load_metrics.csv"),),
@@ -262,6 +270,16 @@ def summarise_outputs(paths: Iterable[Path]) -> None:
     print_group("CSV files", lambda p: p.suffix.lower() == ".csv")
     print_group("Figures", lambda p: p.suffix.lower() in FIGURE_SUFFIXES)
     print_group("Other artefacts", lambda p: p.suffix.lower() not in {".csv", *FIGURE_SUFFIXES})
+
+    required_energy_files = (
+        Path("results/mne3sd/article_a/energy_consumption.csv"),
+        Path("results/mne3sd/article_a/energy_consumption_summary.csv"),
+    )
+    print("\nEnergy consumption files (Article A):")
+    for path in required_energy_files:
+        exists = (ROOT / path).exists()
+        status = "✓" if exists else "✗"
+        print(f"  [{status}] {path.as_posix()}")
 
 
 def main(argv: Sequence[str] | None = None) -> None:
