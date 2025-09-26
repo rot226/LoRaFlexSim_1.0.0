@@ -128,6 +128,28 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
                 ),
             ),
         ),
+        Task(
+            module="scripts.mne3sd.article_a.plots.plot_class_downlink_energy",
+            description="Class downlink energy plots",
+            outputs=(
+                Path(
+                    "figures/mne3sd/article_a/class_downlink_energy/energy_breakdown/"
+                    "energy_breakdown.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_downlink_energy/energy_breakdown/"
+                    "energy_breakdown.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_downlink_energy/pdr_comparison/"
+                    "pdr_comparison.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_a/class_downlink_energy/pdr_comparison/"
+                    "pdr_comparison.eps"
+                ),
+            ),
+        ),
     ),
     "b": (
         Task(
