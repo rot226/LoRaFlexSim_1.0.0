@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -36,12 +37,15 @@ from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # no
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
     add_worker_argument,
+    filter_completed_tasks,
     resolve_execution_profile,
     resolve_worker_count,
     summarise_metrics,
     write_csv,
 )
 
+
+LOGGER = logging.getLogger("mobility_range_sweep")
 
 DEFAULT_RANGES_KM = [5.0, 10.0, 15.0]
 CI_RANGE_VALUES = [5.0]
@@ -152,22 +156,20 @@ def aggregate_sf_distribution(rows: list[dict[str, object]]) -> dict[str, float]
     return {key: totals[key] / total_packets for key in sorted(totals)}
 
 
-def _run_range_replicate(task: tuple) -> dict[str, object]:
+def _run_range_replicate(task: dict[str, object]) -> dict[str, object]:
     """Execute a single mobility range replicate and return its metrics."""
 
-    (
-        model_name,
-        model_factory,
-        range_km,
-        area_size,
-        replicate,
-        seed,
-        nodes,
-        packets,
-        interval,
-        adr_node,
-        adr_server,
-    ) = task
+    model_name = str(task["model"])
+    model_factory = task["model_factory"]
+    range_km = float(task["range_km"])
+    area_size = float(task["area_size"])
+    replicate = int(task["replicate"])
+    seed = int(task["seed"])
+    nodes = int(task["nodes"])
+    packets = int(task["packets"])
+    interval = float(task["interval"])
+    adr_node = bool(task["adr_node"])
+    adr_server = bool(task["adr_server"])
 
     mobility_model = model_factory(area_size)
     sim = Simulator(
@@ -243,11 +245,18 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip simulations that already exist in the detailed CSV",
+    )
     add_worker_argument(parser, default="auto")
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
     profile = resolve_execution_profile(args.profile)
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     default_ranges = DEFAULT_RANGES_KM if profile != "ci" else CI_RANGE_VALUES
     range_values = parse_range_list(args.range_km, default=default_ranges)
     if profile == "ci" and args.range_km:
@@ -274,22 +283,38 @@ def main() -> None:  # noqa: D401 - CLI entry point
         for model_name, model_factory in models:
             for range_km in range_values:
                 area_size = range_km * 2000.0
+                base_seed = args.seed + combination_index * replicates
                 tasks = [
-                    (
-                        model_name,
-                        model_factory,
-                        range_km,
-                        area_size,
-                        replicate,
-                        args.seed + combination_index * replicates + replicate - 1,
-                        nodes,
-                        packets,
-                        args.interval,
-                        args.adr_node,
-                        args.adr_server,
-                    )
+                    {
+                        "model": model_name,
+                        "model_factory": model_factory,
+                        "range_km": range_km,
+                        "area_size": area_size,
+                        "replicate": replicate,
+                        "seed": base_seed + replicate - 1,
+                        "nodes": nodes,
+                        "packets": packets,
+                        "interval": args.interval,
+                        "adr_node": args.adr_node,
+                        "adr_server": args.adr_server,
+                    }
                     for replicate in range(1, replicates + 1)
                 ]
+
+                if args.resume and RESULTS_PATH.exists():
+                    original_count = len(tasks)
+                    tasks = filter_completed_tasks(
+                        RESULTS_PATH, ("model", "range_km", "replicate"), tasks
+                    )
+                    skipped = original_count - len(tasks)
+                    LOGGER.info(
+                        "Skipping %d previously completed task(s) thanks to --resume",
+                        skipped,
+                    )
+
+                if not tasks:
+                    combination_index += 1
+                    continue
 
                 if executor is not None:
                     replicate_rows = list(executor.map(_run_range_replicate, tasks, chunksize=1))
