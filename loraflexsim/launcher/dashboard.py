@@ -530,6 +530,12 @@ def on_first_packet_change(event):
     global first_packet_user_edited
     if not _syncing_first_packet:
         first_packet_user_edited = True
+        if hasattr(event, "new"):
+            # Panel updates the widget value before invoking the callback, but
+            # tests and scripted interactions often call the handler directly.
+            # Explicitly mirror the requested value so the UI state always
+            # reflects the most recent user input.
+            first_packet_input.value = event.new
 
 
 interval_input.param.watch(on_interval_update, "value")
