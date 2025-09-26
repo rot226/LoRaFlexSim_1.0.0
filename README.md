@@ -937,6 +937,7 @@ python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv -
 python scripts/plot_mobility_multichannel.py results/mobility_multichannel.csv --scenarios n50_c1_static n50_c1_mobile
 python scripts/plot_mobility_latency_energy.py results/mobility_latency_energy.csv
 python scripts/benchmark_energy_classes.py --nodes 20 --packets 5 --output results/energy_classes.csv
+python -m scripts.mne3sd.article_a.plots.plot_energy_duty_cycle --results results/mne3sd/article_a
 ```
 
 `plot_sf_distribution.py` generates `sf_distribution` in PNG, JPG and EPS,
@@ -955,6 +956,11 @@ vector graphics.
 B et C) et exporte un fichier CSV contenant la consommation totale et la
 décomposition TX/RX/veille, ce qui permet de comparer rapidement les profils
 énergétiques.
+
+La commande `plot_energy_duty_cycle` est détaillée dans la documentation
+[« Profils énergétiques »](docs/energy_profiles.md#visualisation-du-cycle-dactivité-énergétique)
+et produit automatiquement un résumé (`results/.../energy_consumption_summary.csv`)
+et les figures associées (`figures/.../*.png`, `figures/.../*.eps`).
 
 ## Calcul de l'airtime
 
