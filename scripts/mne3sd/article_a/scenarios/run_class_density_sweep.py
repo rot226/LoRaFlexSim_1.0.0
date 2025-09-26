@@ -30,8 +30,10 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    add_worker_argument,
     execute_simulation_tasks,
     resolve_execution_profile,
+    resolve_worker_count,
     summarise_metrics,
     write_csv,
 )
@@ -184,12 +186,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
         action="store_true",
         help="Suppress progress logs (only warnings and the summary are printed)",
     )
-    parser.add_argument(
-        "--workers",
-        type=positive_int,
-        default=1,
-        help="Number of parallel worker processes to use",
-    )
+    add_worker_argument(parser)
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -233,8 +230,9 @@ def main() -> None:  # noqa: D401 - CLI entry point
                     }
                 )
 
-    if args.workers > 1:
-        LOGGER.info("Using %d worker processes", args.workers)
+    worker_count = resolve_worker_count(args.workers, len(tasks))
+    if worker_count > 1:
+        LOGGER.info("Using %d worker processes", worker_count)
 
     def log_progress(task: dict[str, object], result: dict[str, object], index: int) -> None:
         LOGGER.info(
@@ -252,8 +250,8 @@ def main() -> None:  # noqa: D401 - CLI entry point
     results = execute_simulation_tasks(
         tasks,
         run_single_simulation,
-        max_workers=args.workers,
-        progress_callback=log_progress if args.workers == 1 else None,
+        max_workers=worker_count,
+        progress_callback=log_progress if worker_count == 1 else None,
     )
 
     results.sort(key=lambda row: (row["class"], row["nodes"], row["replicate"]))

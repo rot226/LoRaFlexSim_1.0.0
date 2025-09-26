@@ -32,8 +32,10 @@ sys.path.insert(
 from loraflexsim.launcher import Simulator  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    add_worker_argument,
     execute_simulation_tasks,
     resolve_execution_profile,
+    resolve_worker_count,
     summarise_metrics,
     write_csv,
 )
@@ -430,12 +432,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable verbose logging",
     )
-    parser.add_argument(
-        "--workers",
-        type=positive_int,
-        default=1,
-        help="Number of parallel worker processes to use",
-    )
+    add_worker_argument(parser)
 
     args = parser.parse_args(argv)
     profile = resolve_execution_profile(args.profile)
@@ -492,8 +489,9 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
                 }
             )
 
-    if args.workers > 1:
-        LOGGER.info("Using %d worker processes", args.workers)
+    worker_count = resolve_worker_count(args.workers, len(tasks))
+    if worker_count > 1:
+        LOGGER.info("Using %d worker processes", worker_count)
 
     def log_progress(task: dict[str, Any], result: dict[str, Any], index: int) -> None:
         LOGGER.info(
@@ -506,7 +504,7 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 - CLI entry point
     rows = execute_simulation_tasks(
         tasks,
         run_single_configuration,
-        max_workers=args.workers,
+        max_workers=worker_count,
         progress_callback=log_progress,
     )
 

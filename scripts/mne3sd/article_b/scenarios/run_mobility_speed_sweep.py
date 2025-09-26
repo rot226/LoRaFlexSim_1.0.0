@@ -38,7 +38,9 @@ sys.path.insert(
 from loraflexsim.launcher import RandomWaypoint, Simulator, SmoothMobility  # noqa: E402
 from scripts.mne3sd.common import (
     add_execution_profile_argument,
+    add_worker_argument,
     resolve_execution_profile,
+    resolve_worker_count,
     summarise_metrics,
     write_csv,
 )
@@ -251,12 +253,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
-    parser.add_argument(
-        "--workers",
-        type=positive_int,
-        default=1,
-        help="Number of parallel workers used to execute simulation replicates",
-    )
+    add_worker_argument(parser)
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -274,7 +271,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
     packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
     replicates = args.replicates if profile != "ci" else CI_REPLICATES
-    workers = min(args.workers, replicates)
+    workers = resolve_worker_count(args.workers, replicates)
 
     models = [
         ("random_waypoint", RandomWaypoint),
