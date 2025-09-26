@@ -97,6 +97,19 @@ les paramètres suivants sont appliqués lors de la création du `Simulator` ou 
   paramètre supplémentaire n'est nécessaire pour retrouver les collisions
   inter-SF et l'effet capture historiques.【F:loraflexsim/launcher/simulator.py†L392-L470】【F:loraflexsim/launcher/channel.py†L454-L520】
 
+Les paramètres récents suivent désormais fidèlement la séparation FLoRa entre
+**sensibilité** (`detection_threshold_dBm`) et **détection d'énergie**
+(`energy_detection_dBm`), ce qui permet aux passerelles d'ignorer les signaux
+faibles avant même de tester la sensibilité, tout en conservant le seuil de
+sensibilité original à −110 dBm.【F:loraflexsim/launcher/channel.py†L330-L347】【F:loraflexsim/launcher/gateway.py†L162-L238】
+Le **mode capture « pure ALOHA »** est disponible via `capture_mode="aloha"`
+ou automatiquement dès que `validation_mode="flora"` est activé, garantissant
+que toute collision simultanée annule les paquets concernés comme dans les
+traces historiques.【F:loraflexsim/launcher/simulator.py†L411-L415】【F:loraflexsim/launcher/gateway.py†L219-L238】 Enfin, la
+sélection du **modèle de PER** passe par `flora_per_model` (logistique, Croce ou
+désactivé) et reflète les équations du module `FloraPHY` pour contrôler la
+perte aléatoire introduite dans les scénarios de compatibilité.【F:loraflexsim/launcher/channel.py†L273-L278】【F:loraflexsim/launcher/flora_phy.py†L149-L161】
+
 Pour étendre fidèlement les scénarios FLoRa au-delà de 10 km, utilisez les
 presets longue portée fournis par `run.py`. Par exemple :
 
@@ -220,6 +233,7 @@ Deux commandes permettent de rejouer la matrice de validation et de suivre les
    et vérifie que les écarts de PDR, de collisions et de SNR restent dans les
    tolérances définies par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】
 2. `python scripts/run_validation.py --output results/validation_matrix.csv`
+   (script disponible via [scripts/run_validation.py](scripts/run_validation.py))
    génère un rapport synthétique et retourne un code de sortie non nul si une
    dérive dépasse une tolérance.【F:scripts/run_validation.py†L1-L112】
 
