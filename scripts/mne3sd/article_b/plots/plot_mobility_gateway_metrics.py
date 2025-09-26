@@ -156,15 +156,15 @@ def plot_pdr_distribution_by_gateway(df: pd.DataFrame) -> None:
 
     for gateway_id in gateway_ids:
         heights = [entry["shares"].get(gateway_id, 0.0) for entry in entries]
-        ax.bar(indices, heights, bottom=bottoms, label=f"Passerelle {gateway_id}")
+        ax.bar(indices, heights, bottom=bottoms, label=f"Gateway {gateway_id}")
         bottoms = [bottom + height for bottom, height in zip(bottoms, heights)]
 
     ax.set_xticks(list(indices), [entry["label"] for entry in entries], rotation=30, ha="right")
-    ax.set_ylabel("Part du PDR (%)")
-    ax.set_title("Répartition du PDR par passerelle")
+    ax.set_ylabel("PDR share (%)")
+    ax.set_title("PDR distribution by gateway")
     ax.set_ylim(0, 100)
     ax.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
-    ax.legend(title="Passerelles")
+    ax.legend(title="Gateways")
     fig.tight_layout()
 
     output_dir = prepare_figure_directory(
@@ -191,9 +191,9 @@ def plot_downlink_delay_vs_gateways(df: pd.DataFrame) -> None:
             label=model_name.replace("_", " ").title(),
         )
 
-    ax.set_xlabel("Nombre de passerelles")
-    ax.set_ylabel("Délai moyen downlink (s)")
-    ax.set_title("Impact du nombre de passerelles sur le délai downlink")
+    ax.set_xlabel("Number of gateways")
+    ax.set_ylabel("Average downlink delay (s)")
+    ax.set_title("Impact of the number of gateways on downlink delay")
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     ax.legend()
     fig.tight_layout()
@@ -230,9 +230,9 @@ def plot_model_comparison(df: pd.DataFrame) -> None:
                 fontsize=6,
             )
 
-    ax.set_xlabel("PDR agrégé (%)")
-    ax.set_ylabel("Délai moyen downlink (s)")
-    ax.set_title("Comparaison RandomWaypoint vs Smooth")
+    ax.set_xlabel("Aggregated PDR (%)")
+    ax.set_ylabel("Average downlink delay (s)")
+    ax.set_title("RandomWaypoint vs Smooth comparison")
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     ax.legend()
     fig.tight_layout()

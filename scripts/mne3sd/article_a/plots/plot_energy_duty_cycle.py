@@ -126,14 +126,14 @@ def plot_energy_per_node_vs_duty_cycle(df: pd.DataFrame, figures_base: Path) -> 
             yerr=ordered["energy_per_node_J_std"],
             marker="o",
             capsize=3,
-            label=f"Classe {class_name}",
+            label=f"Class {class_name}",
         )
 
-    ax.set_xlabel("Duty-cycle (%)")
-    ax.set_ylabel("Énergie par nœud (J)")
-    ax.set_title("Consommation moyenne par nœud")
+    ax.set_xlabel("Duty cycle (%)")
+    ax.set_ylabel("Energy per node (J)")
+    ax.set_title("Average energy per node")
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
-    ax.legend(title="Classe")
+    ax.legend(title="Class")
     fig.tight_layout()
 
     output_dir = prepare_figure_directory(
@@ -160,15 +160,15 @@ def plot_pdr_vs_duty_cycle(df: pd.DataFrame, figures_base: Path) -> None:
             yerr=pdr_std_pct,
             marker="o",
             capsize=3,
-            label=f"Classe {class_name}",
+            label=f"Class {class_name}",
         )
 
-    ax.set_xlabel("Duty-cycle (%)")
-    ax.set_ylabel("PDR (%)")
-    ax.set_title("Fiabilité des transmissions")
+    ax.set_xlabel("Duty cycle (%)")
+    ax.set_ylabel("Packet delivery ratio (%)")
+    ax.set_title("Transmission reliability")
     ax.set_ylim(0, 105)
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
-    ax.legend(title="Classe")
+    ax.legend(title="Class")
     fig.tight_layout()
 
     output_dir = prepare_figure_directory(
@@ -185,7 +185,7 @@ def plot_energy_breakdown(df: pd.DataFrame, figures_base: Path) -> None:
 
     ordered = df.sort_values(["class", "duty_cycle"])  # garantir l'ordre sur l'axe X
     labels = [
-        f"Classe {row['class']}\n{row['duty_cycle'] * 100:.1f}%" for _, row in ordered.iterrows()
+        f"Class {row['class']}\n{row['duty_cycle'] * 100:.1f}%" for _, row in ordered.iterrows()
     ]
     x = range(len(ordered))
 
@@ -198,13 +198,13 @@ def plot_energy_breakdown(df: pd.DataFrame, figures_base: Path) -> None:
 
     ax.bar(x, tx, width=width, label="TX")
     ax.bar(x, rx, width=width, bottom=tx, label="RX")
-    ax.bar(x, sleep, width=width, bottom=tx + rx, label="Sommeil")
+    ax.bar(x, sleep, width=width, bottom=tx + rx, label="Sleep")
 
     ax.set_xticks(list(x))
     ax.set_xticklabels(labels, rotation=45, ha="right")
-    ax.set_ylabel("Énergie par nœud (J)")
-    ax.set_title("Décomposition énergétique par classe et duty-cycle")
-    ax.legend(title="Composante")
+    ax.set_ylabel("Energy per node (J)")
+    ax.set_title("Energy breakdown by class and duty cycle")
+    ax.legend(title="Component")
     ax.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
     fig.tight_layout()
 
