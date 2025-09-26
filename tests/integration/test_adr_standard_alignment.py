@@ -51,7 +51,6 @@ def test_adr_standard_alignment_with_flora_trace():
 
     last_expected_sf = node.sf
     last_expected_power = node.tx_power
-
     for entry in events:
         event_id = entry["event_id"]
         best_gateway = entry["best_gateway"]
@@ -76,6 +75,12 @@ def test_adr_standard_alignment_with_flora_trace():
 
         assert server.event_gateway[event_id] == best_gateway
         assert pytest.approx(server.event_snir[event_id], abs=1e-9) == best_info["snr"]
+
+        # The most recent entry stored for the best gateway must match the
+        # SNR reported by the FLoRa trace.
+        recorded = node.gateway_snr_history.get(best_gateway, [])
+        assert recorded, "The best gateway must record the selected SNIR"
+        assert recorded[-1] == best_info["snr"]
 
         expected = entry["expected_command"]
         if expected:

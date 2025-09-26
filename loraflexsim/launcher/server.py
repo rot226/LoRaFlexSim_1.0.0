@@ -114,6 +114,68 @@ class NetworkServer:
         return getattr(self, "MARGIN_DB", MARGIN_DB)
 
     @staticmethod
+    def _update_node_snr_history(node, gateway_id: int | None, snr_value: float) -> None:
+        """Enregistrer ``snr_value`` pour ``gateway_id`` dans l'historique nœud."""
+
+        if node is None:
+            return
+
+        node.snr_history.append((gateway_id, snr_value))
+        if len(node.snr_history) > ADR_WINDOW_SIZE:
+            old_gateway, old_snr = node.snr_history.pop(0)
+            if old_gateway is not None:
+                history = node.gateway_snr_history.get(old_gateway)
+                if history:
+                    try:
+                        history.remove(old_snr)
+                    except ValueError:
+                        pass
+
+    @staticmethod
+    def _gateway_snr_statistics(node) -> tuple[dict[int, dict[str, float]], int]:
+        """Retourne les statistiques SNIR par passerelle et le total d'échantillons."""
+
+        stats: dict[int, dict[str, float]] = {}
+        total = 0
+        if node is None:
+            return stats, total
+
+        for gateway_id, history in node.gateway_snr_history.items():
+            if not history:
+                continue
+            count = len(history)
+            total_snr = float(sum(history))
+            stats[gateway_id] = {
+                "count": count,
+                "total": total_snr,
+                "avg": total_snr / count,
+                "max": max(history),
+            }
+            total += count
+
+        # En cas d'incohérence (par exemple après un retrait manuel), on
+        # reconstruit à partir de ``node.snr_history`` pour rester robuste.
+        if node.snr_history and total != len(node.snr_history):
+            stats.clear()
+            total = 0
+            for gateway_id, snr in node.snr_history:
+                if gateway_id is None:
+                    continue
+                entry = stats.setdefault(
+                    gateway_id,
+                    {"count": 0, "total": 0.0, "avg": snr, "max": snr},
+                )
+                entry["count"] += 1
+                entry["total"] += snr
+                if snr > entry["max"]:
+                    entry["max"] = snr
+                total += 1
+            for entry in stats.values():
+                entry["avg"] = entry["total"] / entry["count"]
+
+        return stats, total
+
+    @staticmethod
     def _round_half_away_from_zero(value: float) -> int:
         """Match ``std::round`` semantics used by FLoRa (half away from zero)."""
 
@@ -674,7 +736,8 @@ class NetworkServer:
                     and selected_snr is not None
                 ):
                     for idx in range(len(node.snr_history) - 1, -1, -1):
-                        if node.snr_history[idx] == previous_snr:
+                        gw_id, snr_sample = node.snr_history[idx]
+                        if gw_id == previous_gateway_id and snr_sample == previous_snr:
                             del node.snr_history[idx]
                             break
                 logger.debug(
@@ -775,11 +838,13 @@ class NetworkServer:
                     TX_POWER_INDEX_TO_DBM,
                 )
 
-                node.snr_history.append(snr_value)
-                if len(node.snr_history) > ADR_WINDOW_SIZE:
-                    node.snr_history.pop(0)
+                if selected_gateway_id is not None:
+                    self._update_node_snr_history(node, selected_gateway_id, snr_value)
                 if len(node.snr_history) >= ADR_WINDOW_SIZE:
-                    snr_max = max(node.snr_history)
+                    stats, total = self._gateway_snr_statistics(node)
+                    if not stats or total <= 0:
+                        return
+                    snr_max = max(entry["max"] for entry in stats.values())
                     required = REQUIRED_SNR.get(node.sf, -20.0)
                     margin = snr_max - required - self._adr_margin_db()
                     nstep = self._round_half_away_from_zero(margin / 3.0)
@@ -854,9 +919,8 @@ class NetworkServer:
                     TX_POWER_INDEX_TO_DBM,
                 )
 
-                node.snr_history.append(snr_value)
-                if len(node.snr_history) > ADR_WINDOW_SIZE:
-                    node.snr_history.pop(0)
+                if selected_gateway_id is not None:
+                    self._update_node_snr_history(node, selected_gateway_id, snr_value)
                 if len(node.snr_history) < ADR_WINDOW_SIZE:
                     return
 
@@ -866,10 +930,14 @@ class NetworkServer:
                 ):
                     return
 
+                stats, total = self._gateway_snr_statistics(node)
+                if not stats or total <= 0:
+                    return
+
                 if self.adr_method == "avg":
-                    snr_m = sum(node.snr_history) / len(node.snr_history)
+                    snr_m = sum(entry["total"] for entry in stats.values()) / total
                 else:
-                    snr_m = max(node.snr_history)
+                    snr_m = max(entry["max"] for entry in stats.values())
                 required = REQUIRED_SNR.get(node.sf, -20.0)
                 margin = snr_m - required - self._adr_margin_db()
                 nstep = self._round_half_away_from_zero(margin / 3.0)
