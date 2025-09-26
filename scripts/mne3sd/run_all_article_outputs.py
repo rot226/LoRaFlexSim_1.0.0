@@ -282,6 +282,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip the scenario stage for the selected articles.",
     )
+    parser.add_argument(
+        "--scenario-workers",
+        type=int,
+        default=None,
+        help=(
+            "Override the number of workers used by scenario modules that "
+            "support parallel execution."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -330,6 +339,7 @@ def execute_tasks(
     *,
     reuse: bool = False,
     profile: str | None = None,
+    scenario_workers: int | None = None,
 ) -> list[Path]:
     """Run the provided tasks and return the artefact paths they generate."""
 
@@ -347,8 +357,11 @@ def execute_tasks(
             executed_outputs.extend(task.outputs)
             continue
         command = [PYTHON, "-m", task.module]
-        if profile and ".scenarios." in task.module:
+        is_scenario_module = ".scenarios." in task.module
+        if profile and is_scenario_module:
             command.extend(["--profile", profile])
+        if scenario_workers is not None and is_scenario_module:
+            command.extend(["--workers", str(scenario_workers)])
         subprocess.run(command, check=True, cwd=ROOT)
         executed_outputs.extend(task.outputs)
     return executed_outputs
@@ -425,6 +438,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     heading,
                     reuse=args.reuse,
                     profile=scenario_profile,
+                    scenario_workers=args.scenario_workers,
                 )
             )
         else:

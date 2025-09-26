@@ -977,6 +977,13 @@ python scripts/benchmark_energy_classes.py --nodes 20 --packets 5 --output resul
 python -m scripts.mne3sd.article_a.plots.plot_energy_duty_cycle --results results/mne3sd/article_a
 ```
 
+Pour exécuter l'ensemble des scénarios et graphiques associés aux articles MNE3SD
+en tirant parti du parallélisme des scénarios, utilisez par exemple :
+
+```bash
+py -m scripts.mne3sd.run_all_article_outputs --scenario-workers 8
+```
+
 `plot_sf_distribution.py` generates `sf_distribution` in PNG, JPG and EPS,
 while `plot_energy.py` creates `energy_total` or `energy_per_node` in the
 same formats.
