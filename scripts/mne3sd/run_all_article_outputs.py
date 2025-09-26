@@ -208,6 +208,42 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
                 ),
             ),
         ),
+        Task(
+            module="scripts.mne3sd.article_b.plots.plot_mobility_gateway_metrics",
+            description="Mobility gateway plots",
+            outputs=(
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "pdr_distribution_by_gateway/"
+                    "pdr_distribution_by_gateway.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "pdr_distribution_by_gateway/"
+                    "pdr_distribution_by_gateway.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "downlink_delay_vs_gateways/"
+                    "average_downlink_delay_vs_gateways.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "downlink_delay_vs_gateways/"
+                    "average_downlink_delay_vs_gateways.eps"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "model_comparison/"
+                    "pdr_vs_delay_model_comparison.png"
+                ),
+                Path(
+                    "figures/mne3sd/article_b/mobility_gateway/"
+                    "model_comparison/"
+                    "pdr_vs_delay_model_comparison.eps"
+                ),
+            ),
+        ),
     ),
 }
 

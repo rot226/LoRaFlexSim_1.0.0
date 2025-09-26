@@ -52,6 +52,13 @@ Les modules de tracé sont de fines surcouches qui agrègent les CSV produits pa
 - `--format` : format de sortie (`png`, `pdf`, `svg`, …). Par défaut : `pdf`.
 - `--style` : feuille de style Matplotlib optionnelle appliquée avant le rendu (par défaut `figures/matplotlib-paper.mplstyle` lorsqu'elle est disponible).
 
+## Figures
+
+### `plot_mobility_gateway_metrics`
+- **Répartition du PDR par passerelle** (`figures/mne3sd/article_b/mobility_gateway/pdr_distribution_by_gateway/`) : graphique en barres empilées montrant la part de trafic collectée par chaque passerelle selon le modèle de mobilité et le nombre total de passerelles. Une répartition homogène signale une couverture bien équilibrée tandis qu'un segment dominant met en évidence un goulot d'étranglement.
+- **Délai moyen downlink vs passerelles** (`figures/mne3sd/article_b/mobility_gateway/downlink_delay_vs_gateways/`) : courbes avec barres d'erreur reliant le nombre de passerelles au délai moyen des accusés de réception. La pente renseigne sur l'intérêt d'ajouter des passerelles supplémentaires pour réduire la latence downlink.
+- **Comparaison RandomWaypoint/Smooth** (`figures/mne3sd/article_b/mobility_gateway/model_comparison/`) : nuage de points positionnant chaque configuration selon son PDR agrégé et son délai downlink moyen. Les annotations `n GW` rappellent le nombre de passerelles associé, ce qui aide à visualiser le compromis portée/latence entre les profils de mobilité.
+
 ### Profils d'exécution
 Les lanceurs de scénarios respectent l'option `--profile` partagée ainsi que la variable d'environnement `MNE3SD_PROFILE` :
 
