@@ -25,6 +25,20 @@ sensibilité. Un chemin personnalisé peut être fourni via `flora_noise_path`.
    > ``numpy_stub`` situé dans ``tests/stubs`` uniquement pour les tests. Pour
    > exécuter les scripts ou les exemples de LoRaFlexSim, assurez‑vous que la
    > véritable bibliothèque NumPy est installée dans votre environnement.
+
+## ✅ Vérification avant mise à jour
+
+Avant de mettre à jour votre branche ou de soumettre une contribution,
+exécutez la commande suivante depuis la racine du dépôt :
+
+```bash
+make validate
+```
+
+Cette cible `make` enchaîne les suites de tests par domaine (`-k channel`,
+`-k class_bc`, etc.) puis lance `scripts/run_validation.py` afin de garantir
+qu'aucune régression n'a été introduite. Sur Windows, exécutez cette commande
+depuis un terminal disposant de `make` (Git Bash, WSL ou équivalent).
 3. **Lancez le tableau de bord :**
 ```bash
 panel serve loraflexsim/launcher/dashboard.py --show
