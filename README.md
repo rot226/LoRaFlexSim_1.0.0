@@ -81,10 +81,10 @@ les paramètres suivants sont appliqués lors de la création du `Simulator` ou 
 - `use_flora_curves=True` — charge les équations de perte et de PER de FLoRa.
   Ce paramètre est forcé par `flora_mode`, mais peut être activé manuellement
   lorsque seul le canal doit reproduire les courbes historiques.【F:loraflexsim/launcher/simulator.py†L354-L384】
-- `detection_threshold_dBm=-110` — valeur par défaut des scénarios FLoRa ; elle
-  est propagée à tous les canaux lorsque `flora_mode` est actif, avec un
-  fallback de `-110` dBm si une combinaison SF/BW n'est pas définie par la table
-  d'origine.【F:loraflexsim/launcher/simulator.py†L373-L385】【F:loraflexsim/launcher/channel.py†L93-L114】
+- `detection_threshold_dBm=-110` et `energy_detection_dBm=-90` — valeurs par
+  défaut des scénarios FLoRa ; elles sont propagées à tous les canaux et
+  passerelles lorsque `flora_mode` est actif, avec un fallback de `-110` dBm si
+  une combinaison SF/BW n'est pas définie par la table d'origine.【F:loraflexsim/launcher/simulator.py†L354-L470】【F:loraflexsim/launcher/channel.py†L68-L204】
 - **Presets de propagation** — utilisez `environment="flora"`, `"flora_hata"`
   ou `"flora_oulu"` pour sélectionner respectivement la perte log-normale, la
   variante Hata-Okumura ou le modèle Oulu reproduits depuis FLoRa. Ces presets

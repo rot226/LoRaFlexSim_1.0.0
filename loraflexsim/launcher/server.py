@@ -35,6 +35,7 @@ class NetworkServer:
         process_delay: float = 0.0,
         network_delay: float = 0.0,
         adr_method: str = "max",
+        energy_detection_dBm: float = -float("inf"),
     ):
         """Initialise le serveur réseau.
 
@@ -45,6 +46,9 @@ class NetworkServer:
         :param network_delay: Délai de propagation des messages (s).
         :param adr_method: Méthode d'agrégation du SNR pour l'ADR
             (``"max"`` ou ``"avg"``).
+        :param energy_detection_dBm: Seuil de détection d'énergie appliqué aux
+            configurations FLoRa (−90 dBm par défaut lorsque fourni par le
+            simulateur).
         """
         # Ensemble des identifiants d'événements déjà reçus (pour éviter les doublons)
         self.received_events = set()
@@ -70,6 +74,7 @@ class NetworkServer:
         self.process_delay = process_delay
         self.network_delay = network_delay
         self.adr_method = adr_method
+        self.energy_detection_dBm = energy_detection_dBm
         self.pending_process: dict[
             int,
             tuple[int, int, int, float | None, float | None, object, float | None],

@@ -226,6 +226,7 @@ class Simulator:
         payload_size_bytes: int = 20,
         node_class: str = "A",
         detection_threshold_dBm: float = -float("inf"),
+        energy_detection_dBm: float = -float("inf"),
         min_interference_time: float = 0.0,
         flora_mode: bool = False,
         flora_timing: bool = False,
@@ -291,6 +292,9 @@ class Simulator:
         :param node_class: Classe LoRaWAN commune à tous les nœuds ('A', 'B' ou 'C').
         :param detection_threshold_dBm: RSSI minimal requis pour qu'une
             réception soit prise en compte.
+        :param energy_detection_dBm: Seuil de détection d'énergie appliqué
+            avant la vérification de sensibilité. Lorsque ``flora_mode`` est
+            activé, la valeur par défaut correspond à −90 dBm.
         :param min_interference_time: Chevauchement temporel toléré entre
             transmissions avant de les considérer en collision (s).
         :param flora_mode: Active automatiquement les réglages du mode FLoRa
@@ -371,6 +375,8 @@ class Simulator:
         if flora_mode:
             if detection_threshold_dBm == -float("inf"):
                 detection_threshold_dBm = -110.0
+            if energy_detection_dBm == -float("inf"):
+                energy_detection_dBm = Channel.FLORA_ENERGY_DETECTION_DBM
             if min_interference_time == 0.0:
                 min_interference_time = 5.0
             if self.first_packet_min_delay == 0.0:
@@ -379,7 +385,9 @@ class Simulator:
             duty_cycle = None
             detection_threshold_dBm = -float("inf")
             min_interference_time = float("inf")
+            energy_detection_dBm = -float("inf")
         self.detection_threshold_dBm = detection_threshold_dBm
+        self.energy_detection_dBm = energy_detection_dBm
         self.min_interference_time = min_interference_time
         self.pure_poisson_mode = pure_poisson_mode
         self.lock_step_poisson = lock_step_poisson
@@ -464,6 +472,9 @@ class Simulator:
             if detection_threshold_dBm != -float("inf"):
                 for ch in self.multichannel.channels:
                     ch.detection_threshold_dBm = detection_threshold_dBm
+            if energy_detection_dBm != -float("inf"):
+                for ch in self.multichannel.channels:
+                    ch.energy_detection_dBm = energy_detection_dBm
             if flora_mode:
                 for ch in self.multichannel.channels:
                     ch.phy_model = "omnet_full"
@@ -501,6 +512,7 @@ class Simulator:
                 ch_list = [
                     Channel(
                         detection_threshold_dBm=detection_threshold_dBm,
+                        energy_detection_dBm=energy_detection_dBm,
                         phy_model=ch_phy_model,
                         environment=env,
                         flora_loss_model=flora_loss_model,
@@ -520,6 +532,8 @@ class Simulator:
                     if isinstance(ch, Channel):
                         if detection_threshold_dBm != -float("inf"):
                             ch.detection_threshold_dBm = detection_threshold_dBm
+                        if energy_detection_dBm != -float("inf"):
+                            ch.energy_detection_dBm = energy_detection_dBm
                         if flora_mode:
                             ch.phy_model = "omnet_full"
                         _apply_flora_curves(ch)
@@ -551,6 +565,7 @@ class Simulator:
                         channel_obj = Channel(
                             frequency_hz=float(ch),
                             detection_threshold_dBm=detection_threshold_dBm,
+                            energy_detection_dBm=energy_detection_dBm,
                             phy_model="omnet_full" if flora_mode else phy_model,
                             environment=(
                                 "flora"
@@ -595,6 +610,7 @@ class Simulator:
             process_delay=proc_delay,
             network_delay=net_delay,
             adr_method=self.adr_method,
+            energy_detection_dBm=energy_detection_dBm,
         )
         self.network_server.beacon_interval = self.beacon_interval
         self.network_server.beacon_drift = self.beacon_drift
@@ -645,7 +661,13 @@ class Simulator:
                 gw_y = self.pos_rng.random() * area_size
                 gw_power = None
             self.gateways.append(
-                Gateway(gw_id, gw_x, gw_y, downlink_power_dBm=gw_power)
+                Gateway(
+                    gw_id,
+                    gw_x,
+                    gw_y,
+                    downlink_power_dBm=gw_power,
+                    energy_detection_dBm=energy_detection_dBm,
+                )
             )
 
         # Générer les nœuds aléatoirement dans l'aire et assigner un SF/power initiaux
@@ -1053,6 +1075,12 @@ class Simulator:
                 snr = 10 * math.log10(signal_lin / avg_noise)
                 rssi += getattr(gw, "rx_gain_dB", 0.0)
                 snr += getattr(gw, "rx_gain_dB", 0.0)
+                energy_threshold = max(
+                    node.channel.energy_detection_dBm,
+                    getattr(gw, "energy_detection_dBm", -float("inf")),
+                )
+                if rssi < energy_threshold:
+                    continue
                 # Enregistrer la transmission pour l'interférence future
                 self._tx_manager.add(
                     gw.id,
