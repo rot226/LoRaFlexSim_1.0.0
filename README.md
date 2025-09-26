@@ -88,6 +88,13 @@ les paramètres suivants sont appliqués lors de la création du `Simulator` ou 
 > 📘 Consultez également [`docs/reproduction_flora.md`](docs/reproduction_flora.md)
 > pour une checklist détaillée des paramètres et du mode compatibilité.
 
+| Phénomène | Paramètres/équations clés | Modules concernés | Détails complémentaires |
+| --- | --- | --- | --- |
+| **Pertes radio** | Courbes log-normales (`flora_loss_model`), profils `environment="flora"` et variantes Hata/Oulu | [`loraflexsim/launcher/channel.py`](loraflexsim/launcher/channel.py) | Synthèse des équations de pertes, variables `PL(d)` et constantes dans [`docs/equations_flora.md`](docs/equations_flora.md#pertes-radio) |
+| **Bruit & sensibilité** | Seuils `detection_threshold_dBm`, `energy_detection_dBm`, bruit thermique de référence | [`loraflexsim/launcher/channel.py`](loraflexsim/launcher/channel.py), [`loraflexsim/launcher/gateway.py`](loraflexsim/launcher/gateway.py) | Dérivation des équations de bruit et tables de sensibilité dans [`docs/equations_flora.md`](docs/equations_flora.md#bruit-et-sensibilite) |
+| **Capture & collisions** | Fenêtre de capture (6 symboles), matrice `FLORA_NON_ORTH_DELTA`, logique `capture_mode="aloha"` | [`loraflexsim/launcher/channel.py`](loraflexsim/launcher/channel.py), [`loraflexsim/launcher/gateway.py`](loraflexsim/launcher/gateway.py) | Modélisation C++ et équations de capture détaillées dans [`docs/equations_flora.md`](docs/equations_flora.md#capture-et-collisions) |
+| **Probabilité d'erreur (PER)** | Modèles logistique/Croce, paramètres `flora_per_model`, intégration PHY | [`loraflexsim/launcher/channel.py`](loraflexsim/launcher/channel.py), [`loraflexsim/launcher/server.py`](loraflexsim/launcher/server.py) | Formules PER et coefficients normalisés décrits dans [`docs/equations_flora.md`](docs/equations_flora.md#probabilite-derreur) |
+
 - `flora_mode=True` — active automatiquement les courbes logistiques de FLoRa,
   impose le modèle physique `omnet_full`, applique le seuil de détection
   historique et réutilise les presets de propagation « flora » sur l'ensemble
