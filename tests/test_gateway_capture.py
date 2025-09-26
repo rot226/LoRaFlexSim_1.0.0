@@ -49,6 +49,26 @@ def test_no_capture_before_five_symbols():
     assert server.packets_received == 0
 
 
+def test_interference_ends_before_cs_begin():
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    sf = 7
+    bw = 125e3
+    symbol_time = (2 ** sf) / bw
+    interferer_start = -0.002
+    interferer_end = interferer_start + 3 * symbol_time  # ends before csBegin (~5 symbols)
+
+    gw.start_reception(1, 1, sf, -60, interferer_end, 6.0, interferer_start, 868e6)
+    gw.start_reception(2, 2, sf, -50, 0.1, 6.0, 0.0, 868e6)
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    assert server.packets_received == 1
+
+
 def test_strong_signal_arrives_late():
     gw = Gateway(0, 0, 0)
     server = NetworkServer()
