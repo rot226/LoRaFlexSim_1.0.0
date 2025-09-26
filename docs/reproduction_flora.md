@@ -33,6 +33,11 @@ Lorsque les fichiers INI ne précisent pas `timeToNextPacket`, LoRaFlexSim ramè
 
 ## 4. Contrôles rapides avant validation
 
+> 🧪 **Validation d'une nouvelle version**
+> - `make validate` : exécute la batterie de tests de régression FLoRa (unitaires et intégration) décrite dans [`VALIDATION.md`](../VALIDATION.md).
+> - `python scripts/run_validation.py --output results/validation_matrix.csv` : rejoue l'ensemble des scénarios historiques et compare les métriques aux traces `.sca` de référence.
+> - Vérifiez les jeux de données dans `tests/integration/` et `tests/test_flora_*.py` avant de publier une modification impactant `channel.py`, `gateway.py` ou `server.py`.
+
 | Élément | Vérification | Commande/conseil |
 | --- | --- | --- |
 | Paramètres radio | `flora_mode=True`, `phy_model="flora"`, preset `environment` cohérent | Inspecter `simulator.flora_mode` et `channel.environment` dans un REPL |
