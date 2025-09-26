@@ -74,6 +74,14 @@ ARTICLE_PLOTS: dict[str, tuple[Task, ...]] = {
                 Path("figures/mne3sd/article_a/class_pdr_vs_interval.eps"),
             ),
         ),
+        Task(
+            module="scripts.mne3sd.article_a.plots.plot_energy_duty_cycle",
+            description="Energy consumption versus duty cycle plots",
+            outputs=(
+                Path("figures/mne3sd/article_a/energy_per_node_vs_duty_cycle.png"),
+                Path("figures/mne3sd/article_a/energy_per_node_vs_duty_cycle.eps"),
+            ),
+        ),
     ),
     "b": (
         Task(
