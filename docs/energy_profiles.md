@@ -47,3 +47,29 @@ python scripts/benchmark_energy_classes.py --nodes 20 --packets 5 --output resul
 
 Le fichier généré peut ensuite être tracé avec un tableur ou un outil dédié
 afin de documenter et comparer les profils de consommation.
+
+## Visualisation du cycle d'activité énergétique
+
+Pour analyser la consommation issue des scénarios de l'article A, le module
+[`scripts.mne3sd.article_a.plots.plot_energy_duty_cycle`](../scripts/mne3sd/article_a/plots/plot_energy_duty_cycle.py)
+propose une commande prête à l'emploi :
+
+```bash
+python -m scripts.mne3sd.article_a.plots.plot_energy_duty_cycle --results results/mne3sd/article_a
+```
+
+Cette commande charge le résumé énergétique généré par les simulations
+(`results/.../energy_consumption_summary.csv`) et produit plusieurs figures
+comparant le cycle d'activité des nœuds.  Les graphiques exportés se trouvent
+dans `figures/.../` au format PNG et EPS (par exemple
+`figures/.../energy_duty_cycle.png` et `figures/.../energy_duty_cycle.eps`).
+
+Les options principales permettent de :
+
+- préciser la source des données via `--results` ;
+- activer la génération d'un rendu LaTeX (`--latex`) ;
+- afficher les figures à l'écran (`--show`).
+
+La commande fonctionne également sous Windows 11 (fenêtre **cmd**) en adaptant
+les chemins (`python -m ...`).  Elle facilite ainsi la traçabilité des
+consommations mesurées dans l'étude.
