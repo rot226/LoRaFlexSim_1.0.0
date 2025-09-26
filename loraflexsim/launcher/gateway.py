@@ -229,12 +229,9 @@ class Gateway:
             )
             for t in interfering_transmissions:
                 t["lost_flag"] = True
-                t_key = (t["sf"], t["frequency"])
-                try:
-                    self.active_map[t_key].remove(t)
-                    self.active_by_event.pop(t["event_id"], None)
-                except (ValueError, KeyError):
-                    pass
+            new_transmission["lost_flag"] = True
+            self.active_map.setdefault(key, []).append(new_transmission)
+            self.active_by_event[event_id] = (key, new_transmission)
             return
 
         if not interfering_transmissions:
@@ -419,21 +416,17 @@ class Gateway:
                     t['lost_flag'] = False  # gagnant
                 else:
                     t['lost_flag'] = True   # perdants
-            # Retirer toutes les transmissions concurrentes actives qui sont perdantes
-            for t in interfering_transmissions:
-                if t['lost_flag']:
-                    t_key = (t['sf'], t['frequency'])
-                    try:
-                        self.active_map[t_key].remove(t)
-                        self.active_by_event.pop(t['event_id'], None)
-                    except (ValueError, KeyError):
-                        pass
             # Ajouter la transmission la plus forte si c'est la nouvelle (sinon elle est déjà dans active_transmissions)
             if strongest is new_transmission:
                 new_transmission['lost_flag'] = False
                 self.active_map.setdefault(key, []).append(new_transmission)
                 self.active_by_event[event_id] = (key, new_transmission)
-            # Sinon, la nouvelle transmission est perdue (on ne l'ajoute pas)
+            else:
+                # La nouvelle transmission est perdue mais doit rester marquée active
+                new_transmission['lost_flag'] = True
+                self.active_map.setdefault(key, []).append(new_transmission)
+                self.active_by_event[event_id] = (key, new_transmission)
+            # Les transmissions perdantes restent suivies jusqu'à leur fin simulée
             logger.debug(
                 f"Gateway {self.id}: collision avec capture – paquet {strongest['event_id']} capturé, autres perdus.")
             diag_logger.info(
@@ -444,21 +437,14 @@ class Gateway:
             # Aucun signal ne peut être décodé (collision totale)
             for t in colliders:
                 t['lost_flag'] = True
-            # Retirer tous les paquets concurrents actifs (ils ne seront pas décodés finalement)
-            for t in interfering_transmissions:
-                t_key = (t['sf'], t['frequency'])
-                try:
-                    self.active_map[t_key].remove(t)
-                    self.active_by_event.pop(t['event_id'], None)
-                except (ValueError, KeyError):
-                    pass
-            # Ne pas ajouter la nouvelle transmission car tout est perdu (pas de décodage possible)
+            # Conserver la nouvelle transmission marquée comme perdue pour bloquer le canal
+            self.active_map.setdefault(key, []).append(new_transmission)
+            self.active_by_event[event_id] = (key, new_transmission)
             logger.debug(
                 f"Gateway {self.id}: collision sans capture – toutes les transmissions en collision sont perdues.")
             diag_logger.info(
                 f"t={current_time:.2f} gw={self.id} collision={[t['event_id'] for t in colliders]} none"
             )
-            # **Simplification** : après une collision totale, on considère le canal libre (les signaux brouillés ne sont pas conservés).
             return
 
     def end_reception(self, event_id: int, network_server, node_id: int):
