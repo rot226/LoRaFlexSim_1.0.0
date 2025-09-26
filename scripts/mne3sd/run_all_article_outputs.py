@@ -270,6 +270,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Skip the plotting stage for the selected articles.",
     )
     parser.add_argument(
+        "--reuse",
+        action="store_true",
+        help=(
+            "Skip tasks whose outputs exist and are newer than the corresponding"
+            " script."
+        ),
+    )
+    parser.add_argument(
         "--skip-scenarios",
         action="store_true",
         help="Skip the scenario stage for the selected articles.",
@@ -277,8 +285,51 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _resolve_module_source(module: str) -> Path | None:
+    """Return the source file executed for the provided module."""
+
+    parts = module.split(".")
+    module_path = ROOT / Path(*parts)
+    candidates = (
+        module_path.with_suffix(".py"),
+        module_path / "__main__.py",
+        module_path / "__init__.py",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _outputs_are_fresh(task: Task, script_path: Path | None) -> bool:
+    """Return whether the task outputs are newer than the script file."""
+
+    if not task.outputs or script_path is None:
+        return False
+
+    try:
+        script_mtime = script_path.stat().st_mtime
+    except FileNotFoundError:
+        return False
+
+    for output in task.outputs:
+        full_path = ROOT / output
+        try:
+            if not full_path.exists():
+                return False
+            if full_path.stat().st_mtime < script_mtime:
+                return False
+        except FileNotFoundError:
+            return False
+    return True
+
+
 def execute_tasks(
-    tasks: Iterable[Task], heading: str, *, profile: str | None = None
+    tasks: Iterable[Task],
+    heading: str,
+    *,
+    reuse: bool = False,
+    profile: str | None = None,
 ) -> list[Path]:
     """Run the provided tasks and return the artefact paths they generate."""
 
@@ -290,6 +341,11 @@ def execute_tasks(
     print(f"\n=== {heading} ===")
     for task in task_list:
         print(f"→ {task.description} ({task.module})")
+        script_path = _resolve_module_source(task.module)
+        if reuse and _outputs_are_fresh(task, script_path):
+            print("  ↺ Artefacts à jour, tâche ignorée (--reuse).")
+            executed_outputs.extend(task.outputs)
+            continue
         command = [PYTHON, "-m", task.module]
         if profile and ".scenarios." in task.module:
             command.extend(["--profile", profile])
@@ -364,7 +420,12 @@ def main(argv: Sequence[str] | None = None) -> None:
             tasks = ARTICLE_SCENARIOS.get(article, ())
             heading = f"Article {article.upper()} scenarios"
             all_outputs.extend(
-                execute_tasks(tasks, heading, profile=scenario_profile)
+                execute_tasks(
+                    tasks,
+                    heading,
+                    reuse=args.reuse,
+                    profile=scenario_profile,
+                )
             )
         else:
             print(f"\nSkipping scenarios for article {article.upper()}.")
@@ -372,7 +433,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         if not args.skip_plots:
             tasks = ARTICLE_PLOTS.get(article, ())
             heading = f"Article {article.upper()} plots"
-            all_outputs.extend(execute_tasks(tasks, heading))
+            all_outputs.extend(
+                execute_tasks(tasks, heading, reuse=args.reuse)
+            )
         else:
             print(f"\nSkipping plots for article {article.upper()}.")
 
