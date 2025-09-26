@@ -25,6 +25,7 @@ import os
 import statistics
 import sys
 import types
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -235,6 +236,73 @@ class DownlinkDelayTracker:
         self.scheduler.pop_ready = types.MethodType(self._pop_ready_func, self.scheduler)  # type: ignore[assignment]
 
 
+def _run_gateway_replicate(task: tuple) -> dict[str, object]:
+    """Execute a single gateway sweep replicate and return its metrics."""
+
+    (
+        model_name,
+        model_factory,
+        num_gateways,
+        channel_plan,
+        range_km,
+        area_size,
+        nodes,
+        packets,
+        interval,
+        adr_node,
+        adr_server,
+        replicate,
+        seed,
+    ) = task
+
+    mobility_model = model_factory(area_size)
+    sim = Simulator(
+        num_nodes=nodes,
+        num_gateways=num_gateways,
+        packets_to_send=packets,
+        seed=seed,
+        mobility=True,
+        mobility_model=mobility_model,
+        area_size=area_size,
+        packet_interval=interval,
+        adr_node=adr_node,
+        adr_server=adr_server,
+        channels=MultiChannel(channel_plan),
+    )
+
+    with DownlinkDelayTracker(sim.network_server.scheduler) as tracker:
+        sim.run()
+
+    metrics = sim.get_metrics()
+
+    delivered = int(metrics.get("delivered", 0))
+    collisions = int(metrics.get("collisions", 0))
+    total_packets = delivered + collisions
+    collision_rate = collisions / total_packets if total_packets else 0.0
+
+    pdr_by_gateway = normalise_gateway_distribution(metrics.get("pdr_by_gateway", {}))
+
+    downlink_samples = len(tracker.delays)
+    avg_downlink_delay = statistics.mean(tracker.delays) if tracker.delays else None
+
+    return {
+        "model": model_name,
+        "gateways": num_gateways,
+        "range_km": range_km,
+        "area_size_m": area_size,
+        "nodes": nodes,
+        "channels": json.dumps(channel_plan),
+        "replicate": replicate,
+        "seed": seed,
+        "pdr": float(metrics.get("PDR", 0.0)),
+        "collision_rate": collision_rate,
+        "avg_downlink_delay_s": avg_downlink_delay if avg_downlink_delay is not None else "",
+        "downlink_samples": downlink_samples,
+        "pdr_by_gateway": json.dumps(pdr_by_gateway, sort_keys=True),
+        "pdr_by_gateway_raw": pdr_by_gateway,
+    }
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description=(
@@ -285,6 +353,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel workers used to execute simulation replicates",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -303,6 +377,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
     packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
     replicates = args.replicates if profile != "ci" else CI_REPLICATES
+    workers = min(args.workers, replicates)
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -312,112 +387,90 @@ def main() -> None:  # noqa: D401 - CLI entry point
     results: list[dict[str, object]] = []
     combination_index = 0
 
-    for num_gateways in gateway_values:
-        for model_name, model_factory in models:
-            replicate_rows: list[dict[str, object]] = []
+    executor: ProcessPoolExecutor | None = None
+    if workers > 1:
+        executor = ProcessPoolExecutor(max_workers=workers)
 
-            for replicate in range(1, replicates + 1):
-                seed = args.seed + combination_index * replicates + replicate - 1
-                mobility_model = model_factory(area_size)
-                sim = Simulator(
-                    num_nodes=nodes,
-                    num_gateways=num_gateways,
-                    packets_to_send=packets,
-                    seed=seed,
-                    mobility=True,
-                    mobility_model=mobility_model,
-                    area_size=area_size,
-                    packet_interval=args.interval,
-                    adr_node=args.adr_node,
-                    adr_server=args.adr_server,
-                    channels=MultiChannel(channel_plan),
+    try:
+        for num_gateways in gateway_values:
+            for model_name, model_factory in models:
+                tasks = [
+                    (
+                        model_name,
+                        model_factory,
+                        num_gateways,
+                        channel_plan,
+                        range_km,
+                        area_size,
+                        nodes,
+                        packets,
+                        args.interval,
+                        args.adr_node,
+                        args.adr_server,
+                        replicate,
+                        args.seed + combination_index * replicates + replicate - 1,
+                    )
+                    for replicate in range(1, replicates + 1)
+                ]
+
+                if executor is not None:
+                    replicate_rows = list(executor.map(_run_gateway_replicate, tasks, chunksize=1))
+                else:
+                    replicate_rows = [_run_gateway_replicate(task) for task in tasks]
+
+                replicate_rows.sort(key=lambda row: int(row["replicate"]))
+
+                combination_index += 1
+
+                results.extend(
+                    {
+                        key: value
+                        for key, value in row.items()
+                        if key != "pdr_by_gateway_raw"
+                    }
+                    for row in replicate_rows
                 )
 
-                with DownlinkDelayTracker(sim.network_server.scheduler) as tracker:
-                    sim.run()
-
-                metrics = sim.get_metrics()
-
-                delivered = int(metrics.get("delivered", 0))
-                collisions = int(metrics.get("collisions", 0))
-                total_packets = delivered + collisions
-                collision_rate = collisions / total_packets if total_packets else 0.0
-
-                pdr_by_gateway = normalise_gateway_distribution(
-                    metrics.get("pdr_by_gateway", {})
+                summary_entries = summarise_metrics(
+                    replicate_rows,
+                    [
+                        "model",
+                        "gateways",
+                        "range_km",
+                        "area_size_m",
+                        "nodes",
+                        "channels",
+                    ],
+                    ["pdr", "collision_rate", "avg_downlink_delay_s"],
                 )
 
-                downlink_samples = len(tracker.delays)
-                avg_downlink_delay = (
-                    statistics.mean(tracker.delays) if tracker.delays else None
-                )
+                distribution = aggregate_gateway_distribution(replicate_rows)
+                distribution_json = json.dumps(distribution, sort_keys=True)
 
-                row = {
-                    "model": model_name,
-                    "gateways": num_gateways,
-                    "range_km": range_km,
-                    "area_size_m": area_size,
-                    "nodes": nodes,
-                    "channels": json.dumps(channel_plan),
-                    "replicate": replicate,
-                    "seed": seed,
-                    "pdr": float(metrics.get("PDR", 0.0)),
-                    "collision_rate": collision_rate,
-                    "avg_downlink_delay_s": avg_downlink_delay if avg_downlink_delay is not None else "",
-                    "downlink_samples": downlink_samples,
-                    "pdr_by_gateway": json.dumps(pdr_by_gateway, sort_keys=True),
-                    "pdr_by_gateway_raw": pdr_by_gateway,
-                }
-                replicate_rows.append(row)
-
-            combination_index += 1
-
-            results.extend(
-                {
-                    key: value
-                    for key, value in row.items()
-                    if key != "pdr_by_gateway_raw"
-                }
-                for row in replicate_rows
-            )
-
-            summary_entries = summarise_metrics(
-                replicate_rows,
-                [
-                    "model",
-                    "gateways",
-                    "range_km",
-                    "area_size_m",
-                    "nodes",
-                    "channels",
-                ],
-                ["pdr", "collision_rate", "avg_downlink_delay_s"],
-            )
-
-            distribution = aggregate_gateway_distribution(replicate_rows)
-            distribution_json = json.dumps(distribution, sort_keys=True)
-
-            for entry in summary_entries:
-                summary_row: dict[str, object] = {
-                    "model": entry["model"],
-                    "gateways": entry["gateways"],
-                    "range_km": entry["range_km"],
-                    "area_size_m": entry["area_size_m"],
-                    "nodes": entry["nodes"],
-                    "channels": entry["channels"],
-                    "replicate": "aggregate",
-                    "seed": "",
-                    "pdr": "",
-                    "collision_rate": "",
-                    "avg_downlink_delay_s": "",
-                    "downlink_samples": "",
-                    "pdr_by_gateway": distribution_json,
-                    "pdr_by_gateway_mean": distribution_json,
-                }
-                for metric in ("pdr", "collision_rate", "avg_downlink_delay_s"):
-                    summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
-                    summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
-                results.append(summary_row)
+                for entry in summary_entries:
+                    summary_row: dict[str, object] = {
+                        "model": entry["model"],
+                        "gateways": entry["gateways"],
+                        "range_km": entry["range_km"],
+                        "area_size_m": entry["area_size_m"],
+                        "nodes": entry["nodes"],
+                        "channels": entry["channels"],
+                        "replicate": "aggregate",
+                        "seed": "",
+                        "pdr": "",
+                        "collision_rate": "",
+                        "avg_downlink_delay_s": "",
+                        "downlink_samples": "",
+                        "pdr_by_gateway": distribution_json,
+                        "pdr_by_gateway_mean": distribution_json,
+                    }
+                    for metric in ("pdr", "collision_rate", "avg_downlink_delay_s"):
+                        summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                        summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                    results.append(summary_row)
+    finally:
+        if executor is not None:
+            executor.shutdown()
 
     write_csv(RESULTS_PATH, FIELDNAMES, results)
 

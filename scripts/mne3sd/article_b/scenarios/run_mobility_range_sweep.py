@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -149,6 +150,63 @@ def aggregate_sf_distribution(rows: list[dict[str, object]]) -> dict[str, float]
     return {key: totals[key] / total_packets for key in sorted(totals)}
 
 
+def _run_range_replicate(task: tuple) -> dict[str, object]:
+    """Execute a single mobility range replicate and return its metrics."""
+
+    (
+        model_name,
+        model_factory,
+        range_km,
+        area_size,
+        replicate,
+        seed,
+        nodes,
+        packets,
+        interval,
+        adr_node,
+        adr_server,
+    ) = task
+
+    mobility_model = model_factory(area_size)
+    sim = Simulator(
+        num_nodes=nodes,
+        num_gateways=1,
+        packets_to_send=packets,
+        seed=seed,
+        mobility=True,
+        mobility_model=mobility_model,
+        area_size=area_size,
+        packet_interval=interval,
+        adr_node=adr_node,
+        adr_server=adr_server,
+    )
+    sim.run()
+    metrics = sim.get_metrics()
+
+    delivered = int(metrics.get("delivered", 0))
+    collisions = int(metrics.get("collisions", 0))
+    total_packets = delivered + collisions
+    collision_rate = collisions / total_packets if total_packets else 0.0
+
+    energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
+    energy_per_node = energy_nodes / nodes if nodes else 0.0
+
+    sf_distribution = normalise_sf_distribution(metrics.get("sf_distribution", {}))
+
+    return {
+        "model": model_name,
+        "range_km": range_km,
+        "area_size_m": area_size,
+        "replicate": replicate,
+        "pdr": float(metrics.get("PDR", 0.0)),
+        "collision_rate": collision_rate,
+        "avg_delay_s": float(metrics.get("avg_delay_s", 0.0)),
+        "energy_per_node_J": energy_per_node,
+        "sf_distribution": json.dumps(sf_distribution, sort_keys=True),
+        "sf_distribution_raw": sf_distribution,
+    }
+
+
 def main() -> None:  # noqa: D401 - CLI entry point
     parser = argparse.ArgumentParser(
         description="Run a mobility range sweep for RandomWaypoint and SmoothMobility models",
@@ -183,6 +241,12 @@ def main() -> None:  # noqa: D401 - CLI entry point
     )
     parser.add_argument("--adr-node", action="store_true", help="Enable ADR on the devices")
     parser.add_argument("--adr-server", action="store_true", help="Enable ADR on the server")
+    parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=1,
+        help="Number of parallel workers used to execute simulation replicates",
+    )
     add_execution_profile_argument(parser)
     args = parser.parse_args()
 
@@ -195,6 +259,7 @@ def main() -> None:  # noqa: D401 - CLI entry point
     nodes = args.nodes if profile != "ci" else min(args.nodes, CI_NODES)
     packets = args.packets if profile != "ci" else min(args.packets, CI_PACKETS)
     replicates = args.replicates if profile != "ci" else CI_REPLICATES
+    workers = min(args.workers, replicates)
 
     models = [
         ("random_waypoint", RandomWaypoint),
@@ -204,85 +269,72 @@ def main() -> None:  # noqa: D401 - CLI entry point
     results: list[dict[str, object]] = []
     combination_index = 0
 
-    for model_name, model_factory in models:
-        for range_km in range_values:
-            area_size = range_km * 2000.0
-            replicate_rows: list[dict[str, object]] = []
+    executor: ProcessPoolExecutor | None = None
+    if workers > 1:
+        executor = ProcessPoolExecutor(max_workers=workers)
 
-            for replicate in range(1, replicates + 1):
-                seed = args.seed + combination_index * replicates + replicate - 1
-                mobility_model = model_factory(area_size)
-                sim = Simulator(
-                    num_nodes=nodes,
-                    num_gateways=1,
-                    packets_to_send=packets,
-                    seed=seed,
-                    mobility=True,
-                    mobility_model=mobility_model,
-                    area_size=area_size,
-                    packet_interval=args.interval,
-                    adr_node=args.adr_node,
-                    adr_server=args.adr_server,
-                )
-                sim.run()
-                metrics = sim.get_metrics()
+    try:
+        for model_name, model_factory in models:
+            for range_km in range_values:
+                area_size = range_km * 2000.0
+                tasks = [
+                    (
+                        model_name,
+                        model_factory,
+                        range_km,
+                        area_size,
+                        replicate,
+                        args.seed + combination_index * replicates + replicate - 1,
+                        nodes,
+                        packets,
+                        args.interval,
+                        args.adr_node,
+                        args.adr_server,
+                    )
+                    for replicate in range(1, replicates + 1)
+                ]
 
-                delivered = int(metrics.get("delivered", 0))
-                collisions = int(metrics.get("collisions", 0))
-                total_packets = delivered + collisions
-                collision_rate = collisions / total_packets if total_packets else 0.0
+                if executor is not None:
+                    replicate_rows = list(executor.map(_run_range_replicate, tasks, chunksize=1))
+                else:
+                    replicate_rows = [_run_range_replicate(task) for task in tasks]
 
-                energy_nodes = float(metrics.get("energy_nodes_J", 0.0))
-                energy_per_node = energy_nodes / nodes if nodes else 0.0
+                replicate_rows.sort(key=lambda row: int(row["replicate"]))
 
-                sf_distribution = normalise_sf_distribution(metrics.get("sf_distribution", {}))
+                combination_index += 1
 
-                replicate_rows.append(
+                results.extend(
                     {
-                        "model": model_name,
-                        "range_km": range_km,
-                        "area_size_m": area_size,
-                        "replicate": replicate,
-                        "pdr": float(metrics.get("PDR", 0.0)),
-                        "collision_rate": collision_rate,
-                        "avg_delay_s": float(metrics.get("avg_delay_s", 0.0)),
-                        "energy_per_node_J": energy_per_node,
-                        "sf_distribution": json.dumps(sf_distribution, sort_keys=True),
-                        "sf_distribution_raw": sf_distribution,
+                        key: value
+                        for key, value in row.items()
+                        if key != "sf_distribution_raw"
                     }
+                    for row in replicate_rows
                 )
 
-            combination_index += 1
+                summary_entries = summarise_metrics(
+                    replicate_rows,
+                    ["model", "range_km", "area_size_m"],
+                    ["pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"],
+                )
+                sf_summary = aggregate_sf_distribution(replicate_rows)
+                sf_json = json.dumps(sf_summary, sort_keys=True)
 
-            results.extend(
-                {
-                    key: value
-                    for key, value in row.items()
-                    if key != "sf_distribution_raw"
-                }
-                for row in replicate_rows
-            )
-
-            summary_entries = summarise_metrics(
-                replicate_rows,
-                ["model", "range_km", "area_size_m"],
-                ["pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"],
-            )
-            sf_summary = aggregate_sf_distribution(replicate_rows)
-            sf_json = json.dumps(sf_summary, sort_keys=True)
-
-            for entry in summary_entries:
-                summary_row: dict[str, object] = {
-                    "model": entry["model"],
-                    "range_km": entry["range_km"],
-                    "area_size_m": entry["area_size_m"],
-                    "replicate": "aggregate",
-                    "sf_distribution": sf_json,
-                }
-                for metric in ("pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"):
-                    summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
-                    summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
-                results.append(summary_row)
+                for entry in summary_entries:
+                    summary_row: dict[str, object] = {
+                        "model": entry["model"],
+                        "range_km": entry["range_km"],
+                        "area_size_m": entry["area_size_m"],
+                        "replicate": "aggregate",
+                        "sf_distribution": sf_json,
+                    }
+                    for metric in ("pdr", "collision_rate", "avg_delay_s", "energy_per_node_J"):
+                        summary_row[f"{metric}_mean"] = entry.get(f"{metric}_mean", "")
+                        summary_row[f"{metric}_std"] = entry.get(f"{metric}_std", "")
+                    results.append(summary_row)
+    finally:
+        if executor is not None:
+            executor.shutdown()
 
     write_csv(RESULTS_PATH, FIELDNAMES, results)
 
