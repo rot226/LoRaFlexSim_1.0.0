@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import pytest
 
 from loraflexsim.launcher import Simulator
-from loraflexsim.launcher.adr_standard_1 import apply as apply_adr_standard
-from loraflexsim.launcher.lorawan import (
-    DR_TO_SF,
-    LinkADRReq,
-    TX_POWER_INDEX_TO_DBM,
-)
+from loraflexsim.launcher.compare_flora import replay_flora_txconfig
 
 DATA_PATH = (
     Path(__file__).resolve().parent / "data" / "flora_multi_gateway_txconfig.json"
@@ -41,87 +35,37 @@ def test_adr_standard_alignment_with_flora_trace():
         adr_method="avg",
         seed=42,
     )
-    apply_adr_standard(sim)
-
     node = sim.nodes[0]
-    server = sim.network_server
+    initial_sf = node.sf
+    initial_power = node.tx_power
 
-    # Clean scheduler state for a deterministic comparison
-    server.scheduler.queue.clear()
+    report = replay_flora_txconfig(sim, events)
 
-    last_expected_sf = node.sf
-    last_expected_power = node.tx_power
-    for entry in events:
-        event_id = entry["event_id"]
+    assert not report["mismatches"]
+
+    last_decision = None
+    for result, entry in zip(report["results"], events, strict=True):
         best_gateway = entry["best_gateway"]
-        gateways = entry["gateways"]
-        best_info = gateways[str(best_gateway)]
-        end_time = entry["end_time"]
+        expected_snr = entry["gateways"][str(best_gateway)]["snr"]
+        assert result["best_gateway"] == best_gateway
+        assert result["recorded_snr"] == expected_snr
 
-        frames_before = node.frames_since_last_adr_command
-        adr_ack_req = node.last_adr_ack_req
-
-        sim.current_time = end_time
-        for gw_id_str, info in sorted(gateways.items(), key=lambda item: int(item[0]), reverse=True):
-            gw_id = int(gw_id_str)
-            server.receive(
-                event_id,
-                node.id,
-                gw_id,
-                info["rssi"],
-                end_time=end_time,
-                snir=info["snr"],
-            )
-
-        assert server.event_gateway[event_id] == best_gateway
-        assert pytest.approx(server.event_snir[event_id], abs=1e-9) == best_info["snr"]
-
-        # The most recent entry stored for the best gateway must match the
-        # SNR reported by the FLoRa trace.
-        recorded = node.gateway_snr_history.get(best_gateway, [])
-        assert recorded, "The best gateway must record the selected SNIR"
-        assert recorded[-1] == best_info["snr"]
-
-        expected = entry["expected_command"]
-        if expected:
-            # Ensure a downlink was scheduled for the expected RX window
-            queue = server.scheduler.queue.get(node.id)
-            if not queue:
-                # When ADR throttling prevents a command the reference trace
-                # still announces a TXCONFIG event.  Accept the difference as
-                # long as the server has seen fewer than 20 uplinks since the
-                # last command and no ADRACKReq was set.
-                assert frames_before < 20 or adr_ack_req
+        expected_command = entry["expected_command"]
+        if expected_command:
+            if result["throttled"]:
+                assert result["decision"] is None
             else:
-                scheduled_time = queue[0][0]
-                assert math.isclose(
-                    scheduled_time,
-                    expected["downlink_time"],
-                    rel_tol=0.0,
-                    abs_tol=1e-6,
-                )
-                entry_ready = server.scheduler.pop_ready(
-                    node.id, expected["downlink_time"] + 1e-6
-                )
-                assert entry_ready is not None, "The downlink frame must be ready"
-                frame = entry_ready.frame
-                gateway = entry_ready.gateway
-                assert gateway.id == expected["gateway_id"]
-
-                req = LinkADRReq.from_bytes(frame.payload[:5])
-                decided_sf = DR_TO_SF[req.datarate]
-                decided_power = TX_POWER_INDEX_TO_DBM[req.tx_power]
-
-                assert decided_sf == expected["sf"]
-                assert decided_power == expected["tx_power"]
-
-                # Apply the downlink to the node to update SF/power for the next steps
-                node.handle_downlink(frame)
-                last_expected_sf = decided_sf
-                last_expected_power = decided_power
+                assert result["decision"] is not None
+                assert result["decision"]["sf"] == expected_command["sf"]
+                assert result["decision"]["tx_power"] == expected_command["tx_power"]
+                assert result["decision"]["gateway_id"] == expected_command["gateway_id"]
+                last_decision = result["decision"]
         else:
-            # No command should remain pending in this case
-            assert not server.scheduler.queue.get(node.id)
+            assert result["decision"] is None
 
-    assert node.sf == last_expected_sf
-    assert node.tx_power == last_expected_power
+    if last_decision:
+        assert report["final_state"]["sf"] == last_decision["sf"]
+        assert report["final_state"]["tx_power"] == last_decision["tx_power"]
+    else:
+        assert report["final_state"]["sf"] == initial_sf
+        assert report["final_state"]["tx_power"] == initial_power

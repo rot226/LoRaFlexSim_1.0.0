@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 try:  # pandas is optional when simply parsing raw simulator metrics
     import pandas as pd
 except Exception:  # pragma: no cover - pandas may not be installed
     pd = None
+
+from .adr_standard_1 import apply as apply_adr_standard
+from .lorawan import DR_TO_SF, LinkADRReq, TX_POWER_INDEX_TO_DBM
+from .server import ADR_WINDOW_SIZE
+
+if TYPE_CHECKING:
+    from .simulator import Simulator
 
 
 def _parse_sca_file(path: Path) -> dict[str, Any]:
@@ -203,6 +211,208 @@ def compare_with_sim(
     pdr_match = abs(sim_metrics.get("PDR", 0.0) - flora_metrics["PDR"]) <= pdr_tol
     sf_match = sim_metrics.get("sf_distribution") == flora_metrics["sf_distribution"]
     return pdr_match and sf_match
+
+
+def replay_flora_txconfig(
+    sim: "Simulator", events: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """Replay a FLoRa TXCONFIG trace and compare ADR decisions.
+
+    Parameters
+    ----------
+    sim:
+        Simulator instance configured like the target scenario.
+    events:
+        Iterable describing the FLoRa TXCONFIG reference trace.
+
+    Returns
+    -------
+    dict
+        Structured report with per-event decisions, detected mismatches,
+        throttled events and the final node state.
+    """
+
+    apply_adr_standard(sim)
+    node = sim.nodes[0]
+    server = sim.network_server
+
+    server.scheduler.queue.clear()
+
+    mismatches: list[dict[str, Any]] = []
+    throttled_events: list[int] = []
+    results: list[dict[str, Any]] = []
+
+    last_expected_sf = node.sf
+    last_expected_power = node.tx_power
+
+    for entry in events:
+        event_id = int(entry["event_id"])
+        best_gateway = int(entry["best_gateway"])
+        gateways = entry["gateways"]
+        best_info = gateways[str(best_gateway)]
+        end_time = float(entry["end_time"])
+
+        frames_before = getattr(node, "frames_since_last_adr_command", 0)
+        adr_ack_req = getattr(node, "last_adr_ack_req", False)
+
+        sim.current_time = end_time
+        for gw_id_str, info in sorted(
+            gateways.items(), key=lambda item: int(item[0]), reverse=True
+        ):
+            gw_id = int(gw_id_str)
+            server.receive(
+                event_id,
+                node.id,
+                gw_id,
+                info.get("rssi"),
+                end_time=end_time,
+                snir=info.get("snr"),
+            )
+
+        recorded = node.gateway_snr_history.get(best_gateway, [])
+        recorded_snr = recorded[-1] if recorded else None
+        if recorded_snr is None:
+            mismatches.append(
+                {
+                    "event_id": event_id,
+                    "type": "missing_best_gateway_history",
+                    "expected": best_info["snr"],
+                    "observed": recorded,
+                }
+            )
+        elif recorded_snr != best_info["snr"]:
+            mismatches.append(
+                {
+                    "event_id": event_id,
+                    "type": "best_gateway_snr_mismatch",
+                    "expected": best_info["snr"],
+                    "observed": recorded_snr,
+                }
+            )
+
+        expected = entry.get("expected_command")
+        decision: dict[str, Any] | None = None
+        throttled = False
+
+        queue = server.scheduler.queue.get(node.id)
+
+        if expected:
+            if not queue:
+                if frames_before < ADR_WINDOW_SIZE and not adr_ack_req:
+                    throttled = True
+                    throttled_events.append(event_id)
+                else:
+                    mismatches.append(
+                        {
+                            "event_id": event_id,
+                            "type": "missing_downlink",
+                            "details": {
+                                "frames_since_command": frames_before,
+                                "adr_ack_req": adr_ack_req,
+                            },
+                        }
+                    )
+            else:
+                scheduled_time = queue[0][0]
+                if not math.isclose(
+                    scheduled_time,
+                    expected["downlink_time"],
+                    rel_tol=0.0,
+                    abs_tol=1e-6,
+                ):
+                    mismatches.append(
+                        {
+                            "event_id": event_id,
+                            "type": "downlink_time_mismatch",
+                            "expected": expected["downlink_time"],
+                            "observed": scheduled_time,
+                        }
+                    )
+                ready = server.scheduler.pop_ready(
+                    node.id, expected["downlink_time"] + 1e-6
+                )
+                if ready is None:
+                    mismatches.append(
+                        {
+                            "event_id": event_id,
+                            "type": "downlink_not_ready",
+                            "expected": expected,
+                        }
+                    )
+                else:
+                    frame = ready.frame
+                    gateway = ready.gateway
+                    req = LinkADRReq.from_bytes(frame.payload[:5])
+                    decided_sf = DR_TO_SF[req.datarate]
+                    decided_power = TX_POWER_INDEX_TO_DBM[req.tx_power]
+                    decision = {
+                        "sf": decided_sf,
+                        "tx_power": decided_power,
+                        "gateway_id": gateway.id,
+                        "downlink_time": scheduled_time,
+                    }
+                    if decided_sf != expected["sf"] or decided_power != expected["tx_power"]:
+                        mismatches.append(
+                            {
+                                "event_id": event_id,
+                                "type": "command_mismatch",
+                                "expected": expected,
+                                "observed": decision,
+                            }
+                        )
+                    elif gateway.id != expected["gateway_id"]:
+                        mismatches.append(
+                            {
+                                "event_id": event_id,
+                                "type": "gateway_mismatch",
+                                "expected": expected["gateway_id"],
+                                "observed": gateway.id,
+                            }
+                        )
+                    node.handle_downlink(frame)
+                    last_expected_sf = decided_sf
+                    last_expected_power = decided_power
+        else:
+            if queue:
+                mismatches.append(
+                    {
+                        "event_id": event_id,
+                        "type": "unexpected_downlink",
+                        "details": queue,
+                    }
+                )
+
+        results.append(
+            {
+                "event_id": event_id,
+                "expected": expected,
+                "decision": decision,
+                "throttled": throttled,
+                "recorded_snr": recorded_snr,
+                "best_gateway": best_gateway,
+            }
+        )
+
+    final_state = {"sf": node.sf, "tx_power": node.tx_power}
+    if node.sf != last_expected_sf or node.tx_power != last_expected_power:
+        mismatches.append(
+            {
+                "event_id": None,
+                "type": "final_state_mismatch",
+                "expected": {
+                    "sf": last_expected_sf,
+                    "tx_power": last_expected_power,
+                },
+                "observed": final_state,
+            }
+        )
+
+    return {
+        "results": results,
+        "mismatches": mismatches,
+        "throttled_events": throttled_events,
+        "final_state": final_state,
+    }
 
 
 def load_flora_rx_stats(path: str | Path) -> dict[str, Any]:

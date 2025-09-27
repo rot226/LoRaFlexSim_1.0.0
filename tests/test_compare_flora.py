@@ -1,19 +1,23 @@
-import pytest
+import json
 from pathlib import Path
 
-try:
-    pytest.importorskip('pandas')
-except Exception:
-    pytest.skip('pandas import failed', allow_module_level=True)
+import pytest
+
+try:  # pragma: no cover - optional dependency
+    import pandas as pd
+except Exception:  # pragma: no cover - pandas may be missing in CI
+    pd = None
 
 from loraflexsim.launcher.simulator import Simulator
 from loraflexsim.launcher.compare_flora import (
     compare_with_sim,
     load_flora_metrics,
     load_flora_rx_stats,
+    replay_flora_txconfig,
 )
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_compare_with_flora(tmp_path):
     data_path = Path(__file__).parent / 'data' / 'flora_metrics.csv'
     flora_copy = tmp_path / 'flora_metrics.csv'
@@ -34,6 +38,7 @@ def test_compare_with_flora(tmp_path):
     assert compare_with_sim(metrics, flora_copy, pdr_tol=0.01)
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_load_flora_metrics_from_sca(tmp_path):
     """Metrics should be correctly parsed from a single .sca file."""
     sca = tmp_path / "metrics.sca"
@@ -49,6 +54,7 @@ scalar sim sf8 3
     assert metrics["sf_distribution"] == {7: 5, 8: 3}
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_load_flora_metrics_directory(tmp_path):
     """Aggregated metrics from a directory of .sca files are combined."""
     sca1 = tmp_path / "run1.sca"
@@ -71,6 +77,7 @@ scalar sim sf8 3
     assert metrics["sf_distribution"] == {7: 3, 8: 7}
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_compare_with_flora_mismatch(tmp_path):
     """Comparison should fail when metrics differ significantly."""
     data_path = Path(__file__).parent / 'data' / 'flora_metrics.csv'
@@ -81,6 +88,7 @@ def test_compare_with_flora_mismatch(tmp_path):
     assert not compare_with_sim(wrong_metrics, flora_copy, pdr_tol=0.01)
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_rssi_snr_match(tmp_path):
     """Parsed RSSI/SNR values should match simulator results."""
     sim = Simulator(
@@ -106,6 +114,7 @@ def test_rssi_snr_match(tmp_path):
     assert stats["snr"] == pytest.approx(snr)
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_energy_consumption_match(tmp_path):
     """Total energy parsed from a .sca file should match simulator metrics."""
     sim = Simulator(
@@ -130,6 +139,7 @@ def test_energy_consumption_match(tmp_path):
     assert diff / energy <= 0.05
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_average_delay_match(tmp_path):
     """Average delay parsed from a .sca file should match simulator metrics."""
     sim = Simulator(
@@ -154,6 +164,7 @@ def test_average_delay_match(tmp_path):
     assert diff / avg_delay <= 0.05 if avg_delay else diff == 0
 
 
+@pytest.mark.skipif(pd is None, reason="pandas is required for metric comparisons")
 def test_flora_full_mode(tmp_path):
     """PDR and SF distribution should match FLoRa within 1%."""
     data_path = Path(__file__).parent / 'data' / 'flora_metrics.csv'
@@ -179,3 +190,40 @@ def test_flora_full_mode(tmp_path):
     for sf, expected in flora["sf_distribution"].items():
         got = metrics["sf_distribution"].get(sf, 0)
         assert abs(got - expected) / total <= 0.01
+
+
+def test_adr_flora_txconfig_alignment():
+    """ADR decisions must align with the FLoRa TXCONFIG reference trace."""
+
+    data_path = Path(__file__).parent / "integration" / "data" / "flora_multi_gateway_txconfig.json"
+    events = json.loads(data_path.read_text(encoding="utf-8"))
+
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=2,
+        area_size=1000.0,
+        packet_interval=1200.0,
+        first_packet_interval=5.0,
+        packets_to_send=0,
+        flora_mode=True,
+        flora_timing=False,
+        adr_server=True,
+        adr_method="avg",
+        seed=42,
+    )
+
+    report = replay_flora_txconfig(sim, events)
+    assert not report["mismatches"]
+
+    expected_commands = [e["expected_command"] for e in events if e["expected_command"]]
+    assert expected_commands, "Reference trace must contain ADR commands"
+
+    for result, entry in zip(report["results"], events, strict=True):
+        expected = entry["expected_command"]
+        if not expected or result["throttled"]:
+            continue
+        decision = result["decision"]
+        assert decision is not None
+        assert decision["sf"] == expected["sf"]
+        assert decision["tx_power"] == expected["tx_power"]
+        assert decision["gateway_id"] == expected["gateway_id"]
