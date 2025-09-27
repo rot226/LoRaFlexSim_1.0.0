@@ -1060,32 +1060,47 @@ def fast_forward(event=None):
         start_time = None
         max_real_time = None
 
+        current_sim = sim
+        current_doc = doc
+        current_cleanup = _cleanup_callbacks
+        current_on_stop = on_stop
+        current_session_alive = session_alive
+        current_fast_forward_progress = fast_forward_progress
+        current_export_button = export_button
+        current_pause_button = pause_button
+        current_update_map = update_map
+
         def run_and_update():
             total_packets = (
-                sim.packets_to_send * sim.num_nodes if sim.packets_to_send > 0 else None
+                current_sim.packets_to_send * current_sim.num_nodes
+                if current_sim.packets_to_send > 0
+                else None
             )
             last = -1
-            while sim.event_queue and sim.running:
-                sim.step()
+            while current_sim.event_queue and current_sim.running:
+                current_sim.step()
                 if total_packets:
-                    pct = int(sim.packets_sent / total_packets * 100)
+                    pct = int(current_sim.packets_sent / total_packets * 100)
                     if pct != last:
                         last = pct
-                        if session_alive():
-                            doc.add_next_tick_callback(
-                                lambda val=pct: setattr(fast_forward_progress, "value", val)
+                        if current_session_alive():
+                            current_doc.add_next_tick_callback(
+                                lambda val=pct: setattr(
+                                    current_fast_forward_progress, "value", val
+                                )
                             )
 
             def update_ui():
-                fast_forward_progress.value = 100
-                if not session_alive():
-                    _cleanup_callbacks()
+                current_fast_forward_progress.value = 100
+                if not current_session_alive():
+                    current_cleanup()
                     try:
-                        on_stop(None)
+                        if current_sim is sim:
+                            current_on_stop(None)
                     finally:
-                        export_button.disabled = False
+                        current_export_button.disabled = False
                     return
-                metrics = sim.get_metrics()
+                metrics = current_sim.get_metrics()
                 pdr_indicator.value = metrics["PDR"]
                 collisions_indicator.value = metrics["collisions"]
                 energy_indicator.value = metrics["energy_J"]
@@ -1101,26 +1116,26 @@ def fast_forward(event=None):
                     title="Répartition des SF par nœud",
                     xaxis_title="SF",
                     yaxis_title="Nombre de nœuds",
-                    yaxis_range=[0, sim.num_nodes],
+                    yaxis_range=[0, current_sim.num_nodes],
                 )
                 sf_hist_pane.object = sf_fig
-                update_map()
+                current_update_map()
                 try:
-                    on_stop(None)
+                    if current_sim is sim:
+                        current_on_stop(None)
                 finally:
-                    export_button.disabled = False
-                global pause_prev_disabled
-                pause_button.disabled = pause_prev_disabled
-                export_button.disabled = False
+                    current_export_button.disabled = False
+                current_pause_button.disabled = pause_prev_disabled
 
-            if session_alive():
-                doc.add_next_tick_callback(update_ui)
+            if current_session_alive():
+                current_doc.add_next_tick_callback(update_ui)
             else:
-                _cleanup_callbacks()
+                current_cleanup()
                 try:
-                    on_stop(None)
+                    if current_sim is sim:
+                        current_on_stop(None)
                 finally:
-                    export_button.disabled = False
+                    current_export_button.disabled = False
 
         threading.Thread(target=run_and_update, daemon=True).start()
 
