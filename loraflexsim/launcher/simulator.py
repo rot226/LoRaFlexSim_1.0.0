@@ -909,6 +909,26 @@ class Simulator:
             Event(self._seconds_to_ticks(time_s), event_type, eid, node_id),
         )
 
+    def ensure_class_c_rx_window(self, node: Node, time: float | None = None) -> None:
+        """Ensure a Class C polling event is scheduled for ``node``."""
+
+        if node.class_type.upper() != "C":
+            return
+        current_time = self.current_time if time is None else time
+        current_time = max(current_time, self.current_time)
+        target_tick = self._seconds_to_ticks(current_time)
+        for evt in self.event_queue:
+            if (
+                evt.node_id == node.id
+                and evt.type == EventType.RX_WINDOW
+                and evt.time >= target_tick
+            ):
+                return
+        schedule_time = self._ticks_to_seconds(target_tick)
+        eid = self.event_id_counter
+        self.event_id_counter += 1
+        self._push_event(schedule_time, EventType.RX_WINDOW, eid, node.id)
+
     def schedule_event(self, node: Node, time: float, *, reason: str = "poisson"):
         """Planifie un événement de transmission pour un nœud."""
         if not node.alive:
