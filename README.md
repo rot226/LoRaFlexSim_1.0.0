@@ -263,7 +263,9 @@ Deux commandes permettent de rejouer la matrice de validation et de suivre les
 
 1. `pytest tests/integration/test_validation_matrix.py` exécute chaque scénario
    et vérifie que les écarts de PDR, de collisions et de SNR restent dans les
-   tolérances définies par scénario.【F:tests/integration/test_validation_matrix.py†L1-L78】
+   tolérances définies par scénario. Le chargement des références repose sur le
+   module standard `csv`, ce qui supprime toute dépendance optionnelle et rend
+   la matrice reproductible sur toutes les plateformes.【F:tests/integration/test_validation_matrix.py†L1-L83】【F:loraflexsim/validation/reference_loader.py†L1-L109】
 2. `python scripts/run_validation.py --output results/validation_matrix.csv`
    (script disponible via [scripts/run_validation.py](scripts/run_validation.py))
    génère un rapport synthétique et retourne un code de sortie non nul si une
