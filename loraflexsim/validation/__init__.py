@@ -12,15 +12,13 @@ from functools import partial
 
 from loraflexsim.launcher import Simulator, MultiChannel, Channel
 from loraflexsim.launcher import adr_ml, explora_at
-from loraflexsim.launcher.compare_flora import (
-    load_flora_metrics,
-    load_flora_rx_stats,
-)
 from loraflexsim.launcher.smooth_mobility import SmoothMobility
 from loraflexsim.scenarios.long_range import (
     LONG_RANGE_RECOMMENDATIONS,
     create_long_range_channels,
 )
+
+from .reference_loader import load_reference_metrics
 
 
 @dataclass(frozen=True)
@@ -82,12 +80,11 @@ def compute_average_snr(sim: Simulator) -> float:
 def load_flora_reference(path: Path) -> dict[str, float]:
     """Load PDR, collisions and SNR metrics from a FLoRa export."""
 
-    flora_metrics = load_flora_metrics(path)
-    rx_stats = load_flora_rx_stats(path)
+    reference = load_reference_metrics(path)
     return {
-        "PDR": float(flora_metrics["PDR"]),
-        "collisions": float(rx_stats["collisions"]),
-        "snr": float(rx_stats["snr"]),
+        "PDR": float(reference["PDR"]),
+        "collisions": float(reference["collisions"]),
+        "snr": float(reference["snr"]),
     }
 
 

@@ -83,7 +83,7 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 ## Résultats récents
 
-La campagne `pytest` est actuellement entièrement sautée faute de dépendance `pandas`, ce qui impose de suivre le script CLI pour obtenir les métriques réelles.【F:tests/integration/test_validation_matrix.py†L9-L24】 L'exécution du run `python scripts/run_validation.py --output results/validation_matrix.csv` confirme que tous les scénarios reviennent au statut `ok`. Une légère dérive a été observée sur le preset longue portée : la tolérance PDR passe à `±0.015` et celle du SNR à `±0.22` pour absorber un écart stable de `0.014` paquet livré et `0.21 dB` sur plusieurs runs.【F:loraflexsim/validation/__init__.py†L114-L130】【F:results/validation_matrix.csv†L2-L16】
+La campagne `pytest` d'intégration tourne désormais sur toutes les plateformes sans dépendance optionnelle : les métriques de référence sont chargées via le module standard `csv`, garantissant la parité avec les captures `.sca` historiques.【F:tests/integration/test_validation_matrix.py†L1-L83】【F:loraflexsim/validation/reference_loader.py†L1-L109】 L'exécution du run `python scripts/run_validation.py --output results/validation_matrix.csv` confirme que tous les scénarios reviennent au statut `ok`. Une légère dérive a été observée sur le preset longue portée : la tolérance PDR passe à `±0.015` et celle du SNR à `±0.22` pour absorber un écart stable de `0.014` paquet livré et `0.21 dB` sur plusieurs runs.【F:loraflexsim/validation/__init__.py†L83-L138】【F:results/validation_matrix.csv†L2-L16】
 
 | Scénario | ΔPDR | ΔCollisions | ΔSNR (dB) | Tolérances | Statut |
 | --- | --- | --- | --- | --- | --- |

@@ -6,11 +6,6 @@ from pathlib import Path
 
 import pytest
 
-try:  # pragma: no cover - optional dependency
-    import pandas as _pd  # noqa: F401
-except Exception:  # pragma: no cover - skip if pandas unusable
-    pytest.skip("pandas is required for validation comparisons", allow_module_level=True)
-
 from loraflexsim.launcher import adr_ml, explora_at
 from loraflexsim.validation import (
     SCENARIOS,
