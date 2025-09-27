@@ -1,6 +1,45 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from loraflexsim.launcher.channel import Channel
 from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
 from loraflexsim.launcher.server import NetworkServer
+
+
+def _start_tx(
+    gateway: Gateway,
+    event_id: int,
+    node_id: int,
+    sf: int,
+    rssi: float,
+    start_time: float,
+    end_time: float,
+    *,
+    frequency: float = 868e6,
+    capture_threshold: float = 6.0,
+    capture_window_symbols: int = 5,
+    orthogonal_sf: bool = True,
+    non_orth_delta=None,
+    capture_mode: str | None = None,
+) -> dict:
+    gateway.start_reception(
+        event_id,
+        node_id,
+        sf,
+        rssi,
+        end_time,
+        capture_threshold,
+        start_time,
+        frequency,
+        orthogonal_sf=orthogonal_sf,
+        non_orth_delta=non_orth_delta,
+        capture_window_symbols=capture_window_symbols,
+        capture_mode="basic" if capture_mode is None else capture_mode,
+    )
+    _, tx = gateway.active_by_event[event_id]
+    return tx
 
 
 def test_orthogonal_sf_no_collision():
@@ -170,6 +209,106 @@ def test_non_orth_same_sf_uses_capture_threshold():
     assert server.packets_received == 0
 
 
+def test_non_orth_multi_sf_capture_respects_matrix_and_preamble():
+    cases = [
+        (7, 8, 8),
+        (8, 10, 10),
+        (9, 12, 12),
+    ]
+    for idx, (sf_main, sf_interferer, preamble) in enumerate(cases, start=1):
+        gw = Gateway(idx, 0, 0)
+        server = NetworkServer()
+        server.gateways = [gw]
+
+        symbol_duration = (2 ** sf_main) / 125e3
+        strong_duration = symbol_duration * 14
+        delay_symbols = max(5.5, (preamble - 6) + 0.5)
+        interferer_start = symbol_duration * delay_symbols
+        interferer_sym = (2 ** sf_interferer) / 125e3
+        interferer_end = interferer_start + interferer_sym * 6
+
+        strong = _start_tx(
+            gw,
+            1,
+            1,
+            sf_main,
+            -48.0,
+            0.0,
+            strong_duration,
+            orthogonal_sf=False,
+            non_orth_delta=FLORA_NON_ORTH_DELTA,
+            capture_window_symbols=5,
+        )
+        strong["preamble_symbols"] = preamble
+
+        _start_tx(
+            gw,
+            2,
+            2,
+            sf_interferer,
+            -55.0,
+            interferer_start,
+            interferer_end,
+            orthogonal_sf=False,
+            non_orth_delta=FLORA_NON_ORTH_DELTA,
+            capture_window_symbols=5,
+        )
+
+        assert not gw.active_by_event[1][1]["lost_flag"]
+        assert gw.active_by_event[2][1]["lost_flag"]
+
+        gw.end_reception(1, server, 1)
+        gw.end_reception(2, server, 2)
+
+        assert server.packets_received == 1
+
+
+def test_non_orth_capture_blocked_by_contaminated_preamble():
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    sf_main = 8
+    symbol_duration = (2 ** sf_main) / 125e3
+    strong = _start_tx(
+        gw,
+        1,
+        1,
+        sf_main,
+        -50.0,
+        0.0,
+        symbol_duration * 14,
+        orthogonal_sf=False,
+        non_orth_delta=FLORA_NON_ORTH_DELTA,
+        capture_window_symbols=6,
+    )
+    strong["preamble_symbols"] = 12
+
+    interferer_start = symbol_duration * 5.0  # begins before csBegin (6 symbols)
+    interferer_end = interferer_start + symbol_duration * 6
+
+    _start_tx(
+        gw,
+        2,
+        2,
+        10,
+        -58.0,
+        interferer_start,
+        interferer_end,
+        orthogonal_sf=False,
+        non_orth_delta=FLORA_NON_ORTH_DELTA,
+        capture_window_symbols=6,
+    )
+
+    assert gw.active_by_event[1][1]["lost_flag"]
+    assert gw.active_by_event[2][1]["lost_flag"]
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    assert server.packets_received == 0
+
+
 def test_flora_capture_requires_six_symbols():
     gw = Gateway(0, 0, 0)
     server = NetworkServer()
@@ -237,3 +376,67 @@ def test_aloha_mode_disables_capture_effect():
 
     # Pure ALOHA mode destroys both packets regardless of the RSSI delta.
     assert server.packets_received == 0
+
+
+def test_gateway_omnet_capture_matches_reference():
+    data_path = Path(__file__).parent / "data" / "flora_gateway_reference.json"
+    if not data_path.exists():
+        pytest.skip("référence OMNeT++ manquante")
+
+    with data_path.open("r", encoding="utf8") as fh:
+        reference = json.load(fh)
+
+    channel = Channel(
+        phy_model="omnet",
+        flora_capture=True,
+        shadowing_std=0.0,
+        fast_fading_std=0.0,
+    )
+    capture_window = channel.capture_window_symbols
+    expected_cases = reference.get("cases", [])
+
+    for case in expected_cases:
+        gw = Gateway(0, 0, 0)
+        gw.omnet_phy = channel.omnet_phy
+        server = NetworkServer()
+        server.gateways = [gw]
+
+        preambles = case.get("preamble")
+        frequency = case.get("frequency", 868e6)
+        count = len(case.get("rssi", []))
+        for idx, (rssi, start, end, sf) in enumerate(
+            zip(
+                case.get("rssi", []),
+                case.get("start", []),
+                case.get("end", []),
+                case.get("sf", []),
+            ),
+            start=1,
+        ):
+            tx = _start_tx(
+                gw,
+                idx,
+                idx,
+                int(sf),
+                float(rssi),
+                float(start),
+                float(end),
+                frequency=frequency,
+                orthogonal_sf=False,
+                non_orth_delta=FLORA_NON_ORTH_DELTA,
+                capture_window_symbols=capture_window,
+                capture_mode="omnet",
+                capture_threshold=channel.capture_threshold_dB,
+            )
+            if preambles:
+                tx["preamble_symbols"] = preambles[idx - 1]
+
+        winners = [
+            not gw.active_by_event[event_id][1]["lost_flag"]
+            for event_id in range(1, count + 1)
+        ]
+        expected = [bool(value) for value in case.get("expected", [])]
+        assert winners == expected
+
+        for event_id in range(1, count + 1):
+            gw.end_reception(event_id, server, event_id)

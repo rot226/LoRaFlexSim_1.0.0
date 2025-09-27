@@ -1,4 +1,4 @@
-from loraflexsim.launcher.gateway import Gateway
+from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
 from loraflexsim.launcher.server import NetworkServer
 
 
@@ -7,6 +7,36 @@ def _setup():
     server = NetworkServer()
     server.gateways = [gw]
     return gw, server
+
+
+def _start_tx(
+    gw: Gateway,
+    event_id: int,
+    node_id: int,
+    sf: int,
+    rssi: float,
+    start_time: float,
+    end_time: float,
+    *,
+    frequency: float = 868e6,
+    capture_threshold: float = 6.0,
+    capture_window_symbols: int = 5,
+    orthogonal_sf: bool = True,
+):
+    gw.start_reception(
+        event_id,
+        node_id,
+        sf,
+        rssi,
+        end_time,
+        capture_threshold,
+        start_time,
+        frequency,
+        orthogonal_sf=orthogonal_sf,
+        non_orth_delta=FLORA_NON_ORTH_DELTA if not orthogonal_sf else None,
+        capture_window_symbols=capture_window_symbols,
+    )
+    return gw.active_by_event[event_id][1]
 
 
 def test_same_sf_collision():
@@ -48,5 +78,106 @@ def test_residual_interference_blocks_followup_packet():
     gw.end_reception(1, server, 1)
     gw.end_reception(2, server, 2)
     gw.end_reception(3, server, 3)
+    assert server.packets_received == 0
+
+
+def test_multi_sf_non_orthogonal_collision_marks_winners():
+    gw, server = _setup()
+
+    sf_main = 7
+    sym_time_main = (2 ** sf_main) / 125e3
+    strong_duration = sym_time_main * 14
+    strong = _start_tx(
+        gw,
+        1,
+        1,
+        sf_main,
+        -48.0,
+        0.0,
+        strong_duration,
+        orthogonal_sf=False,
+        capture_window_symbols=5,
+    )
+    strong["preamble_symbols"] = 9
+
+    interferer1_start = sym_time_main * 6.5
+    interferer1_sym = (2 ** 9) / 125e3
+    interferer1_end = interferer1_start + interferer1_sym * 6
+    _start_tx(
+        gw,
+        2,
+        2,
+        9,
+        -55.0,
+        interferer1_start,
+        interferer1_end,
+        orthogonal_sf=False,
+        capture_window_symbols=5,
+    )
+
+    interferer2_start = interferer1_start + sym_time_main
+    interferer2_sym = (2 ** 10) / 125e3
+    interferer2_end = interferer2_start + interferer2_sym * 5
+    _start_tx(
+        gw,
+        3,
+        3,
+        10,
+        -60.0,
+        interferer2_start,
+        interferer2_end,
+        orthogonal_sf=False,
+        capture_window_symbols=5,
+    )
+
+    assert not gw.active_by_event[1][1]["lost_flag"]
+    assert gw.active_by_event[2][1]["lost_flag"]
+    assert gw.active_by_event[3][1]["lost_flag"]
+
+    gw.end_reception(2, server, 2)
+    gw.end_reception(3, server, 3)
+    gw.end_reception(1, server, 1)
+
+    assert server.packets_received == 1
+
+
+def test_multi_sf_capture_fails_with_short_preamble():
+    gw, server = _setup()
+
+    sf_main = 7
+    sym_time = (2 ** sf_main) / 125e3
+    strong = _start_tx(
+        gw,
+        1,
+        1,
+        sf_main,
+        -49.0,
+        0.0,
+        sym_time * 12,
+        orthogonal_sf=False,
+        capture_window_symbols=6,
+    )
+    strong["preamble_symbols"] = 7  # csBegin après un seul symbole
+
+    interferer_start = sym_time * 0.5
+    interferer_end = interferer_start + sym_time * 8
+    _start_tx(
+        gw,
+        2,
+        2,
+        9,
+        -56.0,
+        interferer_start,
+        interferer_end,
+        orthogonal_sf=False,
+        capture_window_symbols=6,
+    )
+
+    assert gw.active_by_event[1][1]["lost_flag"]
+    assert gw.active_by_event[2][1]["lost_flag"]
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
     assert server.packets_received == 0
 
