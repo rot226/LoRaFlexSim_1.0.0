@@ -53,6 +53,26 @@ Ce document résume les différences entre la simulation FLoRa d'origine
 - Grand nombre de commandes MAC supplémentaires.
 - Activation OTAA avec dérivation dynamique des clés.
 
+### Prérequis pour l'activation OTAA
+
+Pour déclencher une procédure OTAA complète avec chiffrement AES-128 et
+validation du MIC, les éléments suivants sont requis :
+
+- une **AppKey** de 16 octets (AES-128) partagée entre le nœud et le
+  `JoinServer` ;
+- des identifiants **JoinEUI** et **DevEUI** uniques (8 octets chacun)
+  utilisés lors de l'enregistrement du périphérique ;
+- la configuration d'un `JoinServer` avec un `net_id` cohérent avec le
+  réseau simulé, puis l'appel à `JoinServer.register(join_eui, dev_eui,
+  app_key)` avant l'émission de la requête d'adhésion ;
+- un `DevNonce` inédit pour chaque tentative de join, afin d'éviter les
+  rejets pour réutilisation.
+
+Une fois ces prérequis remplis, le serveur dérive les clés de session
+(`NwkSKey`, `AppSKey`), chiffre le `JoinAccept` et signe la réponse avec le
+MIC attendu. La simulation peut alors poursuivre l'échange applicatif en
+sécurité.
+
 ## Éléments pouvant affecter la comparaison des métriques
 
 - L’ajout du chiffrement et des en-têtes LoRaWAN augmente la taille des
