@@ -155,9 +155,12 @@ def simulate(
     )
     if non_orth_delta is not None:
         channel.non_orth_delta = non_orth_delta
-    airtime = channel.airtime(7, payload_size=PAYLOAD_SIZE)
-    tx_energy = (tx_current - idle_current) * voltage * airtime
-    rx_energy = (rx_current - idle_current) * voltage * airtime
+    sf_tx_energy: list[float] = [0.0] * 6
+    sf_rx_energy: list[float] = [0.0] * 6
+    for idx, sf in enumerate(range(7, 13)):
+        airtime = channel.airtime(sf, payload_size=PAYLOAD_SIZE)
+        sf_tx_energy[idx] = (tx_current - idle_current) * voltage * airtime
+        sf_rx_energy[idx] = (rx_current - idle_current) * voltage * airtime
     # Liste des délais de livraison (0 pour chaque paquet car la transmission
     # réussie est immédiate dans ce modèle simplifié)
     delays = []
@@ -234,7 +237,11 @@ def simulate(
             if nb_tx == 0:
                 continue
             total_transmissions += nb_tx
-            energy_consumed += nb_tx * (tx_energy + rx_energy)
+            energy_consumed += sum(
+                sf_tx_energy[int(node_sf[n]) - 7]
+                + sf_rx_energy[int(node_sf[n]) - 7]
+                for n in nodes_on_ch
+            )
             if nb_tx == 1:
                 n = nodes_on_ch[0]
                 rng = rng_manager.get_stream("traffic", n)
