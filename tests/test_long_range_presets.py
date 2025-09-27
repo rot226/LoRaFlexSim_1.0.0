@@ -26,6 +26,22 @@ def _make_channel(environment: str) -> Channel:
     channel = Channel(environment=environment, flora_loss_model=loss_model)
     # Supprimer le shadowing pour stabiliser le scénario de validation.
     channel.shadowing_std = 0.0
+    # Les validations longue portée s'appuient sur SF11/12 pour dépasser 5 km.
+    # Avec le nouveau seuil d'énergie par défaut (−90 dBm) utilisé en mode
+    # FLoRa, ces trames seraient systématiquement ignorées.  Aligner la
+    # détection d'énergie sur les tables de sensibilité FLoRa garantit que le
+    # banc de tests reste cohérent avec le scénario ``loraflexsim.scenarios
+    # .long_range``, qui applique la même astuce pour reproduire les résultats
+    # de référence au-delà de 5 km.
+    available = [
+        Channel.FLORA_SENSITIVITY[sf][int(channel.bandwidth)]
+        for sf in Channel.FLORA_SENSITIVITY
+        if int(channel.bandwidth) in Channel.FLORA_SENSITIVITY[sf]
+    ]
+    if available:
+        detection_floor = min(available)
+        channel.energy_detection_dBm = detection_floor
+        channel.detection_threshold_dBm = detection_floor
     return channel
 
 
