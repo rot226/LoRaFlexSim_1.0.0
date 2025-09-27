@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import statistics
 import sys
 from pathlib import Path
@@ -20,6 +21,121 @@ from loraflexsim.validation import (
     load_flora_reference,
     run_validation,
 )
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
+from loraflexsim.launcher.server import NetworkServer
+
+
+def _start_gateway_tx(
+    gateway: Gateway,
+    event_id: int,
+    node_id: int,
+    sf: int,
+    rssi: float,
+    start_time: float,
+    end_time: float,
+    *,
+    frequency: float,
+    capture_threshold: float,
+    capture_window_symbols: int,
+    capture_mode: str,
+) -> dict:
+    gateway.start_reception(
+        event_id,
+        node_id,
+        sf,
+        rssi,
+        end_time,
+        capture_threshold,
+        start_time,
+        frequency,
+        orthogonal_sf=False,
+        non_orth_delta=FLORA_NON_ORTH_DELTA,
+        capture_window_symbols=capture_window_symbols,
+        capture_mode=capture_mode,
+    )
+    _, tx = gateway.active_by_event[event_id]
+    return tx
+
+
+def verify_gateway_reference(reference: Path) -> bool:
+    """Vérifie que la capture OMNeT++ reproduit les résultats de référence."""
+
+    if not reference.exists():
+        print(f"Gateway reference file not found: {reference}")
+        return False
+
+    with reference.open("r", encoding="utf8") as fh:
+        payload = json.load(fh)
+
+    cases = payload.get("cases", [])
+    if not cases:
+        print("Gateway reference is empty; skipping alignment check.")
+        return False
+
+    channel = Channel(
+        phy_model="omnet",
+        flora_capture=True,
+        shadowing_std=0.0,
+        fast_fading_std=0.0,
+    )
+    capture_window = channel.capture_window_symbols
+    capture_threshold = channel.capture_threshold_dB
+
+    success = True
+    for idx, case in enumerate(cases, start=1):
+        gw = Gateway(idx, 0.0, 0.0)
+        gw.omnet_phy = channel.omnet_phy
+        server = NetworkServer()
+        server.gateways = [gw]
+
+        frequency = float(case.get("frequency", 868e6))
+        preambles = case.get("preamble")
+        count = len(case.get("rssi", []))
+
+        for event_id, (rssi, start, end, sf) in enumerate(
+            zip(
+                case.get("rssi", []),
+                case.get("start", []),
+                case.get("end", []),
+                case.get("sf", []),
+            ),
+            start=1,
+        ):
+            tx = _start_gateway_tx(
+                gw,
+                event_id,
+                event_id,
+                int(sf),
+                float(rssi),
+                float(start),
+                float(end),
+                frequency=frequency,
+                capture_threshold=capture_threshold,
+                capture_window_symbols=capture_window,
+                capture_mode="omnet",
+            )
+            if preambles:
+                tx["preamble_symbols"] = preambles[event_id - 1]
+
+        winners = [
+            not gw.active_by_event[event_id][1]["lost_flag"]
+            for event_id in range(1, count + 1)
+        ]
+        expected = [bool(value) for value in case.get("expected", [])]
+        if winners != expected:
+            print(
+                "gateway_case_%d mismatch: expected %s got %s"
+                % (idx, expected, winners)
+            )
+            success = False
+        else:
+            print(f"gateway_case_{idx}: ok")
+
+        for event_id in range(1, count + 1):
+            gw.end_reception(event_id, server, event_id)
+
+    return success
 
 
 def run_matrix(output: Path, repeat: int) -> bool:
@@ -28,6 +144,10 @@ def run_matrix(output: Path, repeat: int) -> bool:
     output.parent.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, float | str]] = []
     overall_success = True
+
+    gateway_reference = ROOT_DIR / "tests" / "data" / "flora_gateway_reference.json"
+    if not verify_gateway_reference(gateway_reference):
+        overall_success = False
 
     for scenario in SCENARIOS:
         run_count = repeat if scenario.name == "long_range" else 1
