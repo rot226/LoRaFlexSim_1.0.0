@@ -43,6 +43,8 @@ pn.extension("plotly", raw_css=[
 # Définition du titre de la page via le document Bokeh directement
 if pn.state.curdoc:
     pn.state.curdoc.title = "Simulateur LoRa"
+# Conteneur mutable pour conserver une référence valide à ``pn.state``
+_SESSION_STATE: dict[str, object] = {"state": pn.state}
 
 # --- Variables globales ---
 sim = None
@@ -83,9 +85,18 @@ def average_numeric_metrics(metrics_list: list[dict]) -> dict:
             averages[key] = sum(values) / len(values)
     return averages
 
-def session_alive() -> bool:
+def _get_panel_state() -> object:
+    """Return the captured Panel state used across threads."""
+
+    return _SESSION_STATE["state"]
+
+
+def session_alive(doc=None, state_container=_SESSION_STATE) -> bool:
     """Return True if the Bokeh session is still active."""
-    doc = pn.state.curdoc
+
+    state = state_container["state"]
+    if doc is None:
+        doc = getattr(state, "curdoc", None)
     sc = getattr(doc, "session_context", None)
     return bool(sc and getattr(sc, "session", None))
 
@@ -1043,7 +1054,11 @@ export_button.on_click(exporter_csv)
 def fast_forward(event=None):
     global sim, sim_callback, chrono_callback, map_anim_callback
     global start_time, max_real_time, auto_fast_forward
-    doc = pn.state.curdoc
+    panel_state = _get_panel_state()
+    doc = getattr(panel_state, "curdoc", None)
+    if doc is None:
+        export_message.object = "⚠️ Session Panel indisponible."
+        return
     if sim and sim.running:
         if paused:
             export_message.object = "⚠️ Impossible d'accélérer pendant la pause."
@@ -1094,91 +1109,119 @@ def fast_forward(event=None):
         current_doc = doc
         current_cleanup = _cleanup_callbacks
         current_on_stop = on_stop
-        current_session_alive = session_alive
+        state_container = _SESSION_STATE
+
+        def current_session_alive() -> bool:
+            return session_alive(current_doc, state_container)
+
         current_fast_forward_progress = fast_forward_progress
         current_export_button = export_button
         current_pause_button = pause_button
         current_update_map = update_map
+        current_stop_button = stop_button
+        current_fast_forward_button = fast_forward_button
 
         def run_and_update():
-            total_packets = (
-                current_sim.packets_to_send * current_sim.num_nodes
-                if current_sim.packets_to_send > 0
-                else None
-            )
-            sim_duration = getattr(
-                current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
-            )
-            last = -1
-            while current_sim.event_queue and current_sim.running:
-                current_sim.step()
-                pct: int | None = None
-                if total_packets:
-                    pct = int(current_sim.packets_sent / total_packets * 100)
-                reached_time_limit = (
-                    sim_duration and sim_duration > 0.0 and current_sim.current_time >= sim_duration
+            try:
+                total_packets = (
+                    current_sim.packets_to_send * current_sim.num_nodes
+                    if current_sim.packets_to_send > 0
+                    else None
                 )
-                if sim_duration and sim_duration > 0.0:
-                    pct = int(min(current_sim.current_time / sim_duration * 100, 100))
-                if reached_time_limit:
-                    pct = 100
-                if pct is not None and pct != last:
-                    last = pct
-                    if current_session_alive():
-                        current_doc.add_next_tick_callback(
-                            lambda val=pct: setattr(
-                                current_fast_forward_progress, "value", val
+                sim_duration = getattr(
+                    current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
+                )
+                last = -1
+                while current_sim.event_queue and current_sim.running:
+                    current_sim.step()
+                    pct: int | None = None
+                    if total_packets:
+                        pct = int(current_sim.packets_sent / total_packets * 100)
+                    reached_time_limit = (
+                        sim_duration and sim_duration > 0.0 and current_sim.current_time >= sim_duration
+                    )
+                    if sim_duration and sim_duration > 0.0:
+                        pct = int(min(current_sim.current_time / sim_duration * 100, 100))
+                    if reached_time_limit:
+                        pct = 100
+                    if pct is not None and pct != last:
+                        last = pct
+                        if current_session_alive():
+                            current_doc.add_next_tick_callback(
+                                lambda val=pct: setattr(
+                                    current_fast_forward_progress, "value", val
+                                )
                             )
-                        )
-                if reached_time_limit:
-                    break
+                    if reached_time_limit:
+                        break
 
-            def update_ui():
-                current_fast_forward_progress.value = 100
-                if not current_session_alive():
+                def update_ui():
+                    current_fast_forward_progress.value = 100
+                    if not current_session_alive():
+                        current_cleanup()
+                        try:
+                            if current_sim is sim:
+                                current_on_stop(None)
+                        finally:
+                            current_export_button.disabled = False
+                        return
+                    metrics = current_sim.get_metrics()
+                    pdr_indicator.value = metrics["PDR"]
+                    collisions_indicator.value = metrics["collisions"]
+                    energy_indicator.value = metrics["energy_J"]
+                    delay_indicator.value = metrics["avg_delay_s"]
+                    throughput_indicator.value = metrics["throughput_bps"]
+                    retrans_indicator.value = metrics["retransmissions"]
+                    # Les détails de PDR ne sont pas affichés en direct
+                    sf_dist = metrics["sf_distribution"]
+                    sf_fig = go.Figure(
+                        data=[go.Bar(x=[f"SF{sf}" for sf in sf_dist.keys()], y=list(sf_dist.values()))]
+                    )
+                    sf_fig.update_layout(
+                        title="Répartition des SF par nœud",
+                        xaxis_title="SF",
+                        yaxis_title="Nombre de nœuds",
+                        yaxis_range=[0, current_sim.num_nodes],
+                    )
+                    sf_hist_pane.object = sf_fig
+                    current_update_map()
+                    try:
+                        if current_sim is sim:
+                            current_on_stop(None)
+                    finally:
+                        current_export_button.disabled = False
+                    current_pause_button.disabled = pause_prev_disabled
+
+                if current_session_alive():
+                    current_doc.add_next_tick_callback(update_ui)
+                else:
                     current_cleanup()
                     try:
                         if current_sim is sim:
                             current_on_stop(None)
                     finally:
                         current_export_button.disabled = False
-                    return
-                metrics = current_sim.get_metrics()
-                pdr_indicator.value = metrics["PDR"]
-                collisions_indicator.value = metrics["collisions"]
-                energy_indicator.value = metrics["energy_J"]
-                delay_indicator.value = metrics["avg_delay_s"]
-                throughput_indicator.value = metrics["throughput_bps"]
-                retrans_indicator.value = metrics["retransmissions"]
-                # Les détails de PDR ne sont pas affichés en direct
-                sf_dist = metrics["sf_distribution"]
-                sf_fig = go.Figure(
-                    data=[go.Bar(x=[f"SF{sf}" for sf in sf_dist.keys()], y=list(sf_dist.values()))]
-                )
-                sf_fig.update_layout(
-                    title="Répartition des SF par nœud",
-                    xaxis_title="SF",
-                    yaxis_title="Nombre de nœuds",
-                    yaxis_range=[0, current_sim.num_nodes],
-                )
-                sf_hist_pane.object = sf_fig
-                current_update_map()
-                try:
-                    if current_sim is sim:
-                        current_on_stop(None)
-                finally:
+            finally:
+                def restore_buttons() -> None:
+                    sim_running = getattr(current_sim, "running", False)
+                    sim_duration_limit = getattr(
+                        current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
+                    )
+                    has_limit = (
+                        getattr(current_sim, "packets_to_send", 0) > 0
+                        or (sim_duration_limit is not None and sim_duration_limit > 0.0)
+                    )
                     current_export_button.disabled = False
-                current_pause_button.disabled = pause_prev_disabled
+                    current_pause_button.disabled = pause_prev_disabled
+                    current_stop_button.disabled = not sim_running
+                    current_fast_forward_button.disabled = (not sim_running) or not has_limit
+                    current_fast_forward_progress.value = 100
+                    current_fast_forward_progress.visible = False
 
-            if current_session_alive():
-                current_doc.add_next_tick_callback(update_ui)
-            else:
-                current_cleanup()
-                try:
-                    if current_sim is sim:
-                        current_on_stop(None)
-                finally:
-                    current_export_button.disabled = False
+                if current_session_alive():
+                    current_doc.add_next_tick_callback(restore_buttons)
+                else:
+                    restore_buttons()
 
         threading.Thread(target=run_and_update, daemon=True).start()
 
