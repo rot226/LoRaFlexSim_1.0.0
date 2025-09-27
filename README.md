@@ -39,45 +39,56 @@ Cette cible `make` enchaîne les suites de tests par domaine (`-k channel`,
 `-k class_bc`, etc.) puis lance `scripts/run_validation.py` afin de garantir
 qu'aucune régression n'a été introduite. Sur Windows, exécutez cette commande
 depuis un terminal disposant de `make` (Git Bash, WSL ou équivalent).
-3. **Lancez le tableau de bord :**
+
+## 🚀 Commandes de lancement recommandées
+
+### Tableau de bord Panel
+
 ```bash
 panel serve loraflexsim/launcher/dashboard.py --show
 ```
-Définissez la valeur du champ **Graine** pour réutiliser le même placement de
-nœuds et la même suite d'intervalles pseudo‑aléatoires d'une simulation à
-l'autre. Le champ **Nombre de runs** permet quant à lui d'enchaîner
-automatiquement plusieurs simulations identiques (la graine est incrémentée à
-chaque run).
-Activez l'option **Positions manuelles** pour saisir les coordonnées exactes de
-certains nœuds ou passerelles ; chaque ligne suit par exemple `node,id=3,x=120,y=40`
-ou `gw,id=1,x=10,y=80`. Cela permet notamment de reprendre les positions
-fournies dans l'INI de FLoRa.
-4. **Exécutez des simulations en ligne de commande :**
-   ```bash
-   python run.py --nodes 30 --gateways 1 --mode Random --interval 10 --steps 100 --output résultats.csv
-   python run.py --nodes 20 --mode Random --interval 15 --first-interval 5
-   python run.py --nodes 5 --mode Periodic --interval 10
-   python run.py --long-range-demo            # scénario longue portée (flora_hata)
-   python run.py --long-range-demo flora --output long_range.csv
-   python run.py --long-range-demo rural_long_range --seed 3
-   python run.py --long-range-demo very_long_range --seed 3
-   ```
-    Ajoutez l'option `--seed` pour reproduire exactement le placement des nœuds
-    et l'ordre statistique des intervalles.
-    Utilisez `--runs <n>` pour exécuter plusieurs simulations d'affilée et
-    obtenir une moyenne des métriques.
 
-5. **Démarrez l'API REST/WebSocket (optionnelle) :**
-   ```bash
-   uvicorn launcher.web_api:app --reload
-   ```
-   - L'endpoint `POST /simulations/start` accepte un JSON
-     `{"command": "start_sim", "params": {...}}` pour lancer une simulation.
-   - `GET /simulations/status` retourne `{"status": "idle|running|stopped", "metrics": {...}}`
-     afin de consulter l'état courant (au repos, en cours ou arrêté) et les
-     métriques cumulées.
-   - Les métriques en temps réel sont diffusées sur le WebSocket `/ws` sous la
-     forme `{"event": "metrics", "data": {...}}`.
+- Activez le bouton **Mode FLoRa complet** pour verrouiller `flora_mode`,
+  `flora_timing`, le modèle physique `omnet_full` et la matrice de capture
+  historique.【F:loraflexsim/launcher/dashboard.py†L194-L916】
+- Le champ **Graine** garantit un placement et une séquence pseudo-aléatoire
+  reproductibles ; **Nombre de runs** permet d'enchaîner automatiquement les
+  simulations en incrémentant la graine.
+- L'option **Positions manuelles** accepte des entrées `node,id=3,x=120,y=40`
+  ou `gw,id=1,x=10,y=80` pour rejouer les coordonnées extraites des INI FLoRa.
+
+### Ligne de commande (`run.py`)
+
+```bash
+python -m loraflexsim.run --nodes 30 --gateways 1 --mode random --interval 10 --steps 100 --output resultats.csv
+python -m loraflexsim.run --nodes 5 --mode periodic --interval 10 --runs 3 --seed 42
+python -m loraflexsim.run --long-range-demo flora_hata --seed 3 --output long_range.csv
+```
+
+- Utilisez `--phy-model flora` pour activer la chaîne radio calibrée FLoRa dans
+  la CLI et alignez vos paramètres sur les presets fournis par `--long-range-demo`.
+- L'équivalent Python consiste à instancier directement `Simulator(...,
+  flora_mode=True)` ; le script `examples/run_flora_example.py` fournit un
+  scénario prêt à l'emploi basé sur `n100-gw1.ini` et renvoie les métriques
+  lorsque `scripts/run_validation.py` est exécuté.【F:examples/run_flora_example.py†L1-L47】【F:scripts/run_validation.py†L1-L220】
+- Ajoutez `--seed` pour répéter exactement un run et `--runs <n>` pour calculer
+  automatiquement la moyenne des métriques.【F:loraflexsim/run.py†L352-L735】
+
+### API FastAPI + WebSocket
+
+```bash
+uvicorn loraflexsim.launcher.web_api:app --reload
+```
+
+- `POST /simulations/start` accepte des paramètres `Simulator`, par exemple :
+  ```bash
+  curl -X POST http://localhost:8000/simulations/start \
+    -H "Content-Type: application/json" \
+    -d '{"command": "start_sim", "params": {"nodes": 50, "gateways": 1, "flora_mode": true, "steps": 3600}}'
+  ```
+- `GET /simulations/status` retourne l'état (`idle|running|stopped`) et les
+  métriques cumulées ; le WebSocket `/ws` diffuse les métriques en temps réel
+  pour alimenter des tableaux de bord personnalisés.【F:loraflexsim/launcher/web_api.py†L23-L84】
 
 ## Reproduire FLoRa
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import statistics
 import sys
@@ -24,6 +25,24 @@ from loraflexsim.validation import (
 from loraflexsim.launcher.channel import Channel
 from loraflexsim.launcher.gateway import Gateway, FLORA_NON_ORTH_DELTA
 from loraflexsim.launcher.server import NetworkServer
+
+
+def _load_example_runner():
+    example_path = ROOT_DIR / "examples" / "run_flora_example.py"
+    spec = importlib.util.spec_from_file_location(
+        "loraflexsim.examples.run_flora_example",
+        example_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Impossible de charger le script d'exemple {example_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "run_example"):
+        raise RuntimeError(
+            "Le script d'exemple ne fournit pas de fonction run_example(quiet=True)"
+        )
+    return module.run_example
 
 
 def _start_gateway_tx(
@@ -148,6 +167,35 @@ def run_matrix(output: Path, repeat: int) -> bool:
     gateway_reference = ROOT_DIR / "tests" / "data" / "flora_gateway_reference.json"
     if not verify_gateway_reference(gateway_reference):
         overall_success = False
+
+    try:
+        run_example = _load_example_runner()
+        example_metrics = run_example(quiet=True)
+    except Exception as exc:  # pragma: no cover - dépend des extras Panel
+        print(f"Example scenario failed: {exc}")
+        overall_success = False
+    else:
+        rows.append(
+            {
+                "scenario": "flora_example",
+                "description": "Exemple FLoRa n100-gw1.ini",
+                "pdr_sim": float(example_metrics.get("PDR", 0.0)),
+                "pdr_ref": float(example_metrics.get("PDR", 0.0)),
+                "pdr_delta": 0.0,
+                "pdr_std": 0.0,
+                "collisions_sim": float(example_metrics.get("collisions", 0.0)),
+                "collisions_ref": float(example_metrics.get("collisions", 0.0)),
+                "collisions_delta": 0.0,
+                "snr_sim": float(example_metrics.get("snr", 0.0)),
+                "snr_ref": float(example_metrics.get("snr", 0.0)),
+                "snr_delta": 0.0,
+                "tolerance_pdr": 0.0,
+                "tolerance_collisions": 0.0,
+                "tolerance_snr": 0.0,
+                "status": "example",
+            }
+        )
+        print("flora_example: métriques collectées et ajoutées au CSV")
 
     for scenario in SCENARIOS:
         run_count = repeat if scenario.name == "long_range" else 1
