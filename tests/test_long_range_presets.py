@@ -10,6 +10,9 @@ import pytest
 from loraflexsim.launcher import Channel, Simulator
 
 
+pytestmark = pytest.mark.propagation_campaign
+
+
 def _iter_presets() -> Iterator[str]:
     yield from ("flora", "flora_hata", "flora_oulu")
 

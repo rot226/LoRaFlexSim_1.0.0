@@ -7,6 +7,9 @@ import pytest
 from loraflexsim.launcher.channel import Channel
 
 
+pytestmark = pytest.mark.propagation_campaign
+
+
 @pytest.mark.parametrize(
     "distance",
     [

@@ -44,6 +44,8 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 ### Automatisation
 
+- `pytest -m propagation_campaign` enchaîne les tests unitaires dédiés aux pertes, aux presets longue portée et au PER FLoRa (`test_channel_path_loss.py`, `test_long_range_presets.py`, `test_flora_per.py`).【F:tests/test_channel_path_loss.py†L1-L45】【F:tests/test_long_range_presets.py†L1-L66】【F:tests/test_flora_per.py†L1-L73】
+- `python scripts/compare_flora_channel.py --ini flora-master/simulations/examples/n100-gw1.ini --sca tests/integration/data/mono_gw_single_channel_class_a.sca` confronte les RSSI/SNR reconstruits par `Channel.compute_rssi` aux moyennes issues d'un export `.sca` FLoRa (tolérance par défaut : ±0.5 dB).【F:scripts/compare_flora_channel.py†L1-L244】
 - `pytest tests/integration/test_validation_matrix.py` exécute la matrice pour l'intégration continue.
 - `python scripts/run_validation.py` génère un tableau synthétique (par défaut `results/validation_matrix.csv`) et retourne un code de sortie non nul si une dérive dépasse la tolérance.【F:scripts/run_validation.py†L1-L112】
 - `python scripts/run_rssi_snr_regression.py --output results/rssi_snr_regression.csv` compare les courbes RSSI/SNR (SF7–SF12) avec et sans obstacles aux traces FLoRa.【F:scripts/run_rssi_snr_regression.py†L1-L197】
@@ -55,6 +57,7 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 #### Propagation
 
+- [ ] `pytest -m propagation_campaign` : contrôle simultanément la perte de parcours FLoRa, la portée des presets `flora_*` et la cohérence du PER logistique par rapport aux courbes Croce.【F:tests/test_channel_path_loss.py†L1-L45】【F:tests/test_long_range_presets.py†L1-L66】【F:tests/test_flora_per.py†L1-L73】
 - [ ] `pytest tests/integration/test_long_range_large_area.py` : confirme les marges RSSI/SNR des presets longue portée et la cohérence des profils `flora_*` au-delà de 10 km.【F:tests/integration/test_long_range_large_area.py†L1-L88】
 - [ ] `python scripts/run_validation.py --output results/validation_matrix.csv` : surveille les dérives de perte de parcours et de sensibilité sur l'ensemble des scénarios FLoRa.【F:scripts/run_validation.py†L1-L112】
 
