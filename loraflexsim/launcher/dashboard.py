@@ -202,7 +202,7 @@ def _has_simulation_limit_from_sim() -> bool:
     if sim is None:
         return _has_simulation_limit_from_inputs()
     has_packets = getattr(sim, "packets_to_send", 0) > 0
-    sim_duration = getattr(sim, "sim_duration_limit", None)
+    sim_duration = getattr(sim, "max_sim_time", getattr(sim, "sim_duration_limit", None))
     return has_packets or (sim_duration is not None and sim_duration > 0.0)
 
 
@@ -704,6 +704,7 @@ def setup_simulation(seed_offset: int = 0):
         simulation_duration=(
             sim_duration_limit if sim_duration_limit > 0.0 else None
         ),
+        max_sim_time=(sim_duration_limit if sim_duration_limit > 0.0 else None),
         adr_node=adr_node_checkbox.value,
         adr_server=adr_server_checkbox.value,
         mobility=mobility_checkbox.value,
@@ -1105,15 +1106,22 @@ def fast_forward(event=None):
                 if current_sim.packets_to_send > 0
                 else None
             )
-            sim_duration = getattr(current_sim, "sim_duration_limit", None)
+            sim_duration = getattr(
+                current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
+            )
             last = -1
             while current_sim.event_queue and current_sim.running:
                 current_sim.step()
                 pct: int | None = None
                 if total_packets:
                     pct = int(current_sim.packets_sent / total_packets * 100)
-                elif sim_duration and sim_duration > 0.0:
+                reached_time_limit = (
+                    sim_duration and sim_duration > 0.0 and current_sim.current_time >= sim_duration
+                )
+                if sim_duration and sim_duration > 0.0:
                     pct = int(min(current_sim.current_time / sim_duration * 100, 100))
+                if reached_time_limit:
+                    pct = 100
                 if pct is not None and pct != last:
                     last = pct
                     if current_session_alive():
@@ -1122,6 +1130,8 @@ def fast_forward(event=None):
                                 current_fast_forward_progress, "value", val
                             )
                         )
+                if reached_time_limit:
+                    break
 
             def update_ui():
                 current_fast_forward_progress.value = 100

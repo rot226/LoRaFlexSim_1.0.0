@@ -213,6 +213,7 @@ class Simulator:
         interval_variation: float = 0.0,
         packets_to_send: int = 0,
         simulation_duration: float | None = None,
+        max_sim_time: float | None = None,
         adr_node: bool = False,
         adr_server: bool = False,
         adr_method: str = "max",
@@ -276,6 +277,9 @@ class Simulator:
             d'arrêter la simulation (0 = infini).
         :param simulation_duration: Temps simulé maximum (s). ``None`` ou 0
             pour désactiver la limite temporelle.
+        :param max_sim_time: Limite stricte de temps simulé (s). Quand définie,
+            elle a priorité sur ``simulation_duration`` pour interrompre la
+            simulation et piloter l'accélération via le tableau de bord.
         :param adr_node: Activation de l'ADR côté nœud.
         :param adr_server: Activation de l'ADR côté serveur.
         :param adr_method: Méthode d'agrégation du SNR pour l'ADR
@@ -376,11 +380,17 @@ class Simulator:
             raise ValueError("interval_variation must be between 0 and 3")
         self.interval_variation = interval_variation
         self.packets_to_send = packets_to_send
-        self.sim_duration_limit = (
+        base_limit = (
             float(simulation_duration)
             if simulation_duration is not None and simulation_duration > 0.0
             else None
         )
+        if max_sim_time is not None and max_sim_time > 0.0:
+            self.max_sim_time = float(max_sim_time)
+        else:
+            self.max_sim_time = base_limit
+        self.sim_duration_limit = self.max_sim_time
+        self._max_time_pending = False
         self.adr_node = adr_node
         self.adr_server = adr_server
         self.adr_method = adr_method
@@ -917,6 +927,51 @@ class Simulator:
             Event(self._seconds_to_ticks(time_s), event_type, eid, node_id),
         )
 
+    def _finalize_at_max_time(self) -> None:
+        """Arrête la simulation à ``max_sim_time`` en complétant l'énergie restante."""
+
+        limit = self.max_sim_time
+        if limit is None:
+            self._max_time_pending = False
+            return
+        if self.current_time < limit:
+            for node in self.nodes:
+                prev_energy = node.energy_consumed
+                node.consume_until(limit)
+                delta = node.energy_consumed - prev_energy
+                if delta > 0.0:
+                    self.energy_nodes_J += delta
+                    self.total_energy_J += delta
+        self.current_time = limit
+        self.running = False
+        self.event_queue.clear()
+        self._max_time_pending = False
+
+    def _maybe_finalize_at_limit(self) -> None:
+        """Déclenche la finalisation si la limite temporelle est atteinte."""
+
+        if not self._max_time_pending:
+            return
+        limit = self.max_sim_time
+        if limit is None:
+            self._max_time_pending = False
+            return
+        if not self.event_queue:
+            self._finalize_at_max_time()
+            return
+        next_time = self._ticks_to_seconds(self.event_queue[0].time)
+        if next_time >= limit:
+            self._finalize_at_max_time()
+
+    def _request_stop_at_limit(self) -> None:
+        """Marque la simulation pour s'arrêter dès que possible à la limite."""
+
+        if self.max_sim_time is None:
+            return
+        self._max_time_pending = True
+        if getattr(self, "running", False):
+            self._maybe_finalize_at_limit()
+
     def ensure_class_c_rx_window(self, node: Node, time: float | None = None) -> None:
         """Ensure a Class C polling event is scheduled for ``node``."""
 
@@ -933,6 +988,10 @@ class Simulator:
             ):
                 return
         schedule_time = self._ticks_to_seconds(target_tick)
+        limit = self.max_sim_time
+        if limit is not None and schedule_time >= limit:
+            self._request_stop_at_limit()
+            return
         eid = self.event_id_counter
         self.event_id_counter += 1
         self._push_event(schedule_time, EventType.RX_WINDOW, eid, node.id)
@@ -956,7 +1015,14 @@ class Simulator:
             if enforced > time:
                 time = enforced
                 reason = "duty_cycle"
+        limit = self.max_sim_time
+        if limit is not None and time >= limit:
+            self._request_stop_at_limit()
+            return
         time = self._quantize(time)
+        if limit is not None and time >= limit:
+            self._request_stop_at_limit()
+            return
         node.channel = self.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
         node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
             node.sf, node.channel.bandwidth
@@ -1029,14 +1095,14 @@ class Simulator:
 
     def step(self) -> bool:
         """Exécute le prochain événement planifié. Retourne False si plus d'événement à traiter."""
+        self._maybe_finalize_at_limit()
         if not self.running or not self.event_queue:
             return False
-        if self.sim_duration_limit is not None:
+        limit = self.max_sim_time
+        if limit is not None:
             next_time = self._ticks_to_seconds(self.event_queue[0].time)
-            if next_time > self.sim_duration_limit:
-                self.current_time = self.sim_duration_limit
-                self.running = False
-                self.event_queue.clear()
+            if next_time >= limit:
+                self._finalize_at_max_time()
                 return False
         # Extraire le prochain événement (le plus tôt dans le temps)
         event = heapq.heappop(self.event_queue)
@@ -1044,373 +1110,561 @@ class Simulator:
         priority = event.type
         event_id = event.id
         node = self.node_map.get(event.node_id)
-        if node is None and priority != EventType.BEACON:
-            return True
-        # Avancer le temps de simulation et mettre à jour l'état PHY
-        delta = time - self.current_time
-        self.current_time = time
-        if delta > 0:
-            for ch in self.multichannel.channels:
-                if getattr(ch, "omnet_phy", None):
-                    ch.omnet_phy.update(delta)
-        if node is not None:
-            prev_energy = node.energy_consumed
-            node.consume_until(time)
-            delta_energy = node.energy_consumed - prev_energy
-            if delta_energy > 0.0:
-                self.energy_nodes_J += delta_energy
-                self.total_energy_J += delta_energy
-            if not node.alive:
+        try:
+            if node is None and priority != EventType.BEACON:
                 return True
+            # Avancer le temps de simulation et mettre à jour l'état PHY
+            delta = time - self.current_time
+            self.current_time = time
+            if delta > 0:
+                for ch in self.multichannel.channels:
+                    if getattr(ch, "omnet_phy", None):
+                        ch.omnet_phy.update(delta)
+            if node is not None:
+                prev_energy = node.energy_consumed
+                node.consume_until(time)
+                delta_energy = node.energy_consumed - prev_energy
+                if delta_energy > 0.0:
+                    self.energy_nodes_J += delta_energy
+                    self.total_energy_J += delta_energy
+                if not node.alive:
+                    return True
 
-        if priority == EventType.TX_START:
-            # Début d'une transmission émise par 'node'
-            node_id = node.id
-            node.last_tx_time = time
-            if node._nb_trans_left <= 0:
-                node._nb_trans_left = max(1, node.nb_trans)
-            node._nb_trans_left -= 1
-            if getattr(node.channel, "omnet_phy", None):
-                node.channel.omnet_phy.start_tx()
-            sf = node.sf
-            tx_power = node.tx_power
-            # Durée de la transmission
-            duration = node.channel.airtime(sf, payload_size=self.payload_size_bytes)
-            node.last_airtime = duration
-            node.total_airtime += duration
-            end_time = time + duration
-            if self.duty_cycle_manager and not self.pure_poisson_mode:
-                self.duty_cycle_manager.update_after_tx(node_id, time, duration)
-            # Mettre à jour les compteurs de paquets émis
-            self.packets_sent += 1
-            self.tx_attempted += 1
-            node.increment_sent()
-            # Énergie consommée par la transmission (E = I * V * t)
-            current_a = node.profile.get_tx_current(tx_power)
-            energy_J = current_a * node.profile.voltage_v * duration
-            prev = node.energy_consumed
-            node.add_energy(energy_J, "tx", duration_s=duration)
-            delta = node.energy_consumed - prev
-            self.total_energy_J += delta
-            self.energy_nodes_J += delta
-            if not node.alive:
-                return True
-            node.state = "tx"
-            node.last_state_time = end_time
-            # Marquer le nœud comme en cours de transmission
-            node.in_transmission = True
-            node.current_end_time = end_time
+            if priority == EventType.TX_START:
+                # Début d'une transmission émise par 'node'
+                node_id = node.id
+                node.last_tx_time = time
+                if node._nb_trans_left <= 0:
+                    node._nb_trans_left = max(1, node.nb_trans)
+                node._nb_trans_left -= 1
+                if getattr(node.channel, "omnet_phy", None):
+                    node.channel.omnet_phy.start_tx()
+                sf = node.sf
+                tx_power = node.tx_power
+                # Durée de la transmission
+                duration = node.channel.airtime(sf, payload_size=self.payload_size_bytes)
+                node.last_airtime = duration
+                node.total_airtime += duration
+                end_time = time + duration
+                if self.duty_cycle_manager and not self.pure_poisson_mode:
+                    self.duty_cycle_manager.update_after_tx(node_id, time, duration)
+                # Mettre à jour les compteurs de paquets émis
+                self.packets_sent += 1
+                self.tx_attempted += 1
+                node.increment_sent()
+                # Énergie consommée par la transmission (E = I * V * t)
+                current_a = node.profile.get_tx_current(tx_power)
+                energy_J = current_a * node.profile.voltage_v * duration
+                prev = node.energy_consumed
+                node.add_energy(energy_J, "tx", duration_s=duration)
+                delta = node.energy_consumed - prev
+                self.total_energy_J += delta
+                self.energy_nodes_J += delta
+                if not node.alive:
+                    return True
+                node.state = "tx"
+                node.last_state_time = end_time
+                # Marquer le nœud comme en cours de transmission
+                node.in_transmission = True
+                node.current_end_time = end_time
 
-            # Actualiser les offsets temps/fréquence utilisés pour cette émission
-            if hasattr(node, "update_offsets"):
-                node.update_offsets()
+                # Actualiser les offsets temps/fréquence utilisés pour cette émission
+                if hasattr(node, "update_offsets"):
+                    node.update_offsets()
 
-            heard_by_any = False
-            best_rssi = None
-            # Propagation du paquet vers chaque passerelle
-            best_snr = None
-            for gw in self.gateways:
-                distance = node.distance_to(gw)
-                kwargs = {
-                    "freq_offset_hz": getattr(node, "current_freq_offset", 0.0),
-                    "sync_offset_s": getattr(node, "current_sync_offset", 0.0),
-                    "tx_pos": (node.x, node.y, getattr(node, "altitude", 0.0)),
-                    "rx_pos": (gw.x, gw.y, getattr(gw, "altitude", 0.0)),
-                }
-                if hasattr(node.channel, "_obstacle_loss"):
-                    kwargs["tx_angle"] = getattr(
-                        node, "orientation_az", getattr(node, "direction", 0.0)
+                heard_by_any = False
+                best_rssi = None
+                # Propagation du paquet vers chaque passerelle
+                best_snr = None
+                for gw in self.gateways:
+                    distance = node.distance_to(gw)
+                    kwargs = {
+                        "freq_offset_hz": getattr(node, "current_freq_offset", 0.0),
+                        "sync_offset_s": getattr(node, "current_sync_offset", 0.0),
+                        "tx_pos": (node.x, node.y, getattr(node, "altitude", 0.0)),
+                        "rx_pos": (gw.x, gw.y, getattr(gw, "altitude", 0.0)),
+                    }
+                    if hasattr(node.channel, "_obstacle_loss"):
+                        kwargs["tx_angle"] = getattr(
+                            node, "orientation_az", getattr(node, "direction", 0.0)
+                        )
+                        kwargs["rx_angle"] = getattr(
+                            gw, "orientation_az", getattr(gw, "direction", 0.0)
+                        )
+                    else:
+                        kwargs["tx_angle"] = (
+                            getattr(node, "orientation_az", 0.0),
+                            getattr(node, "orientation_el", 0.0),
+                        )
+                        kwargs["rx_angle"] = (
+                            getattr(gw, "orientation_az", 0.0),
+                            getattr(gw, "orientation_el", 0.0),
+                        )
+                    rssi, snr = node.channel.compute_rssi(
+                        tx_power,
+                        distance,
+                        sf,
+                        **kwargs,
                     )
-                    kwargs["rx_angle"] = getattr(
-                        gw, "orientation_az", getattr(gw, "direction", 0.0)
+                    noise_dBm = node.channel.last_noise_dBm
+                    noise_lin = 10 ** (noise_dBm / 10.0)
+                    freq_hz = getattr(node.channel, "last_freq_hz", node.channel.frequency_hz)
+                    avg_noise = self._tx_manager.average_power(
+                        gw.id,
+                        freq_hz,
+                        time,
+                        end_time,
+                        base_noise_mW=noise_lin,
                     )
-                else:
-                    kwargs["tx_angle"] = (
-                        getattr(node, "orientation_az", 0.0),
-                        getattr(node, "orientation_el", 0.0),
+                    if avg_noise <= 0.0:
+                        avg_noise = noise_lin
+                    signal_lin = 10 ** (rssi / 10.0)
+                    snr = 10 * math.log10(signal_lin / avg_noise)
+                    rssi += getattr(gw, "rx_gain_dB", 0.0)
+                    snr += getattr(gw, "rx_gain_dB", 0.0)
+                    energy_threshold = max(
+                        node.channel.energy_detection_dBm,
+                        getattr(gw, "energy_detection_dBm", -float("inf")),
                     )
-                    kwargs["rx_angle"] = (
-                        getattr(gw, "orientation_az", 0.0),
-                        getattr(gw, "orientation_el", 0.0),
+                    if rssi < energy_threshold:
+                        continue
+                    # Enregistrer la transmission pour l'interférence future
+                    self._tx_manager.add(
+                        gw.id,
+                        freq_hz,
+                        rssi,
+                        end_time,
+                        event_id,
+                        start_time=time,
                     )
-                rssi, snr = node.channel.compute_rssi(
-                    tx_power,
-                    distance,
-                    sf,
-                    **kwargs,
-                )
-                noise_dBm = node.channel.last_noise_dBm
-                noise_lin = 10 ** (noise_dBm / 10.0)
-                freq_hz = getattr(node.channel, "last_freq_hz", node.channel.frequency_hz)
-                avg_noise = self._tx_manager.average_power(
-                    gw.id,
-                    freq_hz,
-                    time,
-                    end_time,
-                    base_noise_mW=noise_lin,
-                )
-                if avg_noise <= 0.0:
-                    avg_noise = noise_lin
-                signal_lin = 10 ** (rssi / 10.0)
-                snr = 10 * math.log10(signal_lin / avg_noise)
-                rssi += getattr(gw, "rx_gain_dB", 0.0)
-                snr += getattr(gw, "rx_gain_dB", 0.0)
-                energy_threshold = max(
-                    node.channel.energy_detection_dBm,
-                    getattr(gw, "energy_detection_dBm", -float("inf")),
-                )
-                if rssi < energy_threshold:
-                    continue
-                # Enregistrer la transmission pour l'interférence future
-                self._tx_manager.add(
-                    gw.id,
-                    freq_hz,
-                    rssi,
-                    end_time,
-                    event_id,
-                    start_time=time,
-                )
-                if not self.pure_poisson_mode:
-                    if rssi < node.channel.detection_threshold_dBm:
-                        continue  # trop faible pour être détecté
-                    snr_threshold = (
-                        node.channel.sensitivity_dBm.get(sf, -float("inf"))
-                        - noise_dBm
-                    )
-                    if snr < snr_threshold:
-                        continue  # signal trop faible pour être reçu
-                heard_by_any = True
-                if best_rssi is None or rssi > best_rssi:
-                    best_rssi = rssi
-                if best_snr is None or snr > best_snr:
-                    best_snr = snr
-                # Démarrer la réception à la passerelle (gestion des collisions et capture)
-                if self.capture_mode is not None:
-                    capture_mode = self.capture_mode
-                else:
-                    capture_mode = (
-                        "omnet"
-                        if node.channel.phy_model == "omnet"
-                        else (
-                            "flora"
-                            if node.channel.phy_model.startswith("flora")
+                    if not self.pure_poisson_mode:
+                        if rssi < node.channel.detection_threshold_dBm:
+                            continue  # trop faible pour être détecté
+                        snr_threshold = (
+                            node.channel.sensitivity_dBm.get(sf, -float("inf"))
+                            - noise_dBm
+                        )
+                        if snr < snr_threshold:
+                            continue  # signal trop faible pour être reçu
+                    heard_by_any = True
+                    if best_rssi is None or rssi > best_rssi:
+                        best_rssi = rssi
+                    if best_snr is None or snr > best_snr:
+                        best_snr = snr
+                    # Démarrer la réception à la passerelle (gestion des collisions et capture)
+                    if self.capture_mode is not None:
+                        capture_mode = self.capture_mode
+                    else:
+                        capture_mode = (
+                            "omnet"
+                            if node.channel.phy_model == "omnet"
                             else (
-                                "advanced" if node.channel.advanced_capture else "basic"
+                                "flora"
+                                if node.channel.phy_model.startswith("flora")
+                                else (
+                                    "advanced" if node.channel.advanced_capture else "basic"
+                                )
                             )
                         )
-                    )
 
-                gw.start_reception(
-                    event_id,
-                    node_id,
-                    sf,
-                    rssi,
-                    end_time,
-                    node.channel.capture_threshold_dB,
-                    self.current_time,
-                    freq_hz,
-                    self.min_interference_time,
-                    freq_offset=getattr(node, "current_freq_offset", 0.0),
-                    sync_offset=getattr(node, "current_sync_offset", 0.0),
-                    bandwidth=node.channel.bandwidth,
-                    noise_floor=noise_dBm,
-                    capture_mode=capture_mode,
-                    flora_phy=(
-                        node.channel.flora_phy
-                        if node.channel.phy_model.startswith("flora")
-                        else None
-                    ),
-                    orthogonal_sf=node.channel.orthogonal_sf,
-                    capture_window_symbols=node.channel.capture_window_symbols,
-                    non_orth_delta=getattr(node.channel, "non_orth_delta", None),
-                )
-
-            # Retenir le meilleur RSSI/SNR mesuré pour cette transmission
-            node.last_rssi = best_rssi if heard_by_any else None
-            node.last_snr = best_snr if heard_by_any else None
-            # Planifier l'événement de fin de transmission correspondant
-            end_time = self._quantize(end_time)
-            self._push_event(end_time, EventType.TX_END, event_id, node.id)
-            # Planifier les fenêtres de réception LoRaWAN
-            rx1, rx2 = node.schedule_receive_windows(end_time)
-            rx1 = self._quantize(rx1)
-            rx2 = self._quantize(rx2)
-            ev1 = self.event_id_counter
-            self.event_id_counter += 1
-            self._push_event(rx1, EventType.RX_WINDOW, ev1, node.id)
-            ev2 = self.event_id_counter
-            self.event_id_counter += 1
-            self._push_event(rx2, EventType.RX_WINDOW, ev2, node.id)
-
-            # Journaliser l'événement de transmission (résultat inconnu à ce stade)
-            log_entry = {
-                "event_id": event_id,
-                "node_id": node_id,
-                "sf": sf,
-                "start_time": time,
-                "end_time": end_time,
-                "frequency_hz": node.channel.frequency_hz,
-                "energy_J": energy_J,
-                "heard": heard_by_any,
-                "rssi_dBm": best_rssi,
-                "snr_dB": best_snr,
-                "result": None,
-                "gateway_id": None,
-            }
-            self.events_log.append(log_entry)
-            self._events_log_map[event_id] = log_entry
-            return True
-
-        elif priority == EventType.TX_END:
-            # Fin d'une transmission – traitement de la réception/perte
-            self._tx_manager.remove(event_id)
-            node_id = node.id
-            # Marquer la fin de transmission du nœud
-            if getattr(node.channel, "omnet_phy", None):
-                node.channel.omnet_phy.stop_tx()
-            node.in_transmission = False
-            node.current_end_time = None
-            node.state = "rx" if node.class_type.upper() == "C" else "processing"
-            # Notifier chaque passerelle de la fin de réception
-            for gw in self.gateways:
-                gw.end_reception(event_id, self.network_server, node_id)
-            # Vérifier si le paquet a été reçu par au moins une passerelle
-            delivered = event_id in self.network_server.received_events
-            if delivered:
-                self.packets_delivered += 1
-                self.rx_delivered += 1
-                node.increment_success()
-                # Délai = temps de fin - temps de début de l'émission
-                start_time = self._events_log_map[event_id]["start_time"]
-                delay = self.current_time - start_time
-                self.total_delay += delay
-                self.delivered_count += 1
-            else:
-                # Identifier la cause de perte: collision ou absence de couverture
-                log_entry = self._events_log_map[event_id]
-                heard = log_entry["heard"]
-                if heard:
-                    self.packets_lost_collision += 1
-                    node.increment_collision()
-                else:
-                    self.packets_lost_no_signal += 1
-            # Mettre à jour le résultat et la passerelle du log de l'événement
-            entry = self._events_log_map[event_id]
-            entry["result"] = (
-                "Success"
-                if delivered
-                else ("CollisionLoss" if entry["heard"] else "NoCoverage")
-            )
-            entry["gateway_id"] = (
-                self.network_server.event_gateway.get(event_id, None)
-                if delivered
-                else None
-            )
-            if delivered:
-                if event_id in self.network_server.event_rssi:
-                    entry["rssi_dBm"] = self.network_server.event_rssi[event_id]
-                if event_id in self.network_server.event_snir:
-                    entry["snr_dB"] = self.network_server.event_snir[event_id]
-
-            if self.debug_rx:
-                if delivered:
-                    gw_id = self.network_server.event_gateway.get(event_id, None)
-                    logger.debug(
-                        f"t={self.current_time:.2f} Packet {event_id} from node {node_id} reçu via GW {gw_id}"
-                    )
-                else:
-                    reason = "Collision" if log_entry["heard"] else "NoCoverage"
-                    logger.debug(
-                        f"t={self.current_time:.2f} Packet {event_id} from node {node_id} perdu ({reason})"
-                    )
-
-            # Mettre à jour l'historique du nœud pour calculer les statistiques
-            # récentes et éventuellement déclencher l'ADR.
-            snr_value = None
-            rssi_value = None
-            if delivered and node.last_snr is not None:
-                snr_value = node.last_snr
-            if delivered and node.last_rssi is not None:
-                rssi_value = node.last_rssi
-            node.history.append(
-                {"snr": snr_value, "rssi": rssi_value, "delivered": delivered}
-            )
-            if len(node.history) > 20:
-                node.history.pop(0)
-
-            # Gestion Adaptive Data Rate (ADR)
-            if self.adr_node:
-                # Only track history here; the actual adaptation now relies on
-                # the standard adr_ack_cnt mechanism implemented in :class:`Node`.
-                pass
-                
-            # Planifier retransmissions restantes ou prochaine émission
-            if node._nb_trans_left > 0:
-                self.retransmissions += 1
-                self.schedule_event(
-                    node, self.current_time + 1.0, reason="retransmission"
-                )
-            else:
-                if (
-                    self.packets_to_send == 0
-                    or node.packets_sent < self.packets_to_send
-                ):
-                    if self.transmission_mode.lower() == "random":
-                        if not self.lock_step_poisson:
-                            node.ensure_poisson_arrivals(
-                                node.last_tx_time,
-                                self.packet_interval,
-                                self.interval_rng,
-                                variation=self.interval_variation,
-                                limit=(
-                                    self.packets_to_send
-                                    if self.packets_to_send
-                                    else None
-                                ),
-                            )
-                        next_time = node.arrival_queue.pop(0)
-                    else:
-                        next_time = node._last_arrival_time + self.packet_interval
-                        node.arrival_interval_sum += self.packet_interval
-                        node.arrival_interval_count += 1
-                        node._last_arrival_time = next_time
-                    self.schedule_event(
-                        node,
-                        next_time if self.pure_poisson_mode else max(next_time, self.current_time),
-                        reason=(
-                            "poisson"
-                            if self.transmission_mode.lower() == "random"
-                            else "periodic"
+                    gw.start_reception(
+                        event_id,
+                        node_id,
+                        sf,
+                        rssi,
+                        end_time,
+                        node.channel.capture_threshold_dB,
+                        self.current_time,
+                        freq_hz,
+                        self.min_interference_time,
+                        freq_offset=getattr(node, "current_freq_offset", 0.0),
+                        sync_offset=getattr(node, "current_sync_offset", 0.0),
+                        bandwidth=node.channel.bandwidth,
+                        noise_floor=noise_dBm,
+                        capture_mode=capture_mode,
+                        flora_phy=(
+                            node.channel.flora_phy
+                            if node.channel.phy_model.startswith("flora")
+                            else None
                         ),
+                        orthogonal_sf=node.channel.orthogonal_sf,
+                        capture_window_symbols=node.channel.capture_window_symbols,
+                        non_orth_delta=getattr(node.channel, "non_orth_delta", None),
+                    )
+
+                # Retenir le meilleur RSSI/SNR mesuré pour cette transmission
+                node.last_rssi = best_rssi if heard_by_any else None
+                node.last_snr = best_snr if heard_by_any else None
+                # Planifier l'événement de fin de transmission correspondant
+                end_time = self._quantize(end_time)
+                self._push_event(end_time, EventType.TX_END, event_id, node.id)
+                # Planifier les fenêtres de réception LoRaWAN
+                rx1, rx2 = node.schedule_receive_windows(end_time)
+                rx1 = self._quantize(rx1)
+                rx2 = self._quantize(rx2)
+                ev1 = self.event_id_counter
+                self.event_id_counter += 1
+                self._push_event(rx1, EventType.RX_WINDOW, ev1, node.id)
+                ev2 = self.event_id_counter
+                self.event_id_counter += 1
+                self._push_event(rx2, EventType.RX_WINDOW, ev2, node.id)
+
+                # Journaliser l'événement de transmission (résultat inconnu à ce stade)
+                log_entry = {
+                    "event_id": event_id,
+                    "node_id": node_id,
+                    "sf": sf,
+                    "start_time": time,
+                    "end_time": end_time,
+                    "frequency_hz": node.channel.frequency_hz,
+                    "energy_J": energy_J,
+                    "heard": heard_by_any,
+                    "rssi_dBm": best_rssi,
+                    "snr_dB": best_snr,
+                    "result": None,
+                    "gateway_id": None,
+                }
+                self.events_log.append(log_entry)
+                self._events_log_map[event_id] = log_entry
+                return True
+
+            elif priority == EventType.TX_END:
+                # Fin d'une transmission – traitement de la réception/perte
+                self._tx_manager.remove(event_id)
+                node_id = node.id
+                # Marquer la fin de transmission du nœud
+                if getattr(node.channel, "omnet_phy", None):
+                    node.channel.omnet_phy.stop_tx()
+                node.in_transmission = False
+                node.current_end_time = None
+                node.state = "rx" if node.class_type.upper() == "C" else "processing"
+                # Notifier chaque passerelle de la fin de réception
+                for gw in self.gateways:
+                    gw.end_reception(event_id, self.network_server, node_id)
+                # Vérifier si le paquet a été reçu par au moins une passerelle
+                delivered = event_id in self.network_server.received_events
+                if delivered:
+                    self.packets_delivered += 1
+                    self.rx_delivered += 1
+                    node.increment_success()
+                    # Délai = temps de fin - temps de début de l'émission
+                    start_time = self._events_log_map[event_id]["start_time"]
+                    delay = self.current_time - start_time
+                    self.total_delay += delay
+                    self.delivered_count += 1
+                else:
+                    # Identifier la cause de perte: collision ou absence de couverture
+                    log_entry = self._events_log_map[event_id]
+                    heard = log_entry["heard"]
+                    if heard:
+                        self.packets_lost_collision += 1
+                        node.increment_collision()
+                    else:
+                        self.packets_lost_no_signal += 1
+                # Mettre à jour le résultat et la passerelle du log de l'événement
+                entry = self._events_log_map[event_id]
+                entry["result"] = (
+                    "Success"
+                    if delivered
+                    else ("CollisionLoss" if entry["heard"] else "NoCoverage")
+                )
+                entry["gateway_id"] = (
+                    self.network_server.event_gateway.get(event_id, None)
+                    if delivered
+                    else None
+                )
+                if delivered:
+                    if event_id in self.network_server.event_rssi:
+                        entry["rssi_dBm"] = self.network_server.event_rssi[event_id]
+                    if event_id in self.network_server.event_snir:
+                        entry["snr_dB"] = self.network_server.event_snir[event_id]
+
+                if self.debug_rx:
+                    if delivered:
+                        gw_id = self.network_server.event_gateway.get(event_id, None)
+                        logger.debug(
+                            f"t={self.current_time:.2f} Packet {event_id} from node {node_id} reçu via GW {gw_id}"
+                        )
+                    else:
+                        reason = "Collision" if log_entry["heard"] else "NoCoverage"
+                        logger.debug(
+                            f"t={self.current_time:.2f} Packet {event_id} from node {node_id} perdu ({reason})"
+                        )
+
+                # Mettre à jour l'historique du nœud pour calculer les statistiques
+                # récentes et éventuellement déclencher l'ADR.
+                snr_value = None
+                rssi_value = None
+                if delivered and node.last_snr is not None:
+                    snr_value = node.last_snr
+                if delivered and node.last_rssi is not None:
+                    rssi_value = node.last_rssi
+                node.history.append(
+                    {"snr": snr_value, "rssi": rssi_value, "delivered": delivered}
+                )
+                if len(node.history) > 20:
+                    node.history.pop(0)
+
+                # Gestion Adaptive Data Rate (ADR)
+                if self.adr_node:
+                    # Only track history here; the actual adaptation now relies on
+                    # the standard adr_ack_cnt mechanism implemented in :class:`Node`.
+                    pass
+                
+                # Planifier retransmissions restantes ou prochaine émission
+                if node._nb_trans_left > 0:
+                    self.retransmissions += 1
+                    self.schedule_event(
+                        node, self.current_time + 1.0, reason="retransmission"
                     )
                 else:
-                    logger.debug(
-                        "Packet limit reached for node %s – no more events for this node.",
-                        node.id,
+                    if (
+                        self.packets_to_send == 0
+                        or node.packets_sent < self.packets_to_send
+                    ):
+                        if self.transmission_mode.lower() == "random":
+                            if not self.lock_step_poisson:
+                                node.ensure_poisson_arrivals(
+                                    node.last_tx_time,
+                                    self.packet_interval,
+                                    self.interval_rng,
+                                    variation=self.interval_variation,
+                                    limit=(
+                                        self.packets_to_send
+                                        if self.packets_to_send
+                                        else None
+                                    ),
+                                )
+                            next_time = node.arrival_queue.pop(0)
+                        else:
+                            next_time = node._last_arrival_time + self.packet_interval
+                            node.arrival_interval_sum += self.packet_interval
+                            node.arrival_interval_count += 1
+                            node._last_arrival_time = next_time
+                        self.schedule_event(
+                            node,
+                            next_time if self.pure_poisson_mode else max(next_time, self.current_time),
+                            reason=(
+                                "poisson"
+                                if self.transmission_mode.lower() == "random"
+                                else "periodic"
+                            ),
+                        )
+                    else:
+                        logger.debug(
+                            "Packet limit reached for node %s – no more events for this node.",
+                            node.id,
+                        )
+
+                    if self.packets_to_send != 0 and all(
+                        n.packets_sent >= self.packets_to_send for n in self.nodes
+                    ):
+                        new_queue = []
+                        for evt in self.event_queue:
+                            if evt.type in (EventType.TX_END, EventType.RX_WINDOW):
+                                new_queue.append(evt)
+                        heapq.heapify(new_queue)
+                        self.event_queue = new_queue
+                        # Stop scheduling further mobility events once every node
+                        # reached the packet limit to ensure the simulation
+                        # completes when using fast forward.
+                        self.mobility_enabled = False
+                        logger.debug(
+                            "Packet limit reached – no more new events will be scheduled."
+                        )
+
+                return True
+
+            elif priority == EventType.RX_WINDOW:
+                # Fenêtre de réception RX1/RX2 pour un nœud
+                if node.class_type.upper() != "C":
+                    current = (
+                        node.profile.listen_current_a
+                        if node.profile.listen_current_a > 0.0
+                        else node.profile.rx_current_a
                     )
-
-                if self.packets_to_send != 0 and all(
-                    n.packets_sent >= self.packets_to_send for n in self.nodes
-                ):
-                    new_queue = []
-                    for evt in self.event_queue:
-                        if evt.type in (EventType.TX_END, EventType.RX_WINDOW):
-                            new_queue.append(evt)
-                    heapq.heapify(new_queue)
-                    self.event_queue = new_queue
-                    # Stop scheduling further mobility events once every node
-                    # reached the packet limit to ensure the simulation
-                    # completes when using fast forward.
-                    self.mobility_enabled = False
-                    logger.debug(
-                        "Packet limit reached – no more new events will be scheduled."
+                    state = "listen" if node.profile.listen_current_a > 0.0 else "rx"
+                    energy_J = (
+                        current
+                        * node.profile.voltage_v
+                        * node.profile.rx_window_duration
                     )
+                    prev_energy = node.energy_consumed
+                    node.add_energy(
+                        energy_J,
+                        state,
+                        duration_s=node.profile.rx_window_duration,
+                    )
+                    delta = node.energy_consumed - prev_energy
+                    if delta > 0.0:
+                        self.energy_nodes_J += delta
+                        self.total_energy_J += delta
+                if not node.alive:
+                    return True
+                node.last_state_time = time + (
+                    node.profile.rx_window_duration
+                    if node.class_type.upper() != "C"
+                    else 0.0
+                )
+                if node.class_type.upper() != "C":
+                    node.state = "sleep"
+                self.network_server.deliver_scheduled(node.id, time)
+                for gw in self.gateways:
+                    downlink = gw.pop_downlink(node.id)
+                    if not downlink:
+                        continue
+                    frame, data_rate, tx_power = downlink
+                    payload_len = 0
+                    if hasattr(frame, "payload"):
+                        try:
+                            payload_len = len(frame.payload)
+                        except Exception:
+                            pass
+                    elif hasattr(frame, "to_bytes"):
+                        try:
+                            payload_len = len(frame.to_bytes())
+                        except Exception:
+                            pass
+                    sf = node.sf
+                    if data_rate is not None:
+                        from .lorawan import DR_TO_SF
 
-            return True
+                        sf = DR_TO_SF.get(data_rate, node.sf)
+                    duration_dl = node.channel.airtime(sf, payload_len)
+                    tx_power_dl = (
+                        tx_power if tx_power is not None else gw.select_downlink_power(node)
+                    )
+                    current_gw = gw.profile.get_tx_current(tx_power_dl)
+                    energy_tx = current_gw * gw.profile.voltage_v * duration_dl
+                    ramp = current_gw * gw.profile.voltage_v * (
+                        gw.profile.ramp_up_s + gw.profile.ramp_down_s
+                    )
+                    total_tx = energy_tx + ramp
+                    self.energy_gateways_J += total_tx
+                    self.total_energy_J += total_tx
+                    gw.add_energy(energy_tx, "tx")
+                    if ramp > 0.0:
+                        gw.add_energy(ramp, "ramp")
+                    preamble_J = (
+                        gw.profile.preamble_current_a
+                        * gw.profile.voltage_v
+                        * gw.profile.preamble_time_s
+                    )
+                    if preamble_J > 0.0:
+                        self.energy_gateways_J += preamble_J
+                        self.total_energy_J += preamble_J
+                        gw.add_energy(preamble_J, "preamble")
+                    if node.class_type.upper() != "C":
+                        extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
+                        if extra_time > 0.0:
+                            extra_energy = current * node.profile.voltage_v * extra_time
+                            prev_energy = node.energy_consumed
+                            node.add_energy(
+                                extra_energy,
+                                state,
+                                duration_s=extra_time,
+                            )
+                            delta = node.energy_consumed - prev_energy
+                            if delta > 0.0:
+                                self.energy_nodes_J += delta
+                                self.total_energy_J += delta
+                    distance = node.distance_to(gw)
+                    kwargs = {
+                        "freq_offset_hz": 0.0,
+                        "sync_offset_s": 0.0,
+                        "tx_pos": (gw.x, gw.y, getattr(gw, "altitude", 0.0)),
+                        "rx_pos": (node.x, node.y, getattr(node, "altitude", 0.0)),
+                    }
+                    if hasattr(node.channel, "_obstacle_loss"):
+                        kwargs["tx_angle"] = getattr(gw, "orientation_az", getattr(gw, "direction", 0.0))
+                        kwargs["rx_angle"] = getattr(node, "orientation_az", getattr(node, "direction", 0.0))
+                    else:
+                        kwargs["tx_angle"] = (
+                            getattr(gw, "orientation_az", 0.0),
+                            getattr(gw, "orientation_el", 0.0),
+                        )
+                        kwargs["rx_angle"] = (
+                            getattr(node, "orientation_az", 0.0),
+                            getattr(node, "orientation_el", 0.0),
+                        )
+                    reference_power = tx_power_dl if tx_power_dl is not None else node.tx_power
+                    rssi, snr = node.channel.compute_rssi(
+                        reference_power,
+                        distance,
+                        sf,
+                        **kwargs,
+                    )
+                    noise_dBm = node.channel.last_noise_dBm
+                    if not self.pure_poisson_mode:
+                        if rssi < node.channel.detection_threshold_dBm:
+                            node.downlink_pending = max(0, node.downlink_pending - 1)
+                            continue
+                        snr_threshold = (
+                            node.channel.sensitivity_dBm.get(sf, -float("inf"))
+                            - noise_dBm
+                        )
+                        if snr >= snr_threshold:
+                            node.handle_downlink(frame)
+                        else:
+                            node.downlink_pending = max(0, node.downlink_pending - 1)
+                    else:
+                        node.handle_downlink(frame)
+                    break
+                # Replanifier selon la classe du nœud
+                if node.class_type.upper() == "C":
+                    if not (
+                        self.packets_to_send != 0
+                        and all(n.packets_sent >= self.packets_to_send for n in self.nodes)
+                    ):
+                        raw_next = time + self.class_c_rx_interval
+                        limit = self.max_sim_time
+                        if limit is not None and raw_next >= limit:
+                            self._request_stop_at_limit()
+                        else:
+                            nxt = self._quantize(raw_next)
+                            if limit is not None and nxt >= limit:
+                                self._request_stop_at_limit()
+                            else:
+                                eid = self.event_id_counter
+                                self.event_id_counter += 1
+                                self._push_event(nxt, EventType.RX_WINDOW, eid, node.id)
+                return True
 
-        elif priority == EventType.RX_WINDOW:
-            # Fenêtre de réception RX1/RX2 pour un nœud
-            if node.class_type.upper() != "C":
+            elif priority == EventType.BEACON:
+                nxt = self._quantize(self.network_server.next_beacon_time(time))
+                eid = self.event_id_counter
+                self.event_id_counter += 1
+                self._push_event(nxt, EventType.BEACON, eid, 0)
+                self.last_beacon_time = time
+                self.network_server.notify_beacon(time)
+                end_of_cycle = nxt
+                for n in self.nodes:
+                    if n.class_type.upper() == "B":
+                        received = random.random() >= getattr(n, "beacon_loss_prob", 0.0)
+                        if received:
+                            n.register_beacon(time)
+                        else:
+                            n.miss_beacon(self.beacon_interval)
+                        periodicity = 2 ** (getattr(n, "ping_slot_periodicity", 0) or 0)
+                        interval = self.ping_slot_interval * periodicity
+                        slot = self._quantize(
+                            n.next_ping_slot_time(
+                                time,
+                                self.beacon_interval,
+                                self.ping_slot_interval,
+                                self.ping_slot_offset,
+                            )
+                        )
+                        while slot < end_of_cycle:
+                            eid = self.event_id_counter
+                            self.event_id_counter += 1
+                            self._push_event(slot, EventType.PING_SLOT, eid, n.id)
+                            slot = self._quantize(slot + interval)
+                return True
+
+            elif priority == EventType.PING_SLOT:
+                if node.class_type.upper() != "B":
+                    return True
                 current = (
                     node.profile.listen_current_a
                     if node.profile.listen_current_a > 0.0
@@ -1432,62 +1686,57 @@ class Simulator:
                 if delta > 0.0:
                     self.energy_nodes_J += delta
                     self.total_energy_J += delta
-            if not node.alive:
-                return True
-            node.last_state_time = time + (
-                node.profile.rx_window_duration
-                if node.class_type.upper() != "C"
-                else 0.0
-            )
-            if node.class_type.upper() != "C":
+                if not node.alive:
+                    return True
+                node.last_state_time = time + node.profile.rx_window_duration
                 node.state = "sleep"
-            self.network_server.deliver_scheduled(node.id, time)
-            for gw in self.gateways:
-                downlink = gw.pop_downlink(node.id)
-                if not downlink:
-                    continue
-                frame, data_rate, tx_power = downlink
-                payload_len = 0
-                if hasattr(frame, "payload"):
-                    try:
-                        payload_len = len(frame.payload)
-                    except Exception:
-                        pass
-                elif hasattr(frame, "to_bytes"):
-                    try:
-                        payload_len = len(frame.to_bytes())
-                    except Exception:
-                        pass
-                sf = node.sf
-                if data_rate is not None:
-                    from .lorawan import DR_TO_SF
+                self.network_server.deliver_scheduled(node.id, time)
+                for gw in self.gateways:
+                    downlink = gw.pop_downlink(node.id)
+                    if not downlink:
+                        continue
+                    frame, data_rate, tx_power = downlink
+                    payload_len = 0
+                    if hasattr(frame, "payload"):
+                        try:
+                            payload_len = len(frame.payload)
+                        except Exception:
+                            pass
+                    elif hasattr(frame, "to_bytes"):
+                        try:
+                            payload_len = len(frame.to_bytes())
+                        except Exception:
+                            pass
+                    sf = node.sf
+                    effective_dr = data_rate if data_rate is not None else node.ping_slot_dr
+                    if effective_dr is not None:
+                        from .lorawan import DR_TO_SF
 
-                    sf = DR_TO_SF.get(data_rate, node.sf)
-                duration_dl = node.channel.airtime(sf, payload_len)
-                tx_power_dl = (
-                    tx_power if tx_power is not None else gw.select_downlink_power(node)
-                )
-                current_gw = gw.profile.get_tx_current(tx_power_dl)
-                energy_tx = current_gw * gw.profile.voltage_v * duration_dl
-                ramp = current_gw * gw.profile.voltage_v * (
-                    gw.profile.ramp_up_s + gw.profile.ramp_down_s
-                )
-                total_tx = energy_tx + ramp
-                self.energy_gateways_J += total_tx
-                self.total_energy_J += total_tx
-                gw.add_energy(energy_tx, "tx")
-                if ramp > 0.0:
-                    gw.add_energy(ramp, "ramp")
-                preamble_J = (
-                    gw.profile.preamble_current_a
-                    * gw.profile.voltage_v
-                    * gw.profile.preamble_time_s
-                )
-                if preamble_J > 0.0:
-                    self.energy_gateways_J += preamble_J
-                    self.total_energy_J += preamble_J
-                    gw.add_energy(preamble_J, "preamble")
-                if node.class_type.upper() != "C":
+                        sf = DR_TO_SF.get(effective_dr, node.sf)
+                    duration_dl = node.channel.airtime(sf, payload_len)
+                    tx_power_dl = (
+                        tx_power if tx_power is not None else gw.select_downlink_power(node)
+                    )
+                    current_gw = gw.profile.get_tx_current(tx_power_dl)
+                    energy_tx = current_gw * gw.profile.voltage_v * duration_dl
+                    ramp = current_gw * gw.profile.voltage_v * (
+                        gw.profile.ramp_up_s + gw.profile.ramp_down_s
+                    )
+                    total_tx = energy_tx + ramp
+                    self.energy_gateways_J += total_tx
+                    self.total_energy_J += total_tx
+                    gw.add_energy(energy_tx, "tx")
+                    if ramp > 0.0:
+                        gw.add_energy(ramp, "ramp")
+                    preamble_J = (
+                        gw.profile.preamble_current_a
+                        * gw.profile.voltage_v
+                        * gw.profile.preamble_time_s
+                    )
+                    if preamble_J > 0.0:
+                        self.energy_gateways_J += preamble_J
+                        self.total_energy_J += preamble_J
+                        gw.add_energy(preamble_J, "preamble")
                     extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
                     if extra_time > 0.0:
                         extra_energy = current * node.profile.voltage_v * extra_time
@@ -1501,270 +1750,112 @@ class Simulator:
                         if delta > 0.0:
                             self.energy_nodes_J += delta
                             self.total_energy_J += delta
-                distance = node.distance_to(gw)
-                kwargs = {
-                    "freq_offset_hz": 0.0,
-                    "sync_offset_s": 0.0,
-                    "tx_pos": (gw.x, gw.y, getattr(gw, "altitude", 0.0)),
-                    "rx_pos": (node.x, node.y, getattr(node, "altitude", 0.0)),
-                }
-                if hasattr(node.channel, "_obstacle_loss"):
-                    kwargs["tx_angle"] = getattr(gw, "orientation_az", getattr(gw, "direction", 0.0))
-                    kwargs["rx_angle"] = getattr(node, "orientation_az", getattr(node, "direction", 0.0))
-                else:
-                    kwargs["tx_angle"] = (
-                        getattr(gw, "orientation_az", 0.0),
-                        getattr(gw, "orientation_el", 0.0),
+                    distance = node.distance_to(gw)
+                    kwargs = {"freq_offset_hz": 0.0, "sync_offset_s": 0.0}
+                    if hasattr(node.channel, "_obstacle_loss"):
+                        kwargs["tx_pos"] = (gw.x, gw.y, getattr(gw, "altitude", 0.0))
+                        kwargs["rx_pos"] = (node.x, node.y, getattr(node, "altitude", 0.0))
+                    reference_power = (
+                        tx_power_dl if tx_power_dl is not None else node.tx_power
                     )
-                    kwargs["rx_angle"] = (
-                        getattr(node, "orientation_az", 0.0),
-                        getattr(node, "orientation_el", 0.0),
+                    rssi, snr = node.channel.compute_rssi(
+                        reference_power,
+                        distance,
+                        sf,
+                        **kwargs,
                     )
-                reference_power = tx_power_dl if tx_power_dl is not None else node.tx_power
-                rssi, snr = node.channel.compute_rssi(
-                    reference_power,
-                    distance,
-                    sf,
-                    **kwargs,
-                )
-                noise_dBm = node.channel.last_noise_dBm
-                if not self.pure_poisson_mode:
-                    if rssi < node.channel.detection_threshold_dBm:
-                        node.downlink_pending = max(0, node.downlink_pending - 1)
-                        continue
-                    snr_threshold = (
-                        node.channel.sensitivity_dBm.get(sf, -float("inf"))
-                        - noise_dBm
-                    )
-                    if snr >= snr_threshold:
-                        node.handle_downlink(frame)
-                    else:
-                        node.downlink_pending = max(0, node.downlink_pending - 1)
-                else:
-                    node.handle_downlink(frame)
-                break
-            # Replanifier selon la classe du nœud
-            if node.class_type.upper() == "C":
-                if not (
-                    self.packets_to_send != 0
-                    and all(n.packets_sent >= self.packets_to_send for n in self.nodes)
-                ):
-                    nxt = self._quantize(time + self.class_c_rx_interval)
-                    eid = self.event_id_counter
-                    self.event_id_counter += 1
-                    self._push_event(nxt, EventType.RX_WINDOW, eid, node.id)
-            return True
-
-        elif priority == EventType.BEACON:
-            nxt = self._quantize(self.network_server.next_beacon_time(time))
-            eid = self.event_id_counter
-            self.event_id_counter += 1
-            self._push_event(nxt, EventType.BEACON, eid, 0)
-            self.last_beacon_time = time
-            self.network_server.notify_beacon(time)
-            end_of_cycle = nxt
-            for n in self.nodes:
-                if n.class_type.upper() == "B":
-                    received = random.random() >= getattr(n, "beacon_loss_prob", 0.0)
-                    if received:
-                        n.register_beacon(time)
-                    else:
-                        n.miss_beacon(self.beacon_interval)
-                    periodicity = 2 ** (getattr(n, "ping_slot_periodicity", 0) or 0)
-                    interval = self.ping_slot_interval * periodicity
-                    slot = self._quantize(
-                        n.next_ping_slot_time(
-                            time,
-                            self.beacon_interval,
-                            self.ping_slot_interval,
-                            self.ping_slot_offset,
+                    noise_dBm = node.channel.last_noise_dBm
+                    if not self.pure_poisson_mode:
+                        if rssi < node.channel.detection_threshold_dBm:
+                            node.downlink_pending = max(0, node.downlink_pending - 1)
+                            continue
+                        snr_threshold = (
+                            node.channel.sensitivity_dBm.get(sf, -float("inf"))
+                            - noise_dBm
                         )
-                    )
-                    while slot < end_of_cycle:
-                        eid = self.event_id_counter
-                        self.event_id_counter += 1
-                        self._push_event(slot, EventType.PING_SLOT, eid, n.id)
-                        slot = self._quantize(slot + interval)
-            return True
-
-        elif priority == EventType.PING_SLOT:
-            if node.class_type.upper() != "B":
-                return True
-            current = (
-                node.profile.listen_current_a
-                if node.profile.listen_current_a > 0.0
-                else node.profile.rx_current_a
-            )
-            state = "listen" if node.profile.listen_current_a > 0.0 else "rx"
-            energy_J = (
-                current
-                * node.profile.voltage_v
-                * node.profile.rx_window_duration
-            )
-            prev_energy = node.energy_consumed
-            node.add_energy(
-                energy_J,
-                state,
-                duration_s=node.profile.rx_window_duration,
-            )
-            delta = node.energy_consumed - prev_energy
-            if delta > 0.0:
-                self.energy_nodes_J += delta
-                self.total_energy_J += delta
-            if not node.alive:
-                return True
-            node.last_state_time = time + node.profile.rx_window_duration
-            node.state = "sleep"
-            self.network_server.deliver_scheduled(node.id, time)
-            for gw in self.gateways:
-                downlink = gw.pop_downlink(node.id)
-                if not downlink:
-                    continue
-                frame, data_rate, tx_power = downlink
-                payload_len = 0
-                if hasattr(frame, "payload"):
-                    try:
-                        payload_len = len(frame.payload)
-                    except Exception:
-                        pass
-                elif hasattr(frame, "to_bytes"):
-                    try:
-                        payload_len = len(frame.to_bytes())
-                    except Exception:
-                        pass
-                sf = node.sf
-                effective_dr = data_rate if data_rate is not None else node.ping_slot_dr
-                if effective_dr is not None:
-                    from .lorawan import DR_TO_SF
-
-                    sf = DR_TO_SF.get(effective_dr, node.sf)
-                duration_dl = node.channel.airtime(sf, payload_len)
-                tx_power_dl = (
-                    tx_power if tx_power is not None else gw.select_downlink_power(node)
-                )
-                current_gw = gw.profile.get_tx_current(tx_power_dl)
-                energy_tx = current_gw * gw.profile.voltage_v * duration_dl
-                ramp = current_gw * gw.profile.voltage_v * (
-                    gw.profile.ramp_up_s + gw.profile.ramp_down_s
-                )
-                total_tx = energy_tx + ramp
-                self.energy_gateways_J += total_tx
-                self.total_energy_J += total_tx
-                gw.add_energy(energy_tx, "tx")
-                if ramp > 0.0:
-                    gw.add_energy(ramp, "ramp")
-                preamble_J = (
-                    gw.profile.preamble_current_a
-                    * gw.profile.voltage_v
-                    * gw.profile.preamble_time_s
-                )
-                if preamble_J > 0.0:
-                    self.energy_gateways_J += preamble_J
-                    self.total_energy_J += preamble_J
-                    gw.add_energy(preamble_J, "preamble")
-                extra_time = max(duration_dl - node.profile.rx_window_duration, 0.0)
-                if extra_time > 0.0:
-                    extra_energy = current * node.profile.voltage_v * extra_time
-                    prev_energy = node.energy_consumed
-                    node.add_energy(
-                        extra_energy,
-                        state,
-                        duration_s=extra_time,
-                    )
-                    delta = node.energy_consumed - prev_energy
-                    if delta > 0.0:
-                        self.energy_nodes_J += delta
-                        self.total_energy_J += delta
-                distance = node.distance_to(gw)
-                kwargs = {"freq_offset_hz": 0.0, "sync_offset_s": 0.0}
-                if hasattr(node.channel, "_obstacle_loss"):
-                    kwargs["tx_pos"] = (gw.x, gw.y, getattr(gw, "altitude", 0.0))
-                    kwargs["rx_pos"] = (node.x, node.y, getattr(node, "altitude", 0.0))
-                reference_power = (
-                    tx_power_dl if tx_power_dl is not None else node.tx_power
-                )
-                rssi, snr = node.channel.compute_rssi(
-                    reference_power,
-                    distance,
-                    sf,
-                    **kwargs,
-                )
-                noise_dBm = node.channel.last_noise_dBm
-                if not self.pure_poisson_mode:
-                    if rssi < node.channel.detection_threshold_dBm:
-                        node.downlink_pending = max(0, node.downlink_pending - 1)
-                        continue
-                    snr_threshold = (
-                        node.channel.sensitivity_dBm.get(sf, -float("inf"))
-                        - noise_dBm
-                    )
-                    if snr >= snr_threshold:
-                        node.handle_downlink(frame)
+                        if snr >= snr_threshold:
+                            node.handle_downlink(frame)
+                        else:
+                            node.downlink_pending = max(0, node.downlink_pending - 1)
                     else:
-                        node.downlink_pending = max(0, node.downlink_pending - 1)
-                else:
-                    node.handle_downlink(frame)
-                break
-            return True
-
-        elif priority == EventType.SERVER_RX:
-            self.network_server._handle_network_arrival(event_id)
-            return True
-
-        elif priority == EventType.SERVER_PROCESS:
-            self.network_server._process_scheduled(event_id)
-            return True
-
-        elif priority == EventType.MOBILITY:
-            # Événement de mobilité (changement de position du nœud)
-            if not self.mobility_enabled:
+                        node.handle_downlink(frame)
+                    break
                 return True
-            node_id = node.id
-            if node.in_transmission:
-                # Si le nœud est en cours de transmission, reporter le déplacement à la fin de celle-ci
-                next_move_time = (
-                    node.current_end_time
-                    if node.current_end_time is not None
-                    else self.current_time
-                )
-                self.schedule_mobility(node, next_move_time)
-            else:
-                # Déplacer le nœud de manière progressive
-                self.mobility_model.move(node, self.current_time)
-                log_entry = {
-                    "event_id": event_id,
-                    "node_id": node_id,
-                    "sf": node.sf,
-                    "start_time": time,
-                    "end_time": time,
-                    "frequency_hz": node.channel.frequency_hz,
-                    "heard": None,
-                    "result": "Mobility",
-                    "energy_J": 0.0,
-                    "gateway_id": None,
-                    "rssi_dBm": None,
-                    "snr_dB": None,
-                }
-                self.events_log.append(log_entry)
-                self._events_log_map[event_id] = log_entry
-                if self.mobility_enabled and (
-                    self.packets_to_send == 0
-                    or node.packets_sent < self.packets_to_send
-                ):
-                    self.schedule_mobility(node, time + self.mobility_model.step)
-            return True
 
-        # Si autre type d'événement (non prévu)
-        return True
+            elif priority == EventType.SERVER_RX:
+                self.network_server._handle_network_arrival(event_id)
+                return True
+
+            elif priority == EventType.SERVER_PROCESS:
+                self.network_server._process_scheduled(event_id)
+                return True
+
+            elif priority == EventType.MOBILITY:
+                # Événement de mobilité (changement de position du nœud)
+                if not self.mobility_enabled:
+                    return True
+                node_id = node.id
+                if node.in_transmission:
+                    # Si le nœud est en cours de transmission, reporter le déplacement à la fin de celle-ci
+                    next_move_time = (
+                        node.current_end_time
+                        if node.current_end_time is not None
+                        else self.current_time
+                    )
+                    self.schedule_mobility(node, next_move_time)
+                else:
+                    # Déplacer le nœud de manière progressive
+                    self.mobility_model.move(node, self.current_time)
+                    log_entry = {
+                        "event_id": event_id,
+                        "node_id": node_id,
+                        "sf": node.sf,
+                        "start_time": time,
+                        "end_time": time,
+                        "frequency_hz": node.channel.frequency_hz,
+                        "heard": None,
+                        "result": "Mobility",
+                        "energy_J": 0.0,
+                        "gateway_id": None,
+                        "rssi_dBm": None,
+                        "snr_dB": None,
+                    }
+                    self.events_log.append(log_entry)
+                    self._events_log_map[event_id] = log_entry
+                    if self.mobility_enabled and (
+                        self.packets_to_send == 0
+                        or node.packets_sent < self.packets_to_send
+                    ):
+                        self.schedule_mobility(node, time + self.mobility_model.step)
+                return True
+
+            # Si autre type d'événement (non prévu)
+            return True
+        finally:
+            self._maybe_finalize_at_limit()
 
     def run(self, max_steps: int | None = None):
         """Exécute la simulation en traitant les événements jusqu'à épuisement ou jusqu'à une limite optionnelle."""
         step_count = 0
+        limit = self.max_sim_time
+        self._maybe_finalize_at_limit()
         while self.event_queue and self.running:
-            self.step()
+            if limit is not None and self.current_time >= limit:
+                self._finalize_at_max_time()
+                break
+            progressed = self.step()
+            if not progressed:
+                break
             step_count += 1
+            self._maybe_finalize_at_limit()
+            if limit is not None and self.current_time >= limit:
+                self.running = False
+                break
             if max_steps and step_count >= max_steps:
                 break
+        if limit is not None and self.current_time >= limit:
+            self.running = False
+        self._maybe_finalize_at_limit()
         if self.dump_intervals:
             self.dump_interval_logs()
 
