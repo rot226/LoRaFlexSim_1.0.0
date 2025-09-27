@@ -61,6 +61,7 @@ total_runs = 1
 current_run = 0
 runs_events: list[pd.DataFrame] = []
 runs_metrics: list[dict] = []
+runs_metrics_timeline: list[pd.DataFrame | list[dict] | None] = []
 auto_fast_forward = False
 timeline_fig = go.Figure()
 last_event_index = 0
@@ -674,18 +675,24 @@ def periodic_chrono_update():
 
 # --- Callback étape de simulation ---
 def step_simulation():
+    global runs_metrics_timeline
     if sim is None or not session_alive():
         if not session_alive():
             _cleanup_callbacks()
         return
     cont = sim.step()
     metrics = sim.get_metrics()
+    timeline = sim.get_metrics_timeline()
     pdr_indicator.value = metrics["PDR"]
     collisions_indicator.value = metrics["collisions"]
     energy_indicator.value = metrics["energy_J"]
     delay_indicator.value = metrics["avg_delay_s"]
     throughput_indicator.value = metrics["throughput_bps"]
     retrans_indicator.value = metrics["retransmissions"]
+    if len(runs_metrics_timeline) < max(current_run, 1):
+        runs_metrics_timeline.extend([None] * (max(current_run, 1) - len(runs_metrics_timeline)))
+    if current_run >= 1:
+        runs_metrics_timeline[current_run - 1] = timeline
     table_df = pd.DataFrame(
         {
             "Node": list(metrics["pdr_by_node"].keys()),
@@ -929,7 +936,7 @@ def setup_simulation(seed_offset: int = 0):
 
 # --- Bouton "Lancer la simulation" ---
 def on_start(event):
-    global total_runs, current_run, runs_events, runs_metrics
+    global total_runs, current_run, runs_events, runs_metrics, runs_metrics_timeline
 
     # Vérifier qu'une simulation n'est pas déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -950,13 +957,14 @@ def on_start(event):
     current_run = 1
     runs_events.clear()
     runs_metrics.clear()
+    runs_metrics_timeline.clear()
     setup_simulation(seed_offset=0)
 
 
 # --- Bouton "Arrêter la simulation" ---
 def on_stop(event):
     global sim, sim_callback, chrono_callback, map_anim_callback, start_time, max_real_time, paused
-    global current_run, total_runs, runs_events, auto_fast_forward
+    global current_run, total_runs, runs_events, auto_fast_forward, runs_metrics_timeline
     # If called programmatically (e.g. after fast_forward), allow cleanup even
     # if the simulation has already stopped.
     if sim is None or (event is not None and not getattr(sim, "running", False)):
@@ -986,6 +994,16 @@ def on_stop(event):
         pass
     try:
         runs_metrics.append(sim.get_metrics())
+    except Exception:
+        pass
+    try:
+        timeline = sim.get_metrics_timeline()
+        if len(runs_metrics_timeline) < max(current_run, 1):
+            runs_metrics_timeline.extend(
+                [None] * (max(current_run, 1) - len(runs_metrics_timeline))
+            )
+        if current_run >= 1:
+            runs_metrics_timeline[current_run - 1] = timeline
     except Exception:
         pass
 
@@ -1081,7 +1099,7 @@ def on_stop(event):
 def exporter_csv(event=None):
     """Export simulation results as CSV files in the current directory."""
     dest_dir = os.getcwd()
-    global runs_events, runs_metrics
+    global runs_events, runs_metrics, runs_metrics_timeline
 
     if not runs_events:
         export_message.object = "⚠️ Lance la simulation d'abord !"
@@ -1098,14 +1116,38 @@ def exporter_csv(event=None):
         df.to_csv(chemin, index=False, encoding="utf-8")
 
         metrics_path = os.path.join(dest_dir, f"metrics_{timestamp}.csv")
+        timeline_path = os.path.join(dest_dir, f"metrics_timeline_{timestamp}.csv")
         if runs_metrics:
             metrics_df = pd.json_normalize(runs_metrics)
             metrics_df.to_csv(metrics_path, index=False, encoding="utf-8")
+        timeline_frames: list[pd.DataFrame] = []
+        if runs_metrics_timeline:
+            for run_index, timeline in enumerate(runs_metrics_timeline, start=1):
+                if timeline is None:
+                    continue
+                if isinstance(timeline, pd.DataFrame):
+                    timeline_df = timeline.copy()
+                else:
+                    timeline_df = pd.DataFrame(list(timeline))
+                if timeline_df.empty:
+                    continue
+                timeline_df = timeline_df.copy()
+                timeline_df.insert(0, "run", run_index)
+                timeline_frames.append(timeline_df)
+        if timeline_frames:
+            pd.concat(timeline_frames, ignore_index=True).to_csv(
+                timeline_path, index=False, encoding="utf-8"
+            )
+        else:
+            timeline_path = None
 
-        export_message.object = (
-            f"✅ Résultats exportés : <b>{chemin}</b><br>"
-            f"Métriques : <b>{metrics_path}</b><br>(Ouvre-les avec Excel ou pandas)"
-        )
+        message_lines = [f"✅ Résultats exportés : <b>{chemin}</b>"]
+        if runs_metrics:
+            message_lines.append(f"Métriques : <b>{metrics_path}</b>")
+        if timeline_path:
+            message_lines.append(f"Timeline : <b>{timeline_path}</b>")
+        message_lines.append("(Ouvre-les avec Excel ou pandas)")
+        export_message.object = "<br>".join(message_lines)
 
         try:
             folder = dest_dir

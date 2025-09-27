@@ -839,6 +839,8 @@ class Simulator:
         self._sf_attempts: dict[int, int] = {sf: 0 for sf in range(7, 13)}
         self._sf_success: dict[int, int] = {sf: 0 for sf in range(7, 13)}
         self.retransmissions = 0
+        # Historique temporel des métriques clés (échantillonné à chaque TX_END)
+        self.metrics_timeline: list[dict[str, float | int]] = []
 
         # Gestion des transmissions simultanées pour calculer l'interférence
         self._tx_manager = _TxManager()
@@ -1484,6 +1486,7 @@ class Simulator:
                             "Packet limit reached – no more new events will be scheduled."
                         )
 
+                self._record_metrics_snapshot()
                 return True
 
             elif priority == EventType.RX_WINDOW:
@@ -1874,6 +1877,44 @@ class Simulator:
         """Arrête la simulation en cours."""
         self.running = False
 
+    def _record_metrics_snapshot(self) -> None:
+        """Ajoute un instantané des métriques cumulées à la timeline."""
+        total_sent = self.tx_attempted
+        delivered = self.rx_delivered
+        collisions = self.packets_lost_collision
+        duplicates = self.network_server.duplicate_packets
+        no_signal = self.packets_lost_no_signal
+        energy = self.total_energy_J
+        current_time = self.current_time
+        pdr = delivered / total_sent if total_sent > 0 else 0.0
+
+        instant_throughput = 0.0
+        if self.metrics_timeline:
+            prev = self.metrics_timeline[-1]
+            dt = current_time - float(prev.get("time_s", 0.0))
+            delivered_delta = delivered - float(prev.get("delivered", 0.0))
+            if dt > 0.0:
+                instant_throughput = (
+                    delivered_delta * self.payload_size_bytes * 8 / dt
+                )
+        elif current_time > 0.0:
+            instant_throughput = (
+                delivered * self.payload_size_bytes * 8 / current_time
+            )
+
+        snapshot = {
+            "time_s": current_time,
+            "PDR": pdr,
+            "tx_attempted": total_sent,
+            "delivered": delivered,
+            "collisions": collisions,
+            "duplicates": duplicates,
+            "packets_lost_no_signal": no_signal,
+            "energy_J": energy,
+            "instant_throughput_bps": instant_throughput,
+        }
+        self.metrics_timeline.append(snapshot)
+
     def get_metrics(self) -> dict:
         """Retourne un dictionnaire des métriques actuelles de la simulation."""
         total_sent = self.tx_attempted
@@ -1980,6 +2021,16 @@ class Simulator:
             **{f"energy_class_{ct}_J": energy_by_class[ct] for ct in energy_by_class},
             "retransmissions": self.retransmissions,
         }
+
+    def get_metrics_timeline(self):
+        """Retourne l'historique des métriques cumulées après chaque ``TX_END``."""
+        if not self.metrics_timeline:
+            if pd is None:
+                return []
+            return pd.DataFrame()
+        if pd is None:
+            return [entry.copy() for entry in self.metrics_timeline]
+        return pd.DataFrame(self.metrics_timeline)
 
     def get_events_dataframe(self) -> "pd.DataFrame | None":
         """
