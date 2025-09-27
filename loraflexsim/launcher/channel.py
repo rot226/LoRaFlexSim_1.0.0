@@ -115,7 +115,16 @@ class Channel:
             if bw in tables
         ]
         if candidates:
-            return min(candidates)
+            # ``FLORA_SENSITIVITY`` stores detection thresholds per SF.  Those
+            # values are always lower (more negative) than the dedicated
+            # ``energyDetection`` floor enforced by FLoRa (−90 dBm).  Returning
+            # the minimum would therefore authorise any frame stronger than the
+            # most sensitive SF, which is incorrect for the energy detection
+            # stage.  We instead clamp the result with the documented
+            # ``FLORA_ENERGY_DETECTION_DBM`` so that gateways ignore frames whose
+            # RSSI stays below −90 dBm, matching the behaviour exercised in
+            # ``test_flora_energy_detection_filters_frames``.
+            return max(max(candidates), cls.FLORA_ENERGY_DETECTION_DBM)
         return cls.FLORA_ENERGY_DETECTION_DBM
 
     @classmethod
