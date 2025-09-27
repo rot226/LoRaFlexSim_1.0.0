@@ -14,6 +14,9 @@ DATA_DIR = Path(__file__).with_name("data")
 FLORA_PER_TRACE = DATA_DIR / "flora_per_sigmoid.csv"
 
 
+pytestmark = pytest.mark.propagation_campaign
+
+
 def test_per_matches_croce_curve():
     ch = Channel(phy_model="omnet", use_flora_curves=False, shadowing_std=0.0)
     sf = 7
