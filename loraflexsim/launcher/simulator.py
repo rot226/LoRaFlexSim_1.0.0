@@ -896,11 +896,16 @@ class Simulator:
                 self._push_event(0.0, EventType.RX_WINDOW, eid, node.id)
 
         # Première émission de beacon pour la synchronisation Class B
-        eid = self.event_id_counter
-        self.event_id_counter += 1
-        self._push_event(0.0, EventType.BEACON, eid, 0)
-        self.last_beacon_time = 0.0
-        self.network_server.last_beacon_time = 0.0
+        self.last_beacon_time: float | None = None
+        has_class_b = any(node.class_type.upper() == "B" for node in self.nodes)
+        if has_class_b:
+            eid = self.event_id_counter
+            self.event_id_counter += 1
+            self._push_event(0.0, EventType.BEACON, eid, 0)
+            self.last_beacon_time = 0.0
+            self.network_server.last_beacon_time = 0.0
+        else:
+            self.network_server.last_beacon_time = None
 
         # Indicateur d'exécution de la simulation
         self.running = True
