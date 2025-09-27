@@ -1955,6 +1955,7 @@ class Simulator:
             "energy_gateways_J": self.energy_gateways_J,
             "avg_delay_s": avg_delay,
             "avg_arrival_interval_s": avg_arrival_interval,
+            "simulation_time_s": sim_time,
             "throughput_bps": throughput_bps,
             "sf_distribution": {
                 sf: sum(1 for node in self.nodes if node.sf == sf)

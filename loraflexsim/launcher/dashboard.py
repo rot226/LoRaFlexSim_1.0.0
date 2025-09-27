@@ -68,22 +68,95 @@ pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
 
 
-def average_numeric_metrics(metrics_list: list[dict]) -> dict:
-    """Return the average of numeric metrics across runs.
+def aggregate_run_metrics(metrics_list: list[dict]) -> dict:
+    """Agrège les métriques de plusieurs runs en pondérant correctement."""
 
-    Only keys whose values are numeric in all dictionaries are averaged.
-    """
     if not metrics_list:
         return {}
-    keys = set(metrics_list[0])
-    for m in metrics_list[1:]:
-        keys &= m.keys()
-    averages: dict = {}
-    for key in keys:
-        values = [m[key] for m in metrics_list]
-        if all(isinstance(v, (int, float)) for v in values):
-            averages[key] = sum(values) / len(values)
-    return averages
+
+    total_attempted = 0.0
+    total_delivered = 0.0
+    total_collisions = 0.0
+    total_duplicates = 0.0
+    total_retransmissions = 0.0
+    total_energy = 0.0
+    total_energy_nodes = 0.0
+    total_energy_gateways = 0.0
+    total_delay_weighted = 0.0
+    total_arrival_interval_weighted = 0.0
+    total_throughput_weighted_bits = 0.0
+    total_simulation_time = 0.0
+
+    energy_class_totals: dict[str, float] = {}
+
+    for metrics in metrics_list:
+        attempted = float(metrics.get("tx_attempted", 0.0) or 0.0)
+        delivered = float(metrics.get("delivered", 0.0) or 0.0)
+        collisions = float(metrics.get("collisions", 0.0) or 0.0)
+        duplicates = float(metrics.get("duplicates", 0.0) or 0.0)
+        retrans = float(metrics.get("retransmissions", 0.0) or 0.0)
+        energy_total = float(metrics.get("energy_J", 0.0) or 0.0)
+        energy_nodes = float(metrics.get("energy_nodes_J", 0.0) or 0.0)
+        energy_gw = float(metrics.get("energy_gateways_J", 0.0) or 0.0)
+        avg_delay = float(metrics.get("avg_delay_s", 0.0) or 0.0)
+        avg_arrival_interval = float(metrics.get("avg_arrival_interval_s", 0.0) or 0.0)
+        throughput = float(metrics.get("throughput_bps", 0.0) or 0.0)
+        sim_time = float(metrics.get("simulation_time_s", 0.0) or 0.0)
+
+        total_attempted += attempted
+        total_delivered += delivered
+        total_collisions += collisions
+        total_duplicates += duplicates
+        total_retransmissions += retrans
+        total_energy += energy_total
+        total_energy_nodes += energy_nodes
+        total_energy_gateways += energy_gw
+        total_delay_weighted += avg_delay * delivered
+        total_arrival_interval_weighted += avg_arrival_interval * attempted
+        total_throughput_weighted_bits += throughput * sim_time
+        total_simulation_time += sim_time
+
+        for key, value in metrics.items():
+            if key.startswith("energy_class_") and key.endswith("_J"):
+                energy_class_totals[key] = energy_class_totals.get(key, 0.0) + float(
+                    value or 0.0
+                )
+
+    aggregated: dict[str, float] = {
+        "tx_attempted": total_attempted,
+        "delivered": total_delivered,
+        "collisions": total_collisions,
+        "duplicates": total_duplicates,
+        "retransmissions": total_retransmissions,
+        "energy_J": total_energy,
+        "energy_nodes_J": total_energy_nodes,
+        "energy_gateways_J": total_energy_gateways,
+        "simulation_time_s": total_simulation_time,
+    }
+
+    aggregated.update(energy_class_totals)
+
+    aggregated["PDR"] = (
+        total_delivered / total_attempted if total_attempted > 0 else 0.0
+    )
+
+    aggregated["avg_delay_s"] = (
+        total_delay_weighted / total_delivered if total_delivered > 0 else 0.0
+    )
+
+    aggregated["avg_arrival_interval_s"] = (
+        total_arrival_interval_weighted / total_attempted
+        if total_attempted > 0
+        else 0.0
+    )
+
+    aggregated["throughput_bps"] = (
+        total_throughput_weighted_bits / total_simulation_time
+        if total_simulation_time > 0
+        else 0.0
+    )
+
+    return aggregated
 
 def _get_panel_state() -> object:
     """Return the captured Panel state used across threads."""
@@ -918,13 +991,13 @@ def on_stop(event):
 
     if current_run < total_runs:
         if runs_metrics:
-            avg = average_numeric_metrics(runs_metrics)
-            pdr_indicator.value = avg.get("PDR", 0.0)
-            collisions_indicator.value = avg.get("collisions", 0)
-            energy_indicator.value = avg.get("energy_J", 0.0)
-            delay_indicator.value = avg.get("avg_delay_s", 0.0)
-            throughput_indicator.value = avg.get("throughput_bps", 0.0)
-            retrans_indicator.value = avg.get("retransmissions", 0)
+            aggregated = aggregate_run_metrics(runs_metrics)
+            pdr_indicator.value = aggregated.get("PDR", 0.0)
+            collisions_indicator.value = aggregated.get("collisions", 0)
+            energy_indicator.value = aggregated.get("energy_J", 0.0)
+            delay_indicator.value = aggregated.get("avg_delay_s", 0.0)
+            throughput_indicator.value = aggregated.get("throughput_bps", 0.0)
+            retrans_indicator.value = aggregated.get("retransmissions", 0)
             # PDR détaillés disponibles dans le fichier exporté uniquement
         current_run += 1
         seed_offset = current_run - 1
@@ -978,13 +1051,13 @@ def on_stop(event):
     fast_forward_progress.visible = False
     fast_forward_progress.value = 0
     if runs_metrics:
-        avg = average_numeric_metrics(runs_metrics)
-        pdr_indicator.value = avg.get("PDR", 0.0)
-        collisions_indicator.value = avg.get("collisions", 0)
-        energy_indicator.value = avg.get("energy_J", 0.0)
-        delay_indicator.value = avg.get("avg_delay_s", 0.0)
-        throughput_indicator.value = avg.get("throughput_bps", 0.0)
-        retrans_indicator.value = avg.get("retransmissions", 0)
+        aggregated = aggregate_run_metrics(runs_metrics)
+        pdr_indicator.value = aggregated.get("PDR", 0.0)
+        collisions_indicator.value = aggregated.get("collisions", 0)
+        energy_indicator.value = aggregated.get("energy_J", 0.0)
+        delay_indicator.value = aggregated.get("avg_delay_s", 0.0)
+        throughput_indicator.value = aggregated.get("throughput_bps", 0.0)
+        retrans_indicator.value = aggregated.get("retransmissions", 0)
         last = runs_metrics[-1]
         table_df = pd.DataFrame(
             {
