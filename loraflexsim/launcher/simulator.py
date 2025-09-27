@@ -836,6 +836,8 @@ class Simulator:
         # Counters for PDR computation
         self.tx_attempted = 0
         self.rx_delivered = 0
+        self._sf_attempts: dict[int, int] = {sf: 0 for sf in range(7, 13)}
+        self._sf_success: dict[int, int] = {sf: 0 for sf in range(7, 13)}
         self.retransmissions = 0
 
         # Gestion des transmissions simultanées pour calculer l'interférence
@@ -1145,6 +1147,7 @@ class Simulator:
                 if getattr(node.channel, "omnet_phy", None):
                     node.channel.omnet_phy.start_tx()
                 sf = node.sf
+                self._sf_attempts[sf] = self._sf_attempts.get(sf, 0) + 1
                 tx_power = node.tx_power
                 # Durée de la transmission
                 duration = node.channel.airtime(sf, payload_size=self.payload_size_bytes)
@@ -1351,6 +1354,9 @@ class Simulator:
                 if delivered:
                     self.packets_delivered += 1
                     self.rx_delivered += 1
+                    sf = self._events_log_map[event_id].get("sf")
+                    if sf is not None:
+                        self._sf_success[sf] = self._sf_success.get(sf, 0) + 1
                     node.increment_success()
                     # Délai = temps de fin - temps de début de l'émission
                     start_time = self._events_log_map[event_id]["start_time"]
@@ -1885,10 +1891,9 @@ class Simulator:
         pdr_by_node = {node.id: node.pdr for node in self.nodes}
         recent_pdr_by_node = {node.id: node.recent_pdr for node in self.nodes}
         pdr_by_sf: dict[int, float] = {}
-        for sf in range(7, 13):
-            nodes_sf = [n for n in self.nodes if n.sf == sf]
-            sent_sf = sum(n.tx_attempted for n in nodes_sf)
-            delivered_sf = sum(n.rx_delivered for n in nodes_sf)
+        for sf in sorted(self._sf_attempts):
+            sent_sf = self._sf_attempts.get(sf, 0)
+            delivered_sf = self._sf_success.get(sf, 0)
             pdr_by_sf[sf] = delivered_sf / sent_sf if sent_sf > 0 else 0.0
 
         gateway_counts = {gw.id: 0 for gw in self.gateways}
