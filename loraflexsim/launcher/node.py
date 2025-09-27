@@ -958,7 +958,27 @@ class Node:
                     from .lorawan import DeviceModeInd, DeviceModeConf
 
                     req = DeviceModeInd.from_bytes(payload[:2])
+                    previous_class = self.class_type
+                    current_time = getattr(
+                        self.simulator, "current_time", self.last_state_time
+                    )
+                    self.consume_until(current_time)
                     self.class_type = req.class_mode
+                    if self.class_type.upper() == "C":
+                        self.state = "rx"
+                    else:
+                        self.state = "sleep"
+                    self.last_state_time = current_time
+                    if (
+                        previous_class.upper() != "C"
+                        and self.class_type.upper() == "C"
+                        and self.simulator is not None
+                    ):
+                        ensure_rx = getattr(
+                            self.simulator, "ensure_class_c_rx_window", None
+                        )
+                        if callable(ensure_rx):
+                            ensure_rx(self, current_time)
                     self.pending_mac_cmd = DeviceModeConf(req.class_mode).to_bytes()
                 except Exception:
                     pass
