@@ -806,9 +806,11 @@ def setup_simulation(seed_offset: int = 0):
 
     sim.running = True
     sim_callback = pn.state.add_periodic_callback(step_simulation, period=100, timeout=None)
-    def anim():
+    cleanup_callback = _cleanup_callbacks
+
+    def anim(cleanup=cleanup_callback):
         if not session_alive():
-            _cleanup_callbacks()
+            cleanup()
             return
         update_map()
         update_timeline()
@@ -1326,4 +1328,4 @@ dashboard = pn.Row(
     sizing_mode="stretch_width",
 )
 dashboard.servable(title="Simulateur LoRa")
-pn.state.on_session_destroyed(lambda session_context: _cleanup_callbacks())
+pn.state.on_session_destroyed(lambda _, cleanup=_cleanup_callbacks: cleanup())
