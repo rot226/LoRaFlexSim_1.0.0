@@ -212,6 +212,7 @@ class Simulator:
         log_mean_after: int | None = None,
         interval_variation: float = 0.0,
         packets_to_send: int = 0,
+        simulation_duration: float | None = None,
         adr_node: bool = False,
         adr_server: bool = False,
         adr_method: str = "max",
@@ -273,6 +274,8 @@ class Simulator:
             modèle aléatoire de FLoRa (aucune dispersion supplémentaire).
         :param packets_to_send: Nombre de paquets à émettre **par nœud** avant
             d'arrêter la simulation (0 = infini).
+        :param simulation_duration: Temps simulé maximum (s). ``None`` ou 0
+            pour désactiver la limite temporelle.
         :param adr_node: Activation de l'ADR côté nœud.
         :param adr_server: Activation de l'ADR côté serveur.
         :param adr_method: Méthode d'agrégation du SNR pour l'ADR
@@ -373,6 +376,11 @@ class Simulator:
             raise ValueError("interval_variation must be between 0 and 3")
         self.interval_variation = interval_variation
         self.packets_to_send = packets_to_send
+        self.sim_duration_limit = (
+            float(simulation_duration)
+            if simulation_duration is not None and simulation_duration > 0.0
+            else None
+        )
         self.adr_node = adr_node
         self.adr_server = adr_server
         self.adr_method = adr_method
@@ -1023,6 +1031,13 @@ class Simulator:
         """Exécute le prochain événement planifié. Retourne False si plus d'événement à traiter."""
         if not self.running or not self.event_queue:
             return False
+        if self.sim_duration_limit is not None:
+            next_time = self._ticks_to_seconds(self.event_queue[0].time)
+            if next_time > self.sim_duration_limit:
+                self.current_time = self.sim_duration_limit
+                self.running = False
+                self.event_queue.clear()
+                return False
         # Extraire le prochain événement (le plus tôt dans le temps)
         event = heapq.heappop(self.event_queue)
         time = self._ticks_to_seconds(event.time)
