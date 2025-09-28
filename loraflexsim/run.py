@@ -47,14 +47,14 @@ def apply_speed_settings(
         raise ValueError("steps must be > 0")
     if nodes <= 0:
         raise ValueError("nodes must be > 0")
-    if sample_size is not None:
-        if not (0.0 < sample_size <= 1.0):
-            raise ValueError("sample_size must be within (0, 1]")
-        steps = max(1, int(math.ceil(steps * sample_size)))
     if fast:
         fast_steps = max(1, int(math.ceil(steps * _FAST_STEP_RATIO)))
         steps = min(steps, max(min_fast_steps, fast_steps))
         nodes = max(1, int(math.ceil(nodes * 0.5)))
+    if sample_size is not None:
+        if not (0.0 < sample_size <= 1.0):
+            raise ValueError("sample_size must be within (0, 1]")
+        steps = max(1, int(math.ceil(steps * sample_size)))
     return nodes, steps
 
 # Configuration du logger pour afficher les informations

@@ -18,6 +18,14 @@ def test_sample_size_fraction():
     assert steps == 250
 
 
+def test_fast_then_sample_respected_fraction():
+    nodes, steps = apply_speed_settings(200, 10_000, fast=True, sample_size=0.5)
+    assert nodes == 100
+    fast_steps = min(10_000, max(600, math.ceil(10_000 * 0.1)))
+    expected_steps = max(1, math.ceil(fast_steps * 0.5))
+    assert steps == expected_steps
+
+
 def test_invalid_sample_size_raises():
     with pytest.raises(ValueError):
         apply_speed_settings(10, 100, sample_size=1.5)
