@@ -849,6 +849,43 @@ def next_beacon_time(
     return expected
 
 
+def compute_ping_slot_offset(
+    devaddr: int,
+    beacon_time: float,
+    periodicity: int,
+    beacon_interval: float,
+) -> float:
+    """Return the Class B ping slot offset in seconds for ``devaddr``.
+
+    The calculation mirrors the LoRaWAN specification where the offset depends
+    on the device address, the current beacon time and the ping slot
+    periodicity.  ``beacon_interval`` is used to derive the base slot duration
+    (1/4096 of the interval).
+    """
+
+    import math
+
+    if beacon_interval <= 0.0:
+        return 0.0
+
+    devaddr &= 0xFFFFFFFF
+    periodicity = max(0, min(int(periodicity), 7))
+    beacon_time = float(beacon_time or 0.0)
+
+    slot_duration = beacon_interval / 4096.0
+    if slot_duration <= 0.0:
+        return 0.0
+
+    ping_period = 1 << (5 + periodicity)
+    period_duration = slot_duration * ping_period
+    if period_duration <= 0.0:
+        return 0.0
+
+    beacon_div = int(math.floor((beacon_time + 1e-9) / period_duration))
+    ping_offset_units = (ping_period * (devaddr + beacon_div)) % 4096
+    return ping_offset_units * slot_duration
+
+
 def next_ping_slot_time(
     last_beacon_time: float,
     after_time: float,

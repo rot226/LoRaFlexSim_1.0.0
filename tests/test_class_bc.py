@@ -189,11 +189,13 @@ def test_network_server_class_b_uses_node_clock_offset():
     assert node.clock_offset != 0.0
 
     after = server.simulator.current_time if server.simulator else 0.0
+    reference = node.last_beacon_time + node.clock_offset
+    offset = node.compute_ping_slot_offset(reference, server.beacon_interval)
     expected_slot = node.next_ping_slot_time(
         after,
         server.beacon_interval,
         server.ping_slot_interval,
-        server.ping_slot_offset,
+        offset,
     )
 
     payload = b"offset-test"
@@ -205,3 +207,27 @@ def test_network_server_class_b_uses_node_clock_offset():
     assert entry and entry.gateway is gateway
     delivered = entry.frame.payload if hasattr(entry.frame, "payload") else entry.frame
     assert delivered == payload
+
+
+def test_class_b_nodes_have_distinct_ping_slots():
+    server = NetworkServer()
+    gateway = Gateway(1, 0, 0)
+    server.gateways = [gateway]
+    server.beacon_interval = 128.0
+    server.ping_slot_interval = 1.0
+
+    node1 = Node(1, 0.0, 0.0, 7, 14, class_type="B")
+    node2 = Node(2, 0.0, 0.0, 7, 14, class_type="B")
+    for node in (node1, node2):
+        node.ping_slot_periodicity = 0
+        node.register_beacon(0.0)
+        node.compute_ping_slot_offset(0.0, server.beacon_interval)
+
+    payload = b"payload"
+    server.send_downlink(node1, payload)
+    server.send_downlink(node2, payload)
+
+    t1 = server.scheduler.next_time(node1.id)
+    t2 = server.scheduler.next_time(node2.id)
+    assert t1 is not None and t2 is not None
+    assert not math.isclose(t1, t2, rel_tol=1e-9, abs_tol=1e-9)

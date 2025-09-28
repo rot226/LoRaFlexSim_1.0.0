@@ -363,6 +363,14 @@ class NetworkServer:
                 beacon_reference = getattr(node, "last_beacon_time", None)
                 if beacon_reference is not None:
                     beacon_reference += getattr(node, "clock_offset", 0.0)
+                beacon_time_for_offset = (
+                    beacon_reference
+                    if beacon_reference is not None
+                    else (self.last_beacon_time if self.last_beacon_time is not None else 0.0)
+                )
+                offset = node.compute_ping_slot_offset(
+                    beacon_time_for_offset, self.beacon_interval
+                )
                 self.scheduler.schedule_class_b(
                     node,
                     after,
@@ -370,7 +378,7 @@ class NetworkServer:
                     gw,
                     self.beacon_interval,
                     self.ping_slot_interval,
-                    self.ping_slot_offset,
+                    offset,
                     last_beacon_time=beacon_reference,
                     priority=priority,
                 )
@@ -398,6 +406,17 @@ class NetworkServer:
                     gw.buffer_downlink(node.id, frame)
         else:
             if node.class_type.upper() == "B":
+                beacon_reference = getattr(node, "last_beacon_time", None)
+                if beacon_reference is not None:
+                    beacon_reference += getattr(node, "clock_offset", 0.0)
+                beacon_time_for_offset = (
+                    beacon_reference
+                    if beacon_reference is not None
+                    else (self.last_beacon_time if self.last_beacon_time is not None else 0.0)
+                )
+                offset = node.compute_ping_slot_offset(
+                    beacon_time_for_offset, self.beacon_interval
+                )
                 self.scheduler.schedule_class_b(
                     node,
                     at_time,
@@ -405,8 +424,8 @@ class NetworkServer:
                     gw,
                     self.beacon_interval,
                     self.ping_slot_interval,
-                    self.ping_slot_offset,
-                    last_beacon_time=getattr(node, "last_beacon_time", None),
+                    offset,
+                    last_beacon_time=beacon_reference,
                     priority=priority,
                 )
             elif node.class_type.upper() == "C":
