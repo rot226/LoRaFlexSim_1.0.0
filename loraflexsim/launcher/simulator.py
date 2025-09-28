@@ -1667,12 +1667,13 @@ class Simulator:
                             n.miss_beacon(self.beacon_interval)
                         periodicity = 2 ** (getattr(n, "ping_slot_periodicity", 0) or 0)
                         interval = self.ping_slot_interval * periodicity
+                        offset = n.compute_ping_slot_offset(time, self.beacon_interval)
                         slot = self._quantize(
                             n.next_ping_slot_time(
                                 time,
                                 self.beacon_interval,
                                 self.ping_slot_interval,
-                                self.ping_slot_offset,
+                                offset,
                             )
                         )
                         while slot < end_of_cycle:

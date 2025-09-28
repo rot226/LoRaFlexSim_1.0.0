@@ -290,6 +290,10 @@ class Node:
             self.state = "rx" if self.class_type.upper() == "C" else "sleep"
             self._startup_end = 0.0
 
+        # Class B ping slot offset (seconds) derived from DevAddr and periodicity
+        self.ping_slot_offset: float = 0.0
+        self.compute_ping_slot_offset(0.0, getattr(self.simulator, "beacon_interval", 128.0))
+
     @property
     def battery_level(self) -> float:
         """Return the remaining battery level as a ratio between 0 and 1."""
@@ -325,11 +329,31 @@ class Node:
         else:
             self.clock_offset = max(self.clock_offset, -max_offset)
 
+    def compute_ping_slot_offset(
+        self, beacon_time: float | None, beacon_interval: float
+    ) -> float:
+        """Recalculate and return the Class B ping slot offset."""
+
+        from .lorawan import compute_ping_slot_offset
+
+        periodicity = self.ping_slot_periodicity or 0
+        devaddr = self.devaddr if self.devaddr is not None else 0
+        if beacon_interval <= 0.0:
+            self.ping_slot_offset = 0.0
+            return self.ping_slot_offset
+        reference = beacon_time if beacon_time is not None else 0.0
+        self.ping_slot_offset = compute_ping_slot_offset(
+            devaddr, reference, periodicity, beacon_interval
+        )
+        return self.ping_slot_offset
+
     def register_beacon(self, time: float) -> None:
         """Record reception of a beacon and reset drift accumulators."""
         self.last_beacon_time = time
         self.clock_offset = 0.0
         self.beacon_loss_streak = 0
+        beacon_interval = getattr(self.simulator, "beacon_interval", 128.0)
+        self.compute_ping_slot_offset(time, beacon_interval)
 
     def __repr__(self):
         """
@@ -892,6 +916,13 @@ class Node:
 
                     req = PingSlotInfoReq.from_bytes(payload[:2])
                     self.ping_slot_periodicity = req.periodicity
+                    beacon_interval = getattr(self.simulator, "beacon_interval", 128.0)
+                    reference = (
+                        (self.last_beacon_time + self.clock_offset)
+                        if self.last_beacon_time is not None
+                        else None
+                    )
+                    self.compute_ping_slot_offset(reference, beacon_interval)
                     self.pending_mac_cmd = PingSlotInfoAns().to_bytes()
                 except Exception:
                     pass
