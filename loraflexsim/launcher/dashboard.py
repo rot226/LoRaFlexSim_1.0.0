@@ -800,6 +800,8 @@ def setup_simulation(seed_offset: int = 0):
 
 
     sim_duration_limit = float(sim_duration_input.value)
+    flora_mode_enabled = bool(flora_mode_toggle.value)
+    phy_model_name = "flora" if flora_mode_enabled else "omnet"
 
     sim = Simulator(
         num_nodes=int(num_nodes_input.value),
@@ -822,8 +824,8 @@ def setup_simulation(seed_offset: int = 0):
                 frequency_hz=868e6 + i * 200e3,
                 fine_fading_std=float(fine_fading_input.value),
                 variable_noise_std=float(noise_std_input.value),
-                phy_model="flora" if flora_mode_toggle.value else "omnet",
-                use_flora_curves=flora_mode_toggle.value,
+                phy_model=phy_model_name,
+                use_flora_curves=flora_mode_enabled,
             )
             for i in range(num_channels_input.value)
         ],
@@ -834,11 +836,16 @@ def setup_simulation(seed_offset: int = 0):
         payload_size_bytes=int(payload_size_input.value),
         node_class=node_class_select.value,
         detection_threshold_dBm=float(detection_threshold_input.value),
+        energy_detection_dBm=(
+            Channel.FLORA_ENERGY_DETECTION_DBM if flora_mode_enabled else -float("inf")
+        ),
         min_interference_time=float(min_interference_input.value),
+        flora_mode=flora_mode_enabled,
+        flora_timing=flora_mode_enabled,
         config_file=config_path,
         mobility_model=mobility_instance,
         seed=seed,
-        phy_model="flora" if flora_mode_toggle.value else "omnet",
+        phy_model=phy_model_name,
     )
 
 
