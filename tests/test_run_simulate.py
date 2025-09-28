@@ -36,8 +36,46 @@ def test_simulate_single_node_periodic():
     idle_energy = (1 + 1) * 1e-6 * 3.3 * 10
     expected_energy = per_tx_energy * delivered + idle_energy
     assert pytest.approx(energy, rel=1e-6) == expected_energy
-    assert avg_delay == 0
+    assert pytest.approx(avg_delay, rel=1e-9) == airtime
     assert throughput == PAYLOAD_SIZE * 8 * delivered / 10
+
+
+def test_avg_delay_depends_on_sf():
+    base_kwargs = dict(
+        nodes=1,
+        gateways=1,
+        mode="Periodic",
+        interval=1.0,
+        steps=10,
+    )
+
+    delivered_a, collisions_a, pdr_a, _, avg_delay_a, throughput_a = simulate(
+        rng_manager=RngManager(0),
+        **base_kwargs,
+    )
+    sf_a = 7 + RngManager(0).get_stream("sf", 0).integers(0, 6)
+    channel = Channel(
+        tx_current_a=0.06,
+        rx_current_a=0.011,
+        idle_current_a=1e-6,
+        voltage_v=3.3,
+    )
+    airtime_a = channel.airtime(sf_a, payload_size=PAYLOAD_SIZE)
+
+    delivered_b, collisions_b, pdr_b, _, avg_delay_b, throughput_b = simulate(
+        rng_manager=RngManager(1),
+        **base_kwargs,
+    )
+    sf_b = 7 + RngManager(1).get_stream("sf", 0).integers(0, 6)
+    airtime_b = channel.airtime(sf_b, payload_size=PAYLOAD_SIZE)
+
+    assert delivered_a == delivered_b == 10
+    assert collisions_a == collisions_b == 0
+    assert pdr_a == pdr_b == 100.0
+    assert throughput_a == throughput_b
+    assert pytest.approx(avg_delay_a, rel=1e-9) == airtime_a
+    assert pytest.approx(avg_delay_b, rel=1e-9) == airtime_b
+    assert airtime_a != airtime_b
 
 
 def test_simulate_periodic_float_interval():
@@ -108,7 +146,15 @@ def test_simulate_accepts_numpy_integer_types():
     assert collisions == 0
     assert pdr == 100.0
     assert pytest.approx(energy, rel=1e-6) == 0.132619833984
-    assert avg_delay == 0
+    sf_value = 7 + RngManager(0).get_stream("sf", 0).integers(0, 6)
+    channel = Channel(
+        tx_current_a=0.06,
+        rx_current_a=0.011,
+        idle_current_a=1e-6,
+        voltage_v=3.3,
+    )
+    airtime = channel.airtime(sf_value, payload_size=PAYLOAD_SIZE)
+    assert pytest.approx(avg_delay, rel=1e-9) == airtime
     assert throughput == PAYLOAD_SIZE * 8 * delivered / 10
 
 
