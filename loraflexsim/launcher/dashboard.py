@@ -311,7 +311,7 @@ detection_threshold_input = pn.widgets.FloatInput(
 )
 detection_threshold_input.disabled = True
 min_interference_input = pn.widgets.FloatInput(
-    name="Min interference (s)", value=5.0, step=0.1, start=0.0
+    name="Interférence minimale (s)", value=5.0, step=0.1, start=0.0
 )
 # Pas de champ dédié pour le délai minimal avant le premier envoi
 min_interference_input.disabled = True
