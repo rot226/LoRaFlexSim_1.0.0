@@ -831,6 +831,7 @@ def step_simulation():
 def setup_simulation(seed_offset: int = 0):
     """Crée et démarre un simulateur avec les paramètres du tableau de bord."""
     global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
+    global timeline_fig, last_event_index
 
     # Empêcher de relancer si une simulation est déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -858,6 +859,10 @@ def setup_simulation(seed_offset: int = 0):
     if chrono_callback:
         chrono_callback.stop()
         chrono_callback = None
+
+    timeline_fig = go.Figure()
+    last_event_index = 0
+    timeline_pane.object = timeline_fig
 
     seed_val = int(seed_input.value)
     seed = seed_val + seed_offset if seed_val != 0 else None

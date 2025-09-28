@@ -118,6 +118,9 @@ if not hasattr(numpy_stub, "dtype"):
 
     numpy_stub.dtype = _dtype
 
+if not hasattr(numpy_stub, "integer"):
+    numpy_stub.integer = int
+
 
 def _install_pandas_stub():
     if "pandas" in sys.modules:
@@ -183,6 +186,9 @@ def _install_pandas_stub():
 
         def tolist(self):
             return list(self._data)
+
+    class _FakeIndex(_FakeSeries):
+        pass
 
     class _FakeLoc:
         def __init__(self, frame):
@@ -374,6 +380,8 @@ def _install_pandas_stub():
 
     pandas_module = types.ModuleType("pandas")
     pandas_module.DataFrame = _FakeDataFrame
+    pandas_module.Series = _FakeSeries
+    pandas_module.Index = _FakeIndex
     pandas_module.concat = _concat
     pandas_module.json_normalize = _json_normalize
     pandas_module.read_csv = _read_csv
@@ -668,3 +676,75 @@ def test_set_metric_indicators_prefers_instant_values(monkeypatch):
     assert delay.value == pytest.approx(4.0)
     assert throughput.value == pytest.approx(512.0)
     assert retrans.value == pytest.approx(2.0)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_setup_simulation_resets_timeline_between_runs(monkeypatch):
+    """Deux lancements successifs doivent repartir d'une timeline vide."""
+
+    monkeypatch.setattr(dashboard, "update_map", lambda: None)
+    monkeypatch.setattr(dashboard, "update_histogram", lambda _metrics: None)
+    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
+
+    def _fake_update_timeline():
+        fig = dashboard.timeline_fig
+        if not isinstance(fig, dashboard.go.Figure):
+            fig = dashboard.go.Figure()
+            dashboard.timeline_fig = fig
+        fig.add_scatter(x=[0.0, 1.0], y=[0, 0], mode="lines", line=dict(color="blue"))
+        dashboard.last_event_index += 1
+        dashboard.timeline_pane.object = fig
+
+    monkeypatch.setattr(dashboard, "update_timeline", _fake_update_timeline)
+    monkeypatch.setattr(
+        dashboard,
+        "session_alive",
+        lambda doc=None, state_container=None: True,
+    )
+
+    dashboard._cleanup_callbacks()
+    dashboard.sim = None
+    dashboard.sim_callback = None
+    dashboard.map_anim_callback = None
+    dashboard.chrono_callback = None
+    dashboard.current_run = 1
+    dashboard.total_runs = 1
+    dashboard.runs_events.clear()
+    dashboard.runs_metrics.clear()
+    dashboard.runs_metrics_timeline.clear()
+    dashboard.packets_input.value = 1
+    dashboard.num_runs_input.value = 1
+    dashboard.real_time_duration_input.value = 0
+    dashboard.sim_duration_input.value = 0
+
+    dashboard.setup_simulation()
+
+    assert dashboard.sim is not None
+    assert getattr(dashboard.sim, "running", False)
+
+    while getattr(dashboard.sim, "running", False):
+        dashboard.step_simulation()
+
+    old_figure = dashboard.timeline_fig
+    assert len(old_figure.data) > 0
+    assert dashboard.timeline_pane.object is old_figure
+    assert dashboard.last_event_index > 0
+
+    dashboard.sim = None
+    dashboard.current_run = 1
+    dashboard.runs_events.clear()
+    dashboard.runs_metrics.clear()
+    dashboard.runs_metrics_timeline.clear()
+
+    dashboard.setup_simulation()
+
+    try:
+        assert dashboard.timeline_fig is not old_figure
+        assert dashboard.last_event_index == 0
+        assert len(dashboard.timeline_fig.data) == 0
+        assert dashboard.timeline_pane.object is dashboard.timeline_fig
+        assert len(dashboard.timeline_pane.object.data) == 0
+    finally:
+        dashboard.on_stop(None)
+        dashboard._cleanup_callbacks()
+        dashboard.sim = None
