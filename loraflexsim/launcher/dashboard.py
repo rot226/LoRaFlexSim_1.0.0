@@ -369,24 +369,32 @@ def _set_metric_indicators(metrics: dict | None) -> None:
     """Met à jour les indicateurs numériques à partir d'un dictionnaire."""
 
     data = metrics or {}
-    for key, indicator in (
-        ("PDR", pdr_indicator),
-        ("collisions", collisions_indicator),
-        ("energy_J", energy_indicator),
-        ("avg_delay_s", delay_indicator),
-        ("throughput_bps", throughput_indicator),
-        ("retransmissions", retrans_indicator),
-    ):
-        raw_value = data.get(key, 0.0)
-        if raw_value is None:
-            raw_value = 0.0
+
+    def _assign(indicator, value):
+        raw_value = value if value is not None else 0.0
         if isinstance(raw_value, numbers.Real):
             indicator.value = float(raw_value)
-            continue
+            return
         try:
             indicator.value = float(raw_value)
         except (TypeError, ValueError):
             indicator.value = 0.0
+
+    _assign(pdr_indicator, data.get("PDR"))
+    _assign(collisions_indicator, data.get("collisions"))
+    _assign(energy_indicator, data.get("energy_J"))
+
+    delay_value = data.get("instant_avg_delay_s")
+    if delay_value is None:
+        delay_value = data.get("avg_delay_s")
+    _assign(delay_indicator, delay_value)
+
+    throughput_value = data.get("instant_throughput_bps")
+    if throughput_value is None:
+        throughput_value = data.get("throughput_bps")
+    _assign(throughput_indicator, throughput_value)
+
+    _assign(retrans_indicator, data.get("retransmissions"))
 
 # Barre de progression pour l'accélération
 fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width=200, visible=False)
@@ -1220,8 +1228,17 @@ def exporter_csv(event=None):
 
         metrics_path = os.path.join(dest_dir, f"metrics_{timestamp}.csv")
         timeline_path = os.path.join(dest_dir, f"metrics_timeline_{timestamp}.csv")
+        required_instant_cols = (
+            "instant_throughput_bps",
+            "instant_avg_delay_s",
+            "recent_losses",
+        )
         if runs_metrics:
             metrics_df = pd.json_normalize(runs_metrics)
+            if hasattr(metrics_df, "columns"):
+                for column in required_instant_cols:
+                    if column not in list(metrics_df.columns):
+                        metrics_df[column] = float("nan")
             metrics_df.to_csv(metrics_path, index=False, encoding="utf-8")
         timeline_frames: list[pd.DataFrame] = []
         if runs_metrics_timeline:
@@ -1234,6 +1251,10 @@ def exporter_csv(event=None):
                     timeline_df = pd.DataFrame(list(timeline))
                 if timeline_df.empty:
                     continue
+                if hasattr(timeline_df, "columns"):
+                    for column in required_instant_cols:
+                        if column not in list(timeline_df.columns):
+                            timeline_df[column] = float("nan")
                 timeline_df = timeline_df.copy()
                 timeline_df.insert(0, "run", run_index)
                 timeline_frames.append(timeline_df)

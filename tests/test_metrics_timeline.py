@@ -42,3 +42,11 @@ def test_metrics_timeline_matches_tx_end_events():
     final = records[-1]
     assert final["PDR"] == pytest.approx(sim.rx_delivered / sim.tx_attempted)
     assert final["energy_J"] >= 0.0
+    assert "instant_throughput_bps" in final
+    assert final["instant_throughput_bps"] >= 0.0
+    assert "instant_avg_delay_s" in final
+    assert final["instant_avg_delay_s"] >= 0.0
+    assert "recent_losses" in final
+    assert final["recent_losses"] >= 0.0
+    assert "losses_total" in final
+    assert final["losses_total"] == pytest.approx(final["tx_attempted"] - final["delivered"])
