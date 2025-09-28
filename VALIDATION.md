@@ -70,6 +70,7 @@ Les tests d'intégration `pytest` exécutent cette matrice et vérifient que le 
 
 - [ ] `pytest tests/integration/test_adr_standard_alignment.py` : valide que la méthode `avg` reproduit les décisions ADR serveur historiques, y compris les fenêtres RX spécifiques aux classes.【F:tests/integration/test_adr_standard_alignment.py†L1-L79】
 - [ ] `pytest tests/test_flora_sca.py` : contrôle l'alignement des métriques PDR/SNR et des commandes ADR sur les fichiers `.sca` produits par FLoRa.【F:tests/test_flora_sca.py†L1-L60】
+- ✅ La logique ADR standard (`adr_method="avg"`/`"max"`) borne les pas négatifs comme `NetworkServerApp::evaluateADR` : une marge défavorable accroît la puissance jusqu'à 14 dBm sans modifier le SF, garantissant une correspondance stricte avec FLoRa.【F:loraflexsim/launcher/server.py†L933-L969】
 
 #### Énergie
 

@@ -959,6 +959,8 @@ class NetworkServer:
                     while nstep < 0 and p_idx > 0:
                         p_idx -= 1
                         nstep += 1
+                    if nstep < 0 and p_idx == 0:
+                        nstep = 0
                     while nstep < 0 and sf < 12:
                         sf += 1
                         nstep += 1
