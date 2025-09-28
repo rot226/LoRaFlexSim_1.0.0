@@ -27,7 +27,7 @@ def run_example(*, steps: int = 1000, quiet: bool = False) -> Mapping[str, Any]:
         seed=1,
         adr_method="avg",
     )
-    adr1(sim, degrade_channel=True, profile="flora", capture_mode="flora")
+    adr1(sim)
     sim.run(steps)
     metrics = sim.get_metrics()
     if not quiet:

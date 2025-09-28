@@ -892,9 +892,9 @@ Pour reproduire un scénario FLoRa :
    (`multipath_taps=3`), un seuil de détection fixé à `-110 dBm` et une fenêtre
    d'interférence minimale de `5 s`. Le délai réseau est également de 10 ms avec
    un traitement serveur de 1,2 s comme dans OMNeT++.
-2. Appliquez l'algorithme ADR1 via `from loraflexsim.launcher.adr_standard_1 import apply as adr1` puis `adr1(sim, degrade_channel=True, profile="flora")`.
-   Cette fonction reprend la logique du serveur FLoRa original tout en
-   remplaçant les canaux idéaux par des `AdvancedChannel` plus réalistes.
+2. Appliquez l'algorithme ADR1 via `from loraflexsim.launcher.adr_standard_1 import apply as adr1` puis `adr1(sim)`.
+   Depuis la version 1.1, la branche de « dégradation avancée » a été retirée :
+   le profil FLoRa utilise directement les canaux standards du simulateur.
 3. Spécifiez `adr_method="avg"` lors de la création du `Simulator` (ou sur
    `sim.network_server`) pour utiliser la moyenne des 20 derniers SNR.
 4. Fournissez le chemin du fichier INI à `Simulator(config_file=...)` ou
@@ -902,6 +902,10 @@ Pour reproduire un scénario FLoRa :
 5. Renseignez **Graine** pour conserver exactement le même placement et la même
    séquence d'intervalles d'une exécution à l'autre.
 6. Ou lancez `python examples/run_flora_example.py` qui combine ces réglages.
+
+> **Note de migration :** si vous utilisiez `adr1(..., degrade_channel=True, profile="flora", capture_mode="flora")`,
+> retirez ces arguments. Ils sont désormais ignorés et les canaux avancés ont
+> été supprimés au profit du modèle FLoRa standard.
 
 ### Compilation de FLoRa (OMNeT++)
 

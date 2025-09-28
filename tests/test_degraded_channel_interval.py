@@ -1,11 +1,12 @@
-from loraflexsim.launcher.simulator import Simulator
+import pytest
+
 from loraflexsim.launcher.adr_standard_1 import apply as apply_adr
 from loraflexsim.launcher.channel import Channel
 from loraflexsim.launcher.multichannel import MultiChannel
-from loraflexsim.launcher.advanced_channel import AdvancedChannel
+from loraflexsim.launcher.simulator import Simulator
 
 
-def test_interval_with_degraded_channel():
+def test_interval_with_flora_channel():
     mean_interval = 2.0
     packets = 1000
     sim = Simulator(
@@ -18,7 +19,7 @@ def test_interval_with_degraded_channel():
         mobility=False,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True, profile="flora", capture_mode="flora")
+    apply_adr(sim)
     sim.run()
     node = sim.nodes[0]
     average = node._last_arrival_time / node.packets_sent
@@ -26,7 +27,7 @@ def test_interval_with_degraded_channel():
     assert abs(average - mean_interval) / mean_interval < 0.02
 
 
-def test_channels_identical_after_degrade():
+def test_channels_configured_for_flora_capture():
     channels = [
         Channel(frequency_hz=868.1e6),
         Channel(frequency_hz=868.3e6),
@@ -44,47 +45,36 @@ def test_channels_identical_after_degrade():
         channels=multi,
         seed=1,
     )
-    apply_adr(sim, degrade_channel=True, profile="flora", capture_mode="flora")
+    apply_adr(sim)
 
-    attrs = [
-        "path_loss_exp",
-        "shadowing_std",
-        "detection_threshold_dBm",
-        "capture_threshold_dB",
-        "flora_capture",
-        "flora_loss_model",
-    ]
     reference = sim.multichannel.channels[0]
-    ple, shad, *_ = Channel.ENV_PRESETS["flora"]
-    assert reference.path_loss_exp == ple
-    assert reference.shadowing_std == shad
-    assert reference.flora_capture is True
-    assert reference.flora_loss_model == "lognorm"
-    for ch in sim.multichannel.channels[1:]:
-        for attr in attrs:
-            assert getattr(ch, attr) == getattr(reference, attr)
+    for ch in sim.multichannel.channels:
+        assert ch.orthogonal_sf is False
+        assert ch.non_orth_delta == reference.non_orth_delta
+
+    node_channel = sim.nodes[0].channel
+    assert node_channel.orthogonal_sf is False
+    assert node_channel.non_orth_delta == reference.non_orth_delta
 
 
-def test_custom_profile_changes_params():
-    sim = Simulator(
-        num_nodes=1,
-        num_gateways=1,
-        transmission_mode="Random",
-        packet_interval=1.0,
-        packets_to_send=1,
-        pure_poisson_mode=True,
-        mobility=False,
-        seed=1,
-    )
-    apply_adr(sim, degrade_channel=True, profile="urban")
-    ple, shad, *_ = Channel.ENV_PRESETS["urban"]
-    ch = sim.multichannel.channels[0]
-    assert ch.path_loss_exp == ple
-    assert ch.shadowing_std == shad
+def test_degrade_flag_is_no_op():
+    base_sim = Simulator(num_nodes=1, packets_to_send=0, seed=42)
+    degraded_sim = Simulator(num_nodes=1, packets_to_send=0, seed=42)
+
+    apply_adr(base_sim)
+    apply_adr(degraded_sim, degrade_channel=True, profile="urban")
+
+    for base_ch, degraded_ch in zip(
+        base_sim.multichannel.channels, degraded_sim.multichannel.channels
+    ):
+        assert isinstance(degraded_ch, Channel)
+        assert degraded_ch.path_loss_exp == base_ch.path_loss_exp
+        assert degraded_ch.shadowing_std == base_ch.shadowing_std
+        assert degraded_ch.detection_threshold_dBm == base_ch.detection_threshold_dBm
 
 
-def test_degraded_channel_reduces_pdr():
-    sim_ideal = Simulator(
+def test_degrade_flag_preserves_pdr():
+    sim_default = Simulator(
         num_nodes=1,
         num_gateways=1,
         area_size=4000,
@@ -95,11 +85,11 @@ def test_degraded_channel_reduces_pdr():
         fixed_sf=7,
         seed=0,
     )
-    apply_adr(sim_ideal)
-    sim_ideal.run()
-    pdr_ideal = sim_ideal.get_metrics()["PDR"]
+    apply_adr(sim_default)
+    sim_default.run()
+    pdr_default = sim_default.get_metrics()["PDR"]
 
-    sim_degraded = Simulator(
+    sim_flag = Simulator(
         num_nodes=1,
         num_gateways=1,
         area_size=4000,
@@ -110,9 +100,8 @@ def test_degraded_channel_reduces_pdr():
         fixed_sf=7,
         seed=0,
     )
-    apply_adr(sim_degraded, degrade_channel=True, profile="flora")
-    node = sim_degraded.nodes[0]
-    assert isinstance(node.channel, AdvancedChannel)
-    sim_degraded.run()
-    pdr_degraded = sim_degraded.get_metrics()["PDR"]
-    assert pdr_degraded < pdr_ideal
+    apply_adr(sim_flag, degrade_channel=True)
+    sim_flag.run()
+    pdr_flag = sim_flag.get_metrics()["PDR"]
+
+    assert pdr_flag == pytest.approx(pdr_default)

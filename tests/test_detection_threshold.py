@@ -5,7 +5,7 @@ from loraflexsim.launcher.channel import Channel
 
 def test_apply_sets_flora_detection_threshold():
     sim = Simulator(num_nodes=1, packets_to_send=0)
-    adr_standard_1.apply(sim, degrade_channel=True, profile="flora")
+    adr_standard_1.apply(sim)
     node = sim.nodes[0]
     expected = Channel.FLORA_SENSITIVITY[node.sf][int(node.channel.bandwidth)]
     assert node.channel.detection_threshold(node.sf) == expected
