@@ -655,12 +655,15 @@ automatiquement la portée.
 
 Le tableau de bord propose désormais un bouton **Mode FLoRa complet**. Quand il
 est activé, `detection_threshold_dBm` est automatiquement fixé à `-110` dBm et
-`min_interference_time` à `5` s, valeurs tirées du fichier INI de FLoRa. Un
-profil radio ``flora`` est aussi sélectionné pour appliquer l'exposant et la
-variance de shadowing correspondants. Les champs restent modifiables si ce mode
-est désactivé. Pour reproduire fidèlement les scénarios FLoRa d'origine, pensez
-également à renseigner les positions des nœuds telles qu'indiquées dans l'INI.
-L'équivalent en script consiste à passer `flora_mode=True` au constructeur `Simulator`.
+`min_interference_time` reste par défaut à `0` s. Toute superposition, même
+infinitésimale, déclenche donc une collision conformément aux fichiers INI de
+FLoRa. Vous pouvez saisir une valeur positive pour imposer un chevauchement
+minimal personnalisé (par exemple `5` s). Un profil radio ``flora`` est aussi
+sélectionné pour appliquer l'exposant et la variance de shadowing
+correspondants. Les champs restent modifiables si ce mode est désactivé. Pour
+reproduire fidèlement les scénarios FLoRa d'origine, pensez également à
+renseigner les positions des nœuds telles qu'indiquées dans l'INI. L'équivalent
+en script consiste à passer `flora_mode=True` au constructeur `Simulator`.
 Lorsque `phy_model="omnet_full"` est utilisé (par exemple en mode FLoRa), le preset
 `environment="flora"` est désormais appliqué automatiquement afin de conserver
 un exposant de 2,7 et un shadowing de 3,57 dB identiques au modèle d'origine.
