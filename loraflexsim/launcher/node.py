@@ -716,6 +716,7 @@ class Node:
             DeviceTimeReq,
             DeviceTimeAns,
             DutyCycleReq,
+            DutyCycleAns,
             RXParamSetupReq,
             RXParamSetupAns,
             RXTimingSetupReq,
@@ -801,13 +802,12 @@ class Node:
                 self.pending_mac_cmd = DeviceTimeAns(int(self.fcnt_up)).to_bytes()
             elif len(payload) >= 2 and payload[0] == 0x04:
                 try:
-                    from .lorawan import DutyCycleReq
-
                     req = DutyCycleReq.from_bytes(payload[:2])
                     self.max_duty_cycle = req.max_duty_cycle
                     simulator = getattr(self, "simulator", None)
                     if simulator is not None and hasattr(simulator, "update_duty_cycle"):
                         simulator.update_duty_cycle(self.id, self.max_duty_cycle)
+                    self.pending_mac_cmd = DutyCycleAns().to_bytes()
                 except Exception:
                     pass
             elif len(payload) >= 5 and payload[0] == 0x05:
