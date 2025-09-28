@@ -835,6 +835,8 @@ def next_beacon_time(
     import math
 
     if last_beacon is None:
+        if after_time <= 0.0:
+            return 0.0
         return math.ceil((after_time + 1e-9) / beacon_interval) * beacon_interval
 
     interval = beacon_interval * (1.0 + drift)
