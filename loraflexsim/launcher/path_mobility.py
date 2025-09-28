@@ -72,8 +72,10 @@ class PathMobility:
 
     def _speed_factor_cell(self, cx: int, cy: int) -> float:
         val = float(self.path_map[cy][cx])
-        if val <= 0:
+        if val < 0:
             return float("inf")
+        if val == 0:
+            return 1.0
         return 1.0 / val
 
     def _update_dynamic_obstacles(self, dt: float) -> None:
