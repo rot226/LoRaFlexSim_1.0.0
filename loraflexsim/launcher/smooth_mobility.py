@@ -1,6 +1,8 @@
 import math
 import numpy as np
 
+from ._random import SeedLike, ensure_rng
+
 
 def bezier_point(p0, p1, p2, p3, t):
     """Return point of cubic Bezier curve for parameter t."""
@@ -30,12 +32,13 @@ class SmoothMobility:
         step: float = 1.0,
         *,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ):
         self.area_size = area_size
         self.min_speed = min_speed
         self.max_speed = max_speed
         self.step = step
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
 
     def assign(self, node):
         """Initialize path and speed for a node."""

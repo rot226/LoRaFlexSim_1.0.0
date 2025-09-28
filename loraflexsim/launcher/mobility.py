@@ -1,6 +1,8 @@
 import math
 import numpy as np
 
+from ._random import SeedLike, ensure_rng
+
 
 class RandomWaypoint:
     """Modèle de mobilité aléatoire (Random Waypoint simplifié) pour les nœuds.
@@ -28,6 +30,7 @@ class RandomWaypoint:
         slope_limit: float | None = None,
         dynamic_obstacles: list[dict[str, float]] | None = None,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         """
         Initialise le modèle de mobilité.
@@ -66,7 +69,7 @@ class RandomWaypoint:
             self.e_rows = 0
             self.e_cols = 0
         self.dynamic_obstacles = [dict(o) for o in (dynamic_obstacles or [])]
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
         self._last_obs_update = 0.0
 
     # ------------------------------------------------------------------

@@ -1,8 +1,11 @@
 from pathlib import Path
 from typing import Iterable, List
 
+import numpy as np
+
 from .mobility import RandomWaypoint as _BaseRandomWaypoint
 from .map_loader import load_map
+from ._random import SeedLike
 
 
 class RandomWaypoint(_BaseRandomWaypoint):
@@ -21,6 +24,8 @@ class RandomWaypoint(_BaseRandomWaypoint):
         step: float = 1.0,
         slope_scale: float = 0.1,
         dynamic_obstacles: List[dict[str, float]] | None = None,
+        rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         if terrain is not None and isinstance(terrain, (str, Path)):
             terrain = load_map(terrain)
@@ -39,4 +44,6 @@ class RandomWaypoint(_BaseRandomWaypoint):
             step=step,
             slope_scale=slope_scale,
             dynamic_obstacles=dynamic_obstacles,
+            rng=rng,
+            seed=seed,
         )

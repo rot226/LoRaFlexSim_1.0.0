@@ -1,6 +1,8 @@
 import math
 import numpy as np
 
+from ._random import SeedLike, ensure_rng
+
 
 class GaussMarkov:
     """Gauss–Markov mobility model with bounded area."""
@@ -15,10 +17,11 @@ class GaussMarkov:
         direction_std: float = 0.2,
         step: float = 1.0,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         self.area_size = float(area_size)
         self.mean_speed = float(mean_speed)
-        init_rng = rng or np.random.Generator(np.random.MT19937())
+        init_rng = ensure_rng(rng, seed)
         self.mean_direction = (
             mean_direction if mean_direction is not None else init_rng.random() * 2 * math.pi
         )

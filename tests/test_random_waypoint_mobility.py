@@ -3,7 +3,9 @@ from loraflexsim.launcher.node import Node
 
 
 def test_random_waypoint_move_within_bounds_and_updates_time():
-    mobility = RandomWaypoint(area_size=100.0, min_speed=1.0, max_speed=1.0)
+    mobility = RandomWaypoint(
+        area_size=100.0, min_speed=1.0, max_speed=1.0, seed=42
+    )
     node = Node(0, 50.0, 50.0, 7, 14)
 
     mobility.assign(node)
