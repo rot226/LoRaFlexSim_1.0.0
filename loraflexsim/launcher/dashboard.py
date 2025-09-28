@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import subprocess
+import numbers
 
 import panel as pn
 import plotly.graph_objects as go
@@ -354,6 +355,30 @@ retrans_indicator = pn.indicators.Number(
     name="Retransmissions", value=0.0, format="{value:.1f}"
 )
 
+
+def _set_metric_indicators(metrics: dict | None) -> None:
+    """Met à jour les indicateurs numériques à partir d'un dictionnaire."""
+
+    data = metrics or {}
+    for key, indicator in (
+        ("PDR", pdr_indicator),
+        ("collisions", collisions_indicator),
+        ("energy_J", energy_indicator),
+        ("avg_delay_s", delay_indicator),
+        ("throughput_bps", throughput_indicator),
+        ("retransmissions", retrans_indicator),
+    ):
+        raw_value = data.get(key, 0.0)
+        if raw_value is None:
+            raw_value = 0.0
+        if isinstance(raw_value, numbers.Real):
+            indicator.value = float(raw_value)
+            continue
+        try:
+            indicator.value = float(raw_value)
+        except (TypeError, ValueError):
+            indicator.value = 0.0
+
 # Barre de progression pour l'accélération
 fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width=200, visible=False)
 
@@ -680,12 +705,7 @@ def step_simulation():
     cont = sim.step()
     metrics = sim.get_metrics()
     timeline = sim.get_metrics_timeline()
-    pdr_indicator.value = metrics["PDR"]
-    collisions_indicator.value = metrics["collisions"]
-    energy_indicator.value = metrics["energy_J"]
-    delay_indicator.value = metrics["avg_delay_s"]
-    throughput_indicator.value = metrics["throughput_bps"]
-    retrans_indicator.value = metrics["retransmissions"]
+    _set_metric_indicators(metrics)
     if len(runs_metrics_timeline) < max(current_run, 1):
         runs_metrics_timeline.extend([None] * (max(current_run, 1) - len(runs_metrics_timeline)))
     if current_run >= 1:
@@ -867,15 +887,13 @@ def setup_simulation(seed_offset: int = 0):
     max_real_time = real_time_duration_input.value if real_time_duration_input.value > 0 else None
     chrono_callback = pn.state.add_periodic_callback(periodic_chrono_update, period=100, timeout=None)
 
+    initial_metrics = sim.get_metrics()
     update_map()
-    pdr_indicator.value = 0
-    collisions_indicator.value = 0
-    energy_indicator.value = 0
-    delay_indicator.value = 0
+    _set_metric_indicators(initial_metrics)
     chrono_indicator.value = 0
     global node_paths
     node_paths = {n.id: [(n.x, n.y)] for n in sim.nodes}
-    update_histogram(sim.get_metrics())
+    update_histogram(initial_metrics)
     num_nodes_input.disabled = True
     num_gateways_input.disabled = True
     area_input.disabled = True
@@ -1004,12 +1022,7 @@ def on_stop(event):
     if current_run < total_runs:
         if runs_metrics:
             aggregated = aggregate_run_metrics(runs_metrics)
-            pdr_indicator.value = aggregated.get("PDR", 0.0)
-            collisions_indicator.value = aggregated.get("collisions", 0)
-            energy_indicator.value = aggregated.get("energy_J", 0.0)
-            delay_indicator.value = aggregated.get("avg_delay_s", 0.0)
-            throughput_indicator.value = aggregated.get("throughput_bps", 0.0)
-            retrans_indicator.value = aggregated.get("retransmissions", 0)
+            _set_metric_indicators(aggregated)
             # PDR détaillés disponibles dans le fichier exporté uniquement
         current_run += 1
         seed_offset = current_run - 1
@@ -1064,12 +1077,7 @@ def on_stop(event):
     fast_forward_progress.value = 0
     if runs_metrics:
         aggregated = aggregate_run_metrics(runs_metrics)
-        pdr_indicator.value = aggregated.get("PDR", 0.0)
-        collisions_indicator.value = aggregated.get("collisions", 0)
-        energy_indicator.value = aggregated.get("energy_J", 0.0)
-        delay_indicator.value = aggregated.get("avg_delay_s", 0.0)
-        throughput_indicator.value = aggregated.get("throughput_bps", 0.0)
-        retrans_indicator.value = aggregated.get("retransmissions", 0)
+        _set_metric_indicators(aggregated)
         last = runs_metrics[-1]
         table_df = pd.DataFrame(
             {
@@ -1275,12 +1283,7 @@ def fast_forward(event=None):
                             current_export_button.disabled = False
                         return
                     metrics = current_sim.get_metrics()
-                    pdr_indicator.value = metrics["PDR"]
-                    collisions_indicator.value = metrics["collisions"]
-                    energy_indicator.value = metrics["energy_J"]
-                    delay_indicator.value = metrics["avg_delay_s"]
-                    throughput_indicator.value = metrics["throughput_bps"]
-                    retrans_indicator.value = metrics["retransmissions"]
+                    _set_metric_indicators(metrics)
                     # Les détails de PDR ne sont pas affichés en direct
                     sf_dist = metrics["sf_distribution"]
                     sf_fig = go.Figure(
