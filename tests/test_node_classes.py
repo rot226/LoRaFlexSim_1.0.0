@@ -2,8 +2,9 @@ import math
 from types import SimpleNamespace
 
 from loraflexsim.launcher.energy_profiles import EnergyProfile
-from loraflexsim.launcher.node import Node
 from loraflexsim.launcher.lorawan import DeviceModeInd, DeviceModeConf
+from loraflexsim.launcher.node import Node
+from loraflexsim.launcher.simulator import Simulator
 
 
 def make_node(class_type: str) -> Node:
@@ -86,3 +87,17 @@ def test_device_mode_ind_energy_accounting_and_state_update():
     assert node.pending_mac_cmd == DeviceModeConf("C").to_bytes()
     assert simulator.calls and simulator.calls[0][0] is node
     assert simulator.calls[0][1] == simulator.current_time
+
+
+def test_rx_window_event_increases_energy():
+    sim = Simulator(num_nodes=1, num_gateways=0, node_class="B", mobility=False)
+    node = sim.nodes[0]
+    assert node.profile.rx_window_duration > 0.0
+    baseline = node.energy_rx + node.energy_listen
+    for _ in range(5):
+        if not sim.step():
+            break
+        current = node.energy_rx + node.energy_listen
+        if current > baseline:
+            break
+    assert node.energy_rx + node.energy_listen > baseline

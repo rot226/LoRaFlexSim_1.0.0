@@ -9,7 +9,7 @@ import numpy as np
 from traffic.exponential import sample_interval
 from traffic.rng_manager import RngManager
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 # Earlier versions used integer nanoseconds for event timestamps to mimic
@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover - pandas optional
     pd = None
 
 from .node import Node
+from .lorawan import DR_TO_SF, SF_TO_DR
 from .gateway import Gateway, FLORA_NON_ORTH_DELTA
 from .channel import Channel
 from .multichannel import MultiChannel
@@ -787,6 +788,9 @@ class Simulator:
                     else 0.0
                 ),
             )
+            nominal_rx = self._nominal_rx_window_duration(node)
+            if nominal_rx >= 0.0:
+                node.profile = replace(node.profile, rx_window_duration=nominal_rx)
             node.simulator = self
             node._warmup_remaining = self.warm_up_intervals
             node._log_after = self.log_mean_after
@@ -923,6 +927,48 @@ class Simulator:
     # ------------------------------------------------------------------
     # Internal time helpers
     # ------------------------------------------------------------------
+    def _nominal_rx_window_duration(self, node: Node) -> float:
+        """Return the expected duration of RX windows for ``node`` in seconds."""
+
+        channel = getattr(node, "channel", None)
+        if channel is None:
+            return 0.0
+
+        sf_values: list[int] = []
+        uplink_sf = int(getattr(node, "sf", 7) or 7)
+        uplink_sf = max(7, min(12, uplink_sf))
+        uplink_dr = SF_TO_DR.get(uplink_sf)
+        if uplink_dr is not None:
+            offset = int(getattr(node, "rx1_dr_offset", 0) or 0)
+            min_dr = min(DR_TO_SF)
+            max_dr = max(DR_TO_SF)
+            rx1_dr = max(min_dr, min(max_dr, uplink_dr - max(0, offset)))
+            rx1_sf = DR_TO_SF.get(rx1_dr, uplink_sf)
+        else:
+            rx1_sf = uplink_sf
+        sf_values.append(rx1_sf)
+
+        durations = [channel.airtime(rx1_sf, 0)]
+
+        rx2_dr = getattr(node, "rx2_datarate", None)
+        if rx2_dr is not None:
+            rx2_sf = DR_TO_SF.get(int(rx2_dr), sf_values[-1])
+            sf_values.append(rx2_sf)
+            durations.append(channel.airtime(rx2_sf, 0))
+
+        ping_dr = getattr(node, "ping_slot_dr", None)
+        if ping_dr is not None:
+            ping_sf = DR_TO_SF.get(int(ping_dr), sf_values[-1])
+            sf_values.append(ping_sf)
+            durations.append(channel.airtime(ping_sf, 0))
+
+        nominal = max(durations) if durations else 0.0
+        guard = 0.0
+        if getattr(channel, "bandwidth", 0.0) > 0.0 and sf_values:
+            max_symbol = max((2 ** sf) / channel.bandwidth for sf in sf_values)
+            guard = 2.0 * max_symbol
+        return nominal + guard
+
     def _seconds_to_ticks(self, t: float) -> int | float:
         if self.tick_ns is None:
             return t
