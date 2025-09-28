@@ -27,6 +27,23 @@ def test_deduplicate_packets():
     assert node.gateway_snr_history.get(gw2.id, []) == [8.5]
 
 
+def test_packet_below_energy_detection_threshold_ignored():
+    server = NetworkServer(energy_detection_dBm=-90.0)
+    gateway = Gateway(0, 0, 0)
+    node = Node(0, 0, 0, 7, 14)
+    server.gateways = [gateway]
+    server.nodes = [node]
+
+    server.receive(1, node.id, gateway.id, rssi=-95.0, snir=-5.0)
+
+    assert server.packets_received == 0
+    assert server.duplicate_packets == 0
+    assert 1 not in server.received_events
+    assert 1 not in server.event_gateway
+    assert node.last_rssi is None
+    assert getattr(node, "last_snr", None) is None
+
+
 def test_add_gateway_deduplicates():
     server = SimpleServer()
     gw = Gateway(0, 0, 0)
