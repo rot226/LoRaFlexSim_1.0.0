@@ -173,6 +173,60 @@ def test_class_b_explicit_rate_and_gateway_congestion():
     assert entry2 and entry2.data_rate == 4 and entry2.tx_power is None
 
 
+def test_class_bc_us915_rx2_spreading_factor():
+    scheduler_b = DownlinkScheduler()
+    gw_b = Gateway(10, 0, 0)
+    channel_us915 = Channel(region="US915")
+    node_b = Node(1, 0.0, 0.0, 7, 14, class_type="B", channel=channel_us915)
+
+    assert node_b.ping_slot_dr == 8
+
+    start_b = scheduler_b.schedule_class_b(
+        node_b,
+        0.0,
+        b"b",
+        gw_b,
+        beacon_interval=128.0,
+        ping_slot_interval=1.0,
+        ping_slot_offset=2.0,
+    )
+
+    expected_sf_b = DR_TO_SF[node_b.ping_slot_dr]
+    assert expected_sf_b == 12
+    payload_len_b = DownlinkScheduler._payload_length(b"b")
+    expected_duration_b = node_b.channel.airtime(expected_sf_b, payload_len_b)
+    last_entry = scheduler_b._last_gateway_entry[gw_b.id]
+
+    assert math.isclose(last_entry["duration"], expected_duration_b, rel_tol=1e-9)
+    queue_entry_b = scheduler_b.queue[node_b.id][0][3]
+    assert queue_entry_b.data_rate == node_b.ping_slot_dr
+    assert math.isclose(start_b, last_entry["start_time"], rel_tol=1e-9)
+
+    scheduler_c = DownlinkScheduler()
+    gw_c = Gateway(11, 0, 0)
+    node_c = Node(2, 0.0, 0.0, 7, 14, class_type="C", channel=Channel(region="US915"))
+
+    assert node_c.rx2_datarate == 8
+
+    start_c = scheduler_c.schedule_class_c(
+        node_c,
+        1.0,
+        b"c",
+        gw_c,
+        data_rate=node_c.rx2_datarate,
+    )
+
+    expected_sf_c = DR_TO_SF[node_c.rx2_datarate]
+    assert expected_sf_c == 12
+    payload_len_c = DownlinkScheduler._payload_length(b"c")
+    expected_duration_c = node_c.channel.airtime(expected_sf_c, payload_len_c)
+    busy_until = scheduler_c._gateway_busy[gw_c.id]
+
+    assert math.isclose(busy_until - start_c, expected_duration_c, rel_tol=1e-9)
+    queue_entry_c = scheduler_c.queue[node_c.id][0][3]
+    assert queue_entry_c.data_rate == node_c.rx2_datarate
+
+
 def test_class_b_priority_preemption():
     scheduler = DownlinkScheduler()
     gw = Gateway(1, 0, 0)

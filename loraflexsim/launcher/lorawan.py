@@ -19,8 +19,22 @@ class LoRaWANFrame:
 # LoRaWAN ADR MAC commands (simplified)
 # ---------------------------------------------------------------------------
 
-DR_TO_SF = {0: 12, 1: 11, 2: 10, 3: 9, 4: 8, 5: 7}
-SF_TO_DR = {sf: dr for dr, sf in DR_TO_SF.items()}
+DR_TO_SF = {
+    0: 12,
+    1: 11,
+    2: 10,
+    3: 9,
+    4: 8,
+    5: 7,
+    6: 7,
+    8: 12,
+    9: 11,
+    10: 10,
+    11: 9,
+    12: 8,
+    13: 7,
+}
+SF_TO_DR = {sf: dr for dr, sf in sorted(DR_TO_SF.items(), reverse=True)}
 # Default RX2 (and ping-slot) data rate per LoRaWAN region
 REGION_DEFAULT_RX2_DR = {
     "EU868": 3,
