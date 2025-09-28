@@ -175,9 +175,9 @@ def simulate(
         airtime = channel.airtime(sf, payload_size=PAYLOAD_SIZE)
         sf_tx_energy[idx] = (tx_current - idle_current) * voltage * airtime
         sf_rx_energy[idx] = (rx_current - idle_current) * voltage * airtime
-    # Liste des délais de livraison (0 pour chaque paquet car la transmission
-    # réussie est immédiate dans ce modèle simplifié)
-    delays = []
+    # Liste des délais de livraison (calculés à partir de la durée réelle de
+    # transmission pour chaque paquet reçu)
+    delays: list[float] = []
 
     # Génération des instants d'émission pour chaque nœud et attribution d'un canal
     send_times = {node: [] for node in range(nodes)}
@@ -249,7 +249,7 @@ def simulate(
             success = False
         if success:
             delivered += 1
-            delays.append(0)
+            delays.append(max(tx.end - tx.start, 0.0))
             if debug_rx:
                 logging.debug(
                     f"t={tx.start:.3f} Node {tx.node} GW {tx.gateway} CH {tx.channel} reçu"
