@@ -75,22 +75,28 @@ class PlannedRandomWaypoint:
         if dt <= 0:
             return
         distance = dt * node.speed
-        while distance > 0 and node.path_index < len(node.path) - 1:
-            dest_x, dest_y = node.path[node.path_index + 1]
-            dx = dest_x - node.x
-            dy = dest_y - node.y
-            seg_len = math.hypot(dx, dy)
-            if seg_len == 0:
-                node.path_index += 1
+        while distance > 0:
+            if not node.path or len(node.path) < 2:
+                break
+            while distance > 0 and node.path_index < len(node.path) - 1:
+                dest_x, dest_y = node.path[node.path_index + 1]
+                dx = dest_x - node.x
+                dy = dest_y - node.y
+                seg_len = math.hypot(dx, dy)
+                if seg_len == 0:
+                    node.path_index += 1
+                    continue
+                move = min(distance, seg_len)
+                ratio = move / seg_len
+                node.x += dx * ratio
+                node.y += dy * ratio
+                distance -= move
+                if ratio >= 1.0:
+                    node.path_index += 1
+            if distance <= 0:
+                break
+            if node.path_index < len(node.path) - 1:
                 continue
-            move = min(distance, seg_len)
-            ratio = move / seg_len
-            node.x += dx * ratio
-            node.y += dy * ratio
-            distance -= move
-            if ratio >= 1.0:
-                node.path_index += 1
-        if node.path_index >= len(node.path) - 1:
             start = (node.x, node.y)
             path = [start]
             for _ in range(20):
@@ -103,5 +109,7 @@ class PlannedRandomWaypoint:
                 path = self.planner.find_path(start, goal)
             node.path = path
             node.path_index = 0
+            if len(path) < 2:
+                break
         node.altitude = self.planner.elevation_at(node.x, node.y)
         node.last_move_time = current_time
