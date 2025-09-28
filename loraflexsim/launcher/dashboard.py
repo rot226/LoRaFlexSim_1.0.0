@@ -217,7 +217,7 @@ first_packet_input = pn.widgets.FloatInput(
     start=0.1,
 )
 packets_input = pn.widgets.IntInput(
-    name="Nombre de paquets par nœud (0=infin)", value=80, step=1, start=0
+    name="Nombre de paquets par nœud (0=infini)", value=80, step=1, start=0
 )
 seed_input = pn.widgets.IntInput(
     name="Graine (0 = aléatoire)", value=0, step=1, start=0
