@@ -393,6 +393,7 @@ Depuis la version 4.0.1, une fois toutes les transmissions envoyées, l'accélé
 ## Suivi de batterie
 
 Chaque nœud peut être doté d'une capacité d'énergie (en joules) grâce au paramètre `battery_capacity_j` du `Simulator`. La consommation est calculée selon le profil d'énergie FLoRa (courants typiques en veille, réception, etc.) puis retranchée de cette réserve. Le champ `battery_remaining_j` indique l'autonomie restante.
+La durée nominale des fenêtres de réception (RX1/RX2 et créneaux de ping) est désormais dérivée automatiquement des paramètres radio de chaque nœud. Les fenêtres RX consomment donc l'énergie correspondant à l'airtime attendu d'une trame vide majoré d'une courte garde de synchronisation.
 Un champ **Capacité batterie (J)** est disponible dans le tableau de bord pour
 saisir facilement cette valeur. Indiquez `0` pour une capacité illimitée : ce
 nombre est automatiquement converti en `None`, valeur attendue par LoRaFlexSim.
