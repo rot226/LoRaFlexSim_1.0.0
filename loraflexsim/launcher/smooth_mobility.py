@@ -1,4 +1,5 @@
 import math
+
 import numpy as np
 
 from ._random import SeedLike, ensure_rng
