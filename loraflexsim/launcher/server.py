@@ -195,16 +195,10 @@ class NetworkServer:
             for node in group:
                 if node.sf != sf:
                     node.sf = sf
-                    node.channel.detection_threshold_dBm = (
-                        Channel.flora_detection_threshold(
-                            node.sf, node.channel.bandwidth
-                        )
-                        + node.channel.sensitivity_margin_dB
-                    )
-                    self.send_downlink(
-                        node,
-                        adr_command=(sf, node.tx_power, node.chmask, node.nb_trans),
-                    )
+                self.send_downlink(
+                    node,
+                    adr_command=(sf, node.tx_power, node.chmask, node.nb_trans),
+                )
             index += size
 
     def assign_explora_at_groups(self) -> None:
@@ -277,12 +271,6 @@ class NetworkServer:
 
                 if node.sf != target_sf or node.tx_power != power:
                     node.sf = target_sf
-                    node.channel.detection_threshold_dBm = (
-                        Channel.flora_detection_threshold(
-                            node.sf, node.channel.bandwidth
-                        )
-                        + node.channel.sensitivity_margin_dB
-                    )
                     node.tx_power = power
                     self.send_downlink(
                         node,
@@ -896,12 +884,6 @@ class NetworkServer:
 
                     if sf != node.sf or power != node.tx_power:
                         node.sf = sf
-                        node.channel.detection_threshold_dBm = (
-                            Channel.flora_detection_threshold(
-                                node.sf, node.channel.bandwidth
-                            )
-                            + node.channel.sensitivity_margin_dB
-                        )
                         node.tx_power = power
                         self.send_downlink(
                             node,
@@ -913,6 +895,8 @@ class NetworkServer:
                             ),
                             gateway=gw,
                         )
+                        node.snr_history = []
+                        node.gateway_snr_history.clear()
             elif self.adr_method == "adr-lite":
                 optimal_sf = 12
                 for sf in range(7, 13):
@@ -922,12 +906,6 @@ class NetworkServer:
                         break
                 if optimal_sf != node.sf:
                     node.sf = optimal_sf
-                    node.channel.detection_threshold_dBm = (
-                        Channel.flora_detection_threshold(
-                            node.sf, node.channel.bandwidth
-                        )
-                        + node.channel.sensitivity_margin_dB
-                    )
                     self.send_downlink(
                         node,
                         adr_command=(
@@ -989,9 +967,6 @@ class NetworkServer:
 
                 if sf != node.sf or power != node.tx_power:
                     node.sf = sf
-                    node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-                        node.sf, node.channel.bandwidth
-                    ) + node.channel.sensitivity_margin_dB
                     node.tx_power = power
                     self.send_downlink(
                         node,

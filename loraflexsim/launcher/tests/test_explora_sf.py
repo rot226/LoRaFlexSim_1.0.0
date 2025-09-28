@@ -84,10 +84,6 @@ def test_explora_sf_updates_with_new_node():
     new_node = Node(node_id, 0.0, 0.0, 12, 14.0, channel=channel, class_type=sim.node_class)
     new_node.initial_sf = 12
     new_node.initial_tx_power = 14.0
-    new_node.channel.detection_threshold_dBm = (
-        Channel.flora_detection_threshold(12, new_node.channel.bandwidth)
-        + new_node.channel.sensitivity_margin_dB
-    )
     sim.nodes.append(new_node)
     frame = new_node.prepare_uplink(b"ping")
     sim.network_server.receive(len(sim.nodes), new_node.id, gw.id, -60, frame)

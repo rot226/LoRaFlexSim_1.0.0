@@ -69,7 +69,6 @@ def _degrade_params(profile: str, capture_mode: str) -> dict:
         "advanced_capture": advanced_capture,
         "flora_capture": flora_capture,
         "flora_loss_model": "lognorm",
-        "detection_threshold_dBm": -130.0,
         "capture_threshold_dB": 6.0,
     }
 
@@ -125,12 +124,8 @@ def apply(
         node.adr_ack_delay = 32
 
     if not degrade_channel:
-        sf = 12  # Default spreading factor used at start
+        # Allow different SFs to interfere like in FLoRa
         for ch in sim.multichannel.channels:
-            ch.detection_threshold_dBm = Channel.flora_detection_threshold(
-                sf, ch.bandwidth
-            ) + ch.sensitivity_margin_dB
-            # Allow different SFs to interfere like in FLoRa
             ch.orthogonal_sf = False
             ch.non_orth_delta = FLORA_NON_ORTH_DELTA
         # Propagate the non-orthogonal behaviour to existing node channels
@@ -157,9 +152,6 @@ def apply(
             sf = 12
             bw = params.get("bandwidth", 125000)
             params["sensitivity_margin_dB"] = getattr(ch, "sensitivity_margin_dB", 0.0)
-            params["detection_threshold_dBm"] = Channel.flora_detection_threshold(
-                sf, bw
-            ) + params["sensitivity_margin_dB"]
             # Créer un canal avancé avec les paramètres mis à jour
             adv = AdvancedChannel(**params)
             adv.orthogonal_sf = False
@@ -173,9 +165,6 @@ def apply(
         # Mettre à jour la référence de canal de chaque nœud
         for node in sim.nodes:
             node.channel = sim.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
-            node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-                getattr(node, "sf", 12), node.channel.bandwidth
-            ) + node.channel.sensitivity_margin_dB
             node.channel.orthogonal_sf = False
             node.channel.non_orth_delta = FLORA_NON_ORTH_DELTA
 

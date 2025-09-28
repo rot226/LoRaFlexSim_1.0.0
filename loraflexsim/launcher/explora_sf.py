@@ -30,16 +30,9 @@ def apply(sim: Simulator) -> None:
         # measurements.
         node.sf = node.initial_sf = 12
         node.tx_power = node.initial_tx_power = 14.0
-        node.channel.detection_threshold_dBm = (
-            Channel.flora_detection_threshold(node.sf, node.channel.bandwidth)
-            + node.channel.sensitivity_margin_dB
-        )
         node.adr_ack_cnt = 0
         node.adr_ack_limit = 64
         node.adr_ack_delay = 32
 
-    for ch in sim.multichannel.channels:
-        ch.detection_threshold_dBm = (
-            Channel.flora_detection_threshold(12, ch.bandwidth)
-            + ch.sensitivity_margin_dB
-        )
+    # Les canaux conservent désormais un seuil neutre ; la sensibilité SF est
+    # évaluée lorsque les paquets sont traités.
