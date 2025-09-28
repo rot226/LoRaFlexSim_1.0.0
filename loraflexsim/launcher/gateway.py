@@ -186,7 +186,11 @@ class Gateway:
         for t in concurrent_transmissions:
             if orthogonal_sf and t.get('sf') != sf:
                 continue
-            overlap = min(t['end_time'], end_time) - current_time
+            # Le chevauchement effectif démarre lorsque les deux transmissions
+            # sont actives; on ignore donc le temps avant le début réel de l'autre
+            # paquet pour éviter de fausses collisions/captures.
+            overlap_start = max(t['start_time'], current_time)
+            overlap = min(t['end_time'], end_time) - overlap_start
             if overlap > min_interference_time:
                 interfering_transmissions.append(t)
 
