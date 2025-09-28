@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-import random
+
+import numpy as np
 
 from .omnet_model import OmnetModel
 
@@ -11,16 +12,27 @@ from .omnet_model import OmnetModel
 class _CorrelatedValue:
     """Simple correlated random walk."""
 
-    def __init__(self, mean: float, std: float, correlation: float) -> None:
+    def __init__(
+        self,
+        mean: float,
+        std: float,
+        correlation: float,
+        *,
+        rng: np.random.Generator | None = None,
+    ) -> None:
         self.mean = mean
         self.std = std
         self.corr = correlation
         self.value = mean
+        if rng is not None:
+            self.rng = rng
+        else:
+            self.rng = np.random.Generator(np.random.MT19937())
 
     def sample(self) -> float:
         self.value = self.corr * self.value + (1.0 - self.corr) * self.mean
         if self.std > 0.0:
-            self.value += random.gauss(0.0, self.std)
+            self.value += self.rng.normal(0.0, self.std)
         return self.value
 
 
@@ -66,6 +78,7 @@ class OmnetPHY:
         tx_start_current_a: float | None = None,
         rx_start_current_a: float | None = None,
         voltage_v: float = 3.3,
+        rng: np.random.Generator | None = None,
     ) -> None:
         """Initialise helper with optional hardware impairments.
 
@@ -76,6 +89,11 @@ class OmnetPHY:
         extra draw.
         """
         self.channel = channel
+        if rng is None:
+            rng = getattr(channel, "rng", None)
+        if rng is None:
+            rng = np.random.Generator(np.random.MT19937())
+        self.rng = rng
         self.model = OmnetModel(
             channel.fine_fading_std,
             channel.omnet.correlation,
@@ -83,45 +101,53 @@ class OmnetPHY:
             freq_drift_std=channel.omnet.freq_drift_std,
             clock_drift_std=channel.omnet.clock_drift_std,
             temperature_K=channel.omnet.temperature_K,
+            rng=self.rng,
         )
         corr = channel.omnet.correlation
         self._freq_offset = _CorrelatedValue(
             channel.frequency_offset_hz,
             freq_offset_std_hz,
             corr,
+            rng=self.rng,
         )
         self._sync_offset = _CorrelatedValue(
             channel.sync_offset_s,
             sync_offset_std_s,
             corr,
+            rng=self.rng,
         )
         self._dev_freq = _CorrelatedValue(
             dev_frequency_offset_hz,
             dev_freq_offset_std_hz,
             corr,
+            rng=self.rng,
         )
         self._temperature = _CorrelatedValue(
             channel.omnet.temperature_K,
             temperature_std_K,
             corr,
+            rng=self.rng,
         )
         self._pa_nl = _CorrelatedValue(
             pa_non_linearity_dB,
             pa_non_linearity_std_dB,
             corr,
+            rng=self.rng,
         )
-        self._phase_noise = _CorrelatedValue(0.0, phase_noise_std_dB, corr)
+        self._phase_noise = _CorrelatedValue(0.0, phase_noise_std_dB, corr, rng=self.rng)
         self._phase_offset = _CorrelatedValue(
             phase_offset_rad,
             phase_offset_std_rad,
             corr,
+            rng=self.rng,
         )
         self._osc_leak = _CorrelatedValue(
             oscillator_leakage_dB,
             oscillator_leakage_std_dB,
             corr,
+            rng=self.rng,
         )
-        self._rx_fault = _CorrelatedValue(0.0, rx_fault_std_dB, corr)
+        self._rx_fault = _CorrelatedValue(0.0, rx_fault_std_dB, corr, rng=self.rng)
         self.clock_jitter_std_s = clock_jitter_std_s
         self.receiver_noise_floor_dBm = channel.receiver_noise_floor_dBm
         self.tx_start_delay_s = float(tx_start_delay_s)
@@ -153,6 +179,24 @@ class OmnetPHY:
         self.energy_idle = 0.0
         self.energy_start = 0.0
         self.energy_ramp = 0.0
+
+    def set_rng(self, rng: np.random.Generator) -> None:
+        """Mettre à jour le générateur aléatoire partagé avec le canal."""
+
+        self.rng = rng
+        self.model.rng = rng
+        for attr in (
+            self._freq_offset,
+            self._sync_offset,
+            self._dev_freq,
+            self._temperature,
+            self._pa_nl,
+            self._phase_noise,
+            self._phase_offset,
+            self._osc_leak,
+            self._rx_fault,
+        ):
+            attr.rng = rng
 
     # ------------------------------------------------------------------
     # Transceiver state helpers
@@ -295,8 +339,8 @@ class OmnetPHY:
             elif ch.adjacent_interference_dB > 0 and diff <= half + ch.bandwidth:
                 noise += max(power - ch.adjacent_interference_dB, 0.0)
         if ch.noise_floor_std > 0:
-            noise += random.gauss(0.0, ch.noise_floor_std)
-        if ch.impulsive_noise_prob > 0.0 and random.random() < ch.impulsive_noise_prob:
+            noise += self.rng.normal(0.0, ch.noise_floor_std)
+        if ch.impulsive_noise_prob > 0.0 and self.rng.random() < ch.impulsive_noise_prob:
             noise += ch.impulsive_noise_dB
         noise += self.model.noise_variation()
         noise += self._osc_leak.sample()
@@ -316,7 +360,7 @@ class OmnetPHY:
         ch = self.channel
         loss = self.path_loss(distance)
         if ch.shadowing_std > 0:
-            loss += random.gauss(0.0, ch.shadowing_std)
+            loss += self.rng.normal(0.0, ch.shadowing_std)
 
         if freq_offset_hz is None:
             freq_offset_hz = self._freq_offset.sample()
@@ -329,7 +373,7 @@ class OmnetPHY:
         # Include short-term clock jitter
         sync_offset_s += self.model.clock_drift()
         if self.clock_jitter_std_s > 0.0:
-            sync_offset_s += random.gauss(0.0, self.clock_jitter_std_s)
+            sync_offset_s += self.rng.normal(0.0, self.clock_jitter_std_s)
 
         phase = self._phase_offset.sample()
 
@@ -344,13 +388,13 @@ class OmnetPHY:
             - ch.cable_loss_dB
         )
         if ch.tx_power_std > 0:
-            rssi += random.gauss(0.0, ch.tx_power_std)
+            rssi += self.rng.normal(0.0, ch.tx_power_std)
         if ch.fast_fading_std > 0:
-            rssi += random.gauss(0.0, ch.fast_fading_std)
+            rssi += self.rng.normal(0.0, ch.fast_fading_std)
         if ch.multipath_taps > 1:
             rssi += self._multipath_fading_db()
         if ch.time_variation_std > 0:
-            rssi += random.gauss(0.0, ch.time_variation_std)
+            rssi += self.rng.normal(0.0, ch.time_variation_std)
         rssi += self.model.fine_fading()
         rssi += ch.rssi_offset_dB
         rssi -= ch._filter_attenuation_db(freq_offset_hz)
@@ -572,8 +616,8 @@ class OmnetPHY:
         taps = self.channel.multipath_taps
         if taps <= 1:
             return 0.0
-        i = sum(random.gauss(0.0, 1.0) for _ in range(taps))
-        q = sum(random.gauss(0.0, 1.0) for _ in range(taps))
+        i = sum(self.rng.normal(0.0, 1.0) for _ in range(taps))
+        q = sum(self.rng.normal(0.0, 1.0) for _ in range(taps))
         amp = math.sqrt(i * i + q * q) / math.sqrt(taps)
         return 20 * math.log10(max(amp, 1e-12))
 
