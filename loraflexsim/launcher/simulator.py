@@ -859,6 +859,8 @@ class Simulator:
         self.events_log: list[dict] = []
         # Accès direct aux événements par identifiant
         self._events_log_map: dict[int, dict] = {}
+        # Suivi des transmissions dont le verdict serveur est en attente
+        self._pending_uplinks: dict[int, dict[str, int]] = {}
 
         # Planifier le premier envoi de chaque nœud
         for node in self.nodes:
@@ -1412,7 +1414,7 @@ class Simulator:
                 return True
 
             elif priority == EventType.TX_END:
-                # Fin d'une transmission – traitement de la réception/perte
+                # Fin d'une transmission – traitement différé du résultat
                 self._tx_manager.remove(event_id)
                 node_id = node.id
                 # Marquer la fin de transmission du nœud
@@ -1424,79 +1426,31 @@ class Simulator:
                 # Notifier chaque passerelle de la fin de réception
                 for gw in self.gateways:
                     gw.end_reception(event_id, self.network_server, node_id)
-                # Vérifier si le paquet a été reçu par au moins une passerelle
-                delivered = event_id in self.network_server.received_events
-                if delivered:
-                    self.packets_delivered += 1
-                    self.rx_delivered += 1
-                    sf = self._events_log_map[event_id].get("sf")
-                    if sf is not None:
-                        self._sf_success[sf] = self._sf_success.get(sf, 0) + 1
-                    node.increment_success()
-                    # Délai = temps de fin - temps de début de l'émission
-                    start_time = self._events_log_map[event_id]["start_time"]
-                    delay = self.current_time - start_time
-                    self.total_delay += delay
-                    self.delivered_count += 1
-                else:
-                    # Identifier la cause de perte: collision ou absence de couverture
-                    log_entry = self._events_log_map[event_id]
-                    heard = log_entry["heard"]
-                    if heard:
-                        self.packets_lost_collision += 1
-                        node.increment_collision()
-                    else:
-                        self.packets_lost_no_signal += 1
-                # Mettre à jour le résultat et la passerelle du log de l'événement
                 entry = self._events_log_map[event_id]
-                entry["result"] = (
-                    "Success"
-                    if delivered
-                    else ("CollisionLoss" if entry["heard"] else "NoCoverage")
-                )
-                entry["gateway_id"] = (
-                    self.network_server.event_gateway.get(event_id, None)
-                    if delivered
-                    else None
-                )
-                if delivered:
-                    if event_id in self.network_server.event_rssi:
-                        entry["rssi_dBm"] = self.network_server.event_rssi[event_id]
-                    if event_id in self.network_server.event_snir:
-                        entry["snr_dB"] = self.network_server.event_snir[event_id]
+                heard = entry.get("heard")
+                pending = event_id in self._pending_uplinks
+                result = entry.get("result")
+                delivered = result == "Success"
 
-                if self.debug_rx:
-                    if delivered:
-                        gw_id = self.network_server.event_gateway.get(event_id, None)
-                        logger.debug(
-                            f"t={self.current_time:.2f} Packet {event_id} from node {node_id} reçu via GW {gw_id}"
-                        )
+                if not pending and result is None:
+                    if event_id in self.network_server.received_events:
+                        delivered = True
+                    elif heard:
+                        self.notify_uplink_result(event_id, "collision")
                     else:
-                        reason = "Collision" if log_entry["heard"] else "NoCoverage"
-                        logger.debug(
-                            f"t={self.current_time:.2f} Packet {event_id} from node {node_id} perdu ({reason})"
-                        )
+                        self.notify_uplink_result(event_id, "no_signal")
 
-                # Mettre à jour l'historique du nœud pour calculer les statistiques
-                # récentes et éventuellement déclencher l'ADR.
-                snr_value = None
-                rssi_value = None
-                if delivered and node.last_snr is not None:
-                    snr_value = node.last_snr
-                if delivered and node.last_rssi is not None:
-                    rssi_value = node.last_rssi
-                node.history.append(
-                    {"snr": snr_value, "rssi": rssi_value, "delivered": delivered}
-                )
-                if len(node.history) > 20:
-                    node.history.pop(0)
+                if self.debug_rx and delivered:
+                    gw_id = self.network_server.event_gateway.get(event_id, None)
+                    logger.debug(
+                        f"t={self.current_time:.2f} Packet {event_id} from node {node_id} reçu via GW {gw_id}"
+                    )
+                elif self.debug_rx and not delivered and not pending:
+                    reason = "Collision" if heard else "NoCoverage"
+                    logger.debug(
+                        f"t={self.current_time:.2f} Packet {event_id} from node {node_id} perdu ({reason})"
+                    )
 
-                # Gestion Adaptive Data Rate (ADR)
-                if self.adr_node:
-                    # Only track history here; the actual adaptation now relies on
-                    # the standard adr_ack_cnt mechanism implemented in :class:`Node`.
-                    pass
-                
                 # Planifier retransmissions restantes ou prochaine émission
                 if node._nb_trans_left > 0:
                     self.retransmissions += 1
@@ -1542,7 +1496,12 @@ class Simulator:
                     if self._all_nodes_done():
                         new_queue = []
                         for evt in self.event_queue:
-                            if evt.type in (EventType.TX_END, EventType.RX_WINDOW):
+                            if evt.type in (
+                                EventType.TX_END,
+                                EventType.RX_WINDOW,
+                                EventType.SERVER_RX,
+                                EventType.SERVER_PROCESS,
+                            ):
                                 new_queue.append(evt)
                         heapq.heapify(new_queue)
                         self.event_queue = new_queue
@@ -1554,7 +1513,6 @@ class Simulator:
                             "Packet limit reached – no more new events will be scheduled."
                         )
 
-                self._record_metrics_snapshot()
                 return True
 
             elif priority == EventType.RX_WINDOW:
@@ -1949,6 +1907,100 @@ class Simulator:
     def stop(self):
         """Arrête la simulation en cours."""
         self.running = False
+
+    def register_pending_uplink(self, event_id: int, node_id: int) -> None:
+        """Marque ``event_id`` comme en attente d'un verdict serveur."""
+        entry = self._events_log_map.get(event_id)
+        if entry is None:
+            return
+        if entry.get("result") in {"Success", "CollisionLoss", "NoCoverage"}:
+            return
+        entry.setdefault("result", "Pending")
+        self._pending_uplinks[event_id] = {"node_id": node_id}
+
+    def notify_uplink_result(
+        self,
+        event_id: int,
+        verdict: str,
+        *,
+        gateway_id: int | None = None,
+        rssi: float | None = None,
+        snr: float | None = None,
+    ) -> None:
+        """Met à jour les métriques dès que le serveur statue sur un uplink."""
+
+        entry = self._events_log_map.get(event_id)
+        if entry is None:
+            return
+
+        previous = entry.get("_finalized", False)
+        if previous:
+            return
+
+        normalized = verdict.lower()
+        label_map = {
+            "success": "Success",
+            "collision": "CollisionLoss",
+            "no_signal": "NoCoverage",
+        }
+        label = label_map.get(normalized, verdict)
+        delivered = normalized == "success"
+        heard = bool(entry.get("heard"))
+        node_id = entry.get("node_id")
+        node = self.node_map.get(node_id) if node_id is not None else None
+
+        self._pending_uplinks.pop(event_id, None)
+
+        if gateway_id is None and delivered:
+            gateway_id = self.network_server.event_gateway.get(event_id)
+        entry["gateway_id"] = gateway_id if delivered else None
+
+        if rssi is None and delivered and event_id in self.network_server.event_rssi:
+            rssi = self.network_server.event_rssi[event_id]
+        if snr is None and delivered and event_id in self.network_server.event_snir:
+            snr = self.network_server.event_snir[event_id]
+
+        if rssi is not None:
+            entry["rssi_dBm"] = rssi
+        if snr is not None:
+            entry["snr_dB"] = snr
+
+        entry["result"] = label
+        entry["_finalized"] = True
+
+        if delivered:
+            self.packets_delivered += 1
+            self.rx_delivered += 1
+            sf = entry.get("sf")
+            if sf is not None:
+                self._sf_success[sf] = self._sf_success.get(sf, 0) + 1
+            if node is not None:
+                node.increment_success()
+            start_time = float(entry.get("start_time", self.current_time))
+            delay = self.current_time - start_time
+            if delay < 0.0:
+                delay = 0.0
+            self.total_delay += delay
+            self.delivered_count += 1
+        else:
+            if heard:
+                self.packets_lost_collision += 1
+                if node is not None:
+                    node.increment_collision()
+            else:
+                self.packets_lost_no_signal += 1
+
+        if node is not None:
+            snr_value = node.last_snr if delivered and node.last_snr is not None else None
+            rssi_value = node.last_rssi if delivered and node.last_rssi is not None else None
+            node.history.append({"snr": snr_value, "rssi": rssi_value, "delivered": delivered})
+            if len(node.history) > 20:
+                node.history.pop(0)
+            if self.adr_node:
+                # L'ADR côté nœud repose sur l'historique stocké ci-dessus.
+                pass
+
+        self._record_metrics_snapshot()
 
     def _record_metrics_snapshot(self) -> None:
         """Ajoute un instantané des métriques cumulées à la timeline."""

@@ -1,5 +1,7 @@
 import pytest
 
+import pytest
+
 from loraflexsim.launcher.simulator import Simulator
 
 
@@ -50,3 +52,42 @@ def test_metrics_timeline_matches_tx_end_events():
     assert final["recent_losses"] >= 0.0
     assert "losses_total" in final
     assert final["losses_total"] == pytest.approx(final["tx_attempted"] - final["delivered"])
+
+
+def test_metrics_timeline_accounts_for_server_delay():
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        transmission_mode="Periodic",
+        packet_interval=2.0,
+        packets_to_send=1,
+        duty_cycle=None,
+        flora_mode=True,
+        flora_timing=True,
+        mobility=False,
+        area_size=10.0,
+        seed=321,
+    )
+    if sim.nodes and sim.gateways:
+        node = sim.nodes[0]
+        gateway = sim.gateways[0]
+        node.x = node.y = 0.0
+        node.initial_x = node.initial_y = 0.0
+        gateway.x = gateway.y = 0.0
+    sim.run()
+
+    timeline = sim.get_metrics_timeline()
+    records = _timeline_records(timeline)
+
+    assert len(records) == 1
+    entry = records[0]
+    expected_time = (
+        sim.events_log[0]["end_time"]
+        + sim.network_server.network_delay
+        + sim.network_server.process_delay
+    )
+    assert entry["time_s"] == pytest.approx(expected_time)
+    assert entry["delivered"] == 1
+    assert entry["PDR"] == pytest.approx(1.0)
+    assert entry["instant_throughput_bps"] > 0.0
+    assert entry["instant_avg_delay_s"] > 0.0
