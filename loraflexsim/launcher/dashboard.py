@@ -885,6 +885,8 @@ def setup_simulation(seed_offset: int = 0):
     # La mobilité est désormais gérée directement par le simulateur
     start_time = time.time()
     max_real_time = real_time_duration_input.value if real_time_duration_input.value > 0 else None
+    pdr_table.object = pd.DataFrame(columns=["Node", "PDR", "Recent PDR"])
+
     chrono_callback = pn.state.add_periodic_callback(periodic_chrono_update, period=100, timeout=None)
 
     initial_metrics = sim.get_metrics()
