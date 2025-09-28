@@ -751,11 +751,15 @@ class Channel:
         return loss + self.system_loss_dB
 
     def path_loss(self, distance: float) -> float:
-        """Calcule la perte de parcours (en dB) pour une distance donnée (m)."""
+        """Calcule la perte de parcours (en dB) pour une distance donnée (m).
+
+        Lève :class:`ValueError` si ``distance`` est nulle ou négative afin de
+        rester cohérent avec les modèles de perte prédéfinis.
+        """
+        if distance <= 0:
+            raise ValueError("distance must be > 0")
         if self.omnet_phy:
             return self.omnet_phy.path_loss(distance)
-        if distance <= 0:
-            return 0.0
         if self.propagation_cache is not None:
             return self.propagation_cache.get(
                 distance, lambda: self._path_loss_uncached(distance)
