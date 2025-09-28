@@ -442,7 +442,22 @@ _METRICS_TIMELINE_TRACES = [
 
 # Tampon des snapshots utilisés pour mettre à jour la figure incrémentalement.
 metrics_timeline_buffer: list[dict[str, float | int]] = []
+metrics_timeline_last_key: (
+    tuple[float | int | None, float | int | None, float | int | None] | None
+) = None
 _metrics_timeline_steps_since_refresh = 0
+
+
+def _snapshot_signature(
+    snapshot: dict[str, float | int]
+) -> tuple[float | int | None, float | int | None, float | int | None]:
+    """Construit la signature utilisée pour éviter les doublons de timeline."""
+
+    return (
+        snapshot.get("time_s"),
+        snapshot.get("tx_attempted"),
+        snapshot.get("delivered"),
+    )
 
 # --- Heatmap de couverture ---
 heatmap_button = pn.widgets.Button(name="Afficher la heatmap", button_type="primary")
@@ -840,6 +855,7 @@ def periodic_chrono_update():
 # --- Callback étape de simulation ---
 def step_simulation():
     global runs_metrics_timeline, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
+    global metrics_timeline_last_key
     if sim is None or not session_alive():
         if not session_alive():
             _cleanup_callbacks()
@@ -867,6 +883,10 @@ def step_simulation():
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = run_timeline
     metrics_timeline_buffer = run_timeline
+    if run_timeline:
+        metrics_timeline_last_key = _snapshot_signature(run_timeline[-1])
+    else:
+        metrics_timeline_last_key = None
     table_df = pd.DataFrame(
         {
             "Node": list(metrics["pdr_by_node"].keys()),
@@ -885,30 +905,34 @@ def step_simulation():
     update_timeline()
     if latest_snapshot is not None:
         snapshot_copy = dict(latest_snapshot)
-        run_timeline.append(snapshot_copy)
-        metrics_timeline_buffer = run_timeline
-        force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
-        _metrics_timeline_steps_since_refresh += 1
-        refresh_due = (
-            _metrics_timeline_steps_since_refresh
-            >= METRICS_TIMELINE_FULL_REFRESH_INTERVAL
-        )
-        if force_full_refresh or refresh_due:
-            _metrics_timeline_steps_since_refresh = 0
-            timeline_for_plot: pd.DataFrame | list[dict] | None = run_timeline
-            _update_metrics_timeline_pane(timeline_for_plot)
-        else:
-            _update_metrics_timeline_pane(
-                run_timeline,
-                latest_snapshot=snapshot_copy,
-                append=True,
+        signature = _snapshot_signature(snapshot_copy)
+        if signature != metrics_timeline_last_key:
+            run_timeline.append(snapshot_copy)
+            metrics_timeline_buffer = run_timeline
+            metrics_timeline_last_key = signature
+            force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
+            _metrics_timeline_steps_since_refresh += 1
+            refresh_due = (
+                _metrics_timeline_steps_since_refresh
+                >= METRICS_TIMELINE_FULL_REFRESH_INTERVAL
             )
+            if force_full_refresh or refresh_due:
+                _metrics_timeline_steps_since_refresh = 0
+                timeline_for_plot: pd.DataFrame | list[dict] | None = run_timeline
+                _update_metrics_timeline_pane(timeline_for_plot)
+            else:
+                _update_metrics_timeline_pane(
+                    run_timeline,
+                    latest_snapshot=snapshot_copy,
+                    append=True,
+                )
     else:
         _update_metrics_timeline_pane(run_timeline)
     if not cont:
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = sim.get_metrics_timeline()
         metrics_timeline_buffer = []
+        metrics_timeline_last_key = None
         _metrics_timeline_steps_since_refresh = 0
         on_stop(None)
         return
@@ -919,6 +943,7 @@ def setup_simulation(seed_offset: int = 0):
     """Crée et démarre un simulateur avec les paramètres du tableau de bord."""
     global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
     global timeline_fig, last_event_index, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
+    global metrics_timeline_last_key
 
     # Empêcher de relancer si une simulation est déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -937,6 +962,7 @@ def setup_simulation(seed_offset: int = 0):
 
     elapsed_time = 0
     metrics_timeline_buffer = []
+    metrics_timeline_last_key = None
     _metrics_timeline_steps_since_refresh = 0
     if current_run >= 1:
         if len(runs_metrics_timeline) < current_run:
