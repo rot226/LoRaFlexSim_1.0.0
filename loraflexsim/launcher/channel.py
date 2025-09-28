@@ -163,7 +163,7 @@ class Channel:
         self,
         frequency_hz: float = 868e6,
         path_loss_exp: float = 2.08,
-        shadowing_std: float = 6.0,
+        shadowing_std: float | None = None,
         path_loss_d0: float | None = None,
         reference_distance: float = 1.0,
         hata_k1: float = 127.5,
@@ -243,13 +243,15 @@ class Channel:
         channel_index: int = 0,
         orthogonal_sf: bool = True,
         rng: np.random.Generator | None = None,
+        seed: int | None = None,
     ):
         """
         Initialise le canal radio avec paramètres de propagation.
 
         :param frequency_hz: Fréquence en Hz (par défaut 868 MHz).
         :param path_loss_exp: Exposant de perte de parcours (log-distance).
-        :param shadowing_std: Écart-type du shadowing (variations aléatoires en dB), 0 pour ignorer.
+        :param shadowing_std: Écart-type du shadowing (variations aléatoires en dB), ``0`` pour ignorer.
+            Laisser ``None`` applique la valeur du preset environnemental le cas échéant.
         :param fast_fading_std: Variation rapide de l'amplitude (dB) pour simuler le fading multipath.
         :param multipath_taps: Nombre de trajets multipath additionnels simulés.
         :param cable_loss_dB: Pertes fixes dues au câble/connectique (dB).
@@ -356,6 +358,11 @@ class Channel:
             initialisé comme auparavant.
         """
 
+        if shadowing_std is None:
+            shadowing_override = False
+            shadowing_std = 6.0
+        else:
+            shadowing_override = True
         self.energy_detection_dBm = energy_detection_dBm
 
         if environment is not None:
@@ -364,10 +371,12 @@ class Channel:
                 raise ValueError(f"Unknown environment preset: {environment}")
             (
                 path_loss_exp,
-                shadowing_std,
+                preset_shadowing_std,
                 path_loss_d0,
                 reference_distance,
             ) = self.ENV_PRESETS[env]
+            if not shadowing_override:
+                shadowing_std = preset_shadowing_std
             self.environment = env
             if (
                 self.energy_detection_dBm == -float("inf")
@@ -392,12 +401,20 @@ class Channel:
             self.channel_index = channel_index
 
         if rng is not None:
+            if seed is not None:
+                warnings.warn(
+                    "L'argument 'seed' est ignoré car un générateur 'rng' a été fourni.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
             self.rng = rng
+            self.seed = None
         else:
             bit_generator = (
                 np.random.MT19937(seed) if seed is not None else np.random.MT19937()
             )
             self.rng = np.random.Generator(bit_generator)
+            self.seed = seed
         self.frequency_hz = frequency_hz
         self.path_loss_exp = path_loss_exp
         self.shadowing_std = shadowing_std  # σ en dB (ex: 6.0 pour environnement urbain/suburbain)
