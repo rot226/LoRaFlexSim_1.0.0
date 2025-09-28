@@ -376,7 +376,13 @@ class NetworkServer:
                 )
             elif node.class_type.upper() == "C":
                 after = self.simulator.current_time if self.simulator else 0.0
-                self.scheduler.schedule_class_c(node, after, frame, gw, priority=priority)
+                scheduled = self.scheduler.schedule_class_c(
+                    node, after, frame, gw, priority=priority
+                )
+                if self.simulator is not None:
+                    ensure_rx = getattr(self.simulator, "ensure_class_c_rx_window", None)
+                    if callable(ensure_rx):
+                        ensure_rx(node, scheduled)
             else:
                 end = getattr(node, "last_uplink_end_time", None)
                 if end is not None:
@@ -410,22 +416,13 @@ class NetworkServer:
                     priority=priority,
                 )
             elif node.class_type.upper() == "C":
-                self.scheduler.schedule_class_c(node, at_time, frame, gw, priority=priority)
+                scheduled = self.scheduler.schedule_class_c(
+                    node, at_time, frame, gw, priority=priority
+                )
                 if self.simulator is not None:
-                    from .simulator import EventType
-
-                    eid = self.simulator.event_id_counter
-                    self.simulator.event_id_counter += 1
-                    if hasattr(self.simulator, "_push_event"):
-                        self.simulator._push_event(at_time, EventType.RX_WINDOW, eid, node.id)
-                    else:
-                        from .simulator import Event
-                        import heapq
-
-                        heapq.heappush(
-                            self.simulator.event_queue,
-                            Event(at_time, EventType.RX_WINDOW, eid, node.id),
-                        )
+                    ensure_rx = getattr(self.simulator, "ensure_class_c_rx_window", None)
+                    if callable(ensure_rx):
+                        ensure_rx(node, scheduled)
             else:
                 self.scheduler.schedule(node.id, at_time, frame, gw, priority=priority)
         try:

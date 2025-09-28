@@ -5,6 +5,7 @@ from loraflexsim.launcher.gateway import Gateway
 from loraflexsim.launcher.lorawan import DR_TO_SF, next_beacon_time
 from loraflexsim.launcher.node import Node
 from loraflexsim.launcher.server import NetworkServer
+from loraflexsim.launcher.simulator import EventType, Simulator
 
 
 def test_schedule_beacon_time():
@@ -205,3 +206,41 @@ def test_network_server_class_b_uses_node_clock_offset():
     assert entry and entry.gateway is gateway
     delivered = entry.frame.payload if hasattr(entry.frame, "payload") else entry.frame
     assert delivered == payload
+
+
+def test_class_c_downlink_delivered_at_scheduled_time():
+    sim = Simulator(num_nodes=0, num_gateways=0, node_class="C")
+    server = sim.network_server
+    gateway = Gateway(1, 0, 0)
+    node = Node(1, 0.0, 0.0, 7, 14, class_type="C")
+
+    server.gateways = [gateway]
+    server.nodes = [node]
+    sim.gateways = [gateway]
+    sim.nodes = [node]
+
+    sim.event_queue.clear()
+    sim.current_time = 3.5
+
+    server.send_downlink(node, b"class-c")
+    scheduled_time = server.scheduler.next_time(node.id)
+
+    assert scheduled_time is not None
+    assert math.isclose(scheduled_time, 3.5, rel_tol=0.0, abs_tol=1e-9)
+
+    rx_events = [
+        evt
+        for evt in sim.event_queue
+        if evt.node_id == node.id and evt.type == EventType.RX_WINDOW
+    ]
+
+    assert any(
+        math.isclose(sim._ticks_to_seconds(evt.time), scheduled_time, rel_tol=0.0, abs_tol=1e-9)
+        for evt in rx_events
+    )
+
+    assert gateway.pop_downlink(node.id) is None
+    sim.current_time = scheduled_time
+    server.deliver_scheduled(node.id, scheduled_time)
+    downlink = gateway.pop_downlink(node.id)
+    assert downlink is not None

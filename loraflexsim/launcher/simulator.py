@@ -992,17 +992,34 @@ class Simulator:
 
         if node.class_type.upper() != "C":
             return
-        current_time = self.current_time if time is None else time
-        current_time = max(current_time, self.current_time)
-        target_tick = self._seconds_to_ticks(current_time)
-        for evt in self.event_queue:
-            if (
-                evt.node_id == node.id
-                and evt.type == EventType.RX_WINDOW
-                and evt.time >= target_tick
-            ):
-                return
-        schedule_time = self._ticks_to_seconds(target_tick)
+
+        base_time = self.current_time if time is None else max(time, self.current_time)
+        schedule_time = self._quantize(base_time)
+        target_tick = self._seconds_to_ticks(schedule_time)
+
+        if time is None:
+            for evt in self.event_queue:
+                if evt.node_id != node.id or evt.type != EventType.RX_WINDOW:
+                    continue
+                evt_time = float(evt.time)
+                target_value = float(target_tick)
+                if self.tick_ns is None:
+                    if evt_time + 1e-9 >= target_value:
+                        return
+                else:
+                    if evt.time >= target_tick:
+                        return
+        else:
+            for evt in self.event_queue:
+                if evt.node_id != node.id or evt.type != EventType.RX_WINDOW:
+                    continue
+                if self.tick_ns is None:
+                    if math.isclose(float(evt.time), float(target_tick), rel_tol=0.0, abs_tol=1e-9):
+                        return
+                else:
+                    if evt.time == target_tick:
+                        return
+
         limit = self.max_sim_time
         if limit is not None and schedule_time >= limit:
             self._request_stop_at_limit()
