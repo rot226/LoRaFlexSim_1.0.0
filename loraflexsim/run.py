@@ -7,6 +7,8 @@ import operator
 
 import logging
 import sys
+from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -67,6 +69,18 @@ if not diag_logger.handlers:
     handler.setFormatter(logging.Formatter("%(message)s"))
     diag_logger.addHandler(handler)
 diag_logger.setLevel(logging.INFO)
+
+
+@dataclass(eq=False)
+class _Transmission:
+    node: int
+    start: float
+    end: float
+    sf: int
+    gateway: int
+    channel: int
+    rssi: float
+    status: str = "pending"
 
 
 def _ensure_positive_int(name: str, value, minimum: int = 1) -> int:
@@ -204,35 +218,167 @@ def simulate(
                 t += sample_interval(interval, rng)
 
 
-    # Simulation pas à pas
-    events: dict[float, list[int]] = {}
+    node_airtime = {
+        node: channel.airtime(int(node_sf[node]), payload_size=PAYLOAD_SIZE)
+        for node in range(nodes)
+    }
+
+    events: dict[float, list[tuple[int, float]]] = {}
     for node, times in send_times.items():
+        airtime = node_airtime[node]
         for t in times:
-            events.setdefault(t, []).append(node)
+            events.setdefault(t, []).append((node, t + airtime))
+
+    active_transmissions: dict[tuple[int, int], list[_Transmission]] = defaultdict(list)
+    time_epsilon = 1e-9
+
+    def finalize_transmission(tx: _Transmission) -> None:
+        nonlocal collisions, delivered, delays
+        if tx.status == "lost":
+            collisions += 1
+            if debug_rx:
+                logging.debug(
+                    f"t={tx.start:.3f} Node {tx.node} GW {tx.gateway} CH {tx.channel} perdu (collision)"
+                )
+            return
+        rng = rng_manager.get_stream("traffic", tx.node)
+        success = True
+        if fine_fading_std > 0.0 and rng.normal(0.0, fine_fading_std) < -3.0:
+            success = False
+        if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
+            success = False
+        if success:
+            delivered += 1
+            delays.append(0)
+            if debug_rx:
+                logging.debug(
+                    f"t={tx.start:.3f} Node {tx.node} GW {tx.gateway} CH {tx.channel} reçu"
+                )
+        else:
+            collisions += 1
+            if debug_rx:
+                logging.debug(
+                    f"t={tx.start:.3f} Node {tx.node} GW {tx.gateway} CH {tx.channel} rejeté (bruit)"
+                )
+            diag_logger.info(
+                f"t={tx.start:.3f} gw={tx.gateway} ch={tx.channel} collision=[{tx.node}] cause=noise"
+            )
+
+    def cleanup_pair(pair_key: tuple[int, int], current_time: float) -> None:
+        transmissions = active_transmissions.get(pair_key)
+        if not transmissions:
+            return
+        remaining: list[_Transmission] = []
+        for tx in transmissions:
+            if tx.end <= current_time + time_epsilon:
+                finalize_transmission(tx)
+            else:
+                remaining.append(tx)
+        if remaining:
+            active_transmissions[pair_key] = remaining
+        else:
+            active_transmissions.pop(pair_key, None)
+
+    def resolve_collisions(pair_key: tuple[int, int], current_time: float) -> None:
+        transmissions = active_transmissions.get(pair_key)
+        if not transmissions:
+            return
+        overlapping = [
+            tx for tx in transmissions if tx.start <= current_time < tx.end
+        ]
+        if len(overlapping) <= 1:
+            return
+        unique_nodes = {tx.node for tx in overlapping}
+        if len(unique_nodes) == 1:
+            overlap_ids = {id(tx) for tx in overlapping}
+            latest_tx = max(overlapping, key=lambda tx: tx.start)
+            latest_id = id(latest_tx)
+            remaining_after: list[_Transmission] = []
+            for tx in transmissions:
+                tx_id = id(tx)
+                if tx_id == latest_id:
+                    remaining_after.append(tx)
+                elif tx_id in overlap_ids:
+                    finalize_transmission(tx)
+                else:
+                    remaining_after.append(tx)
+            if remaining_after:
+                active_transmissions[pair_key] = remaining_after
+            else:
+                active_transmissions.pop(pair_key, None)
+            return
+        candidates = [tx for tx in overlapping if tx.status != "lost"]
+        if not candidates:
+            return
+        if non_orth_delta is None:
+            if len(candidates) == 1:
+                winners = candidates
+            else:
+                rng = rng_manager.get_stream("traffic", candidates[0].node)
+                chosen = rng.choice([tx.node for tx in candidates])
+                winners = [
+                    next(tx for tx in candidates if tx.node == chosen)
+                ]
+        else:
+            winners: list[_Transmission] = []
+            for tx in candidates:
+                captured = True
+                for other in overlapping:
+                    if tx is other:
+                        continue
+                    diff = tx.rssi - other.rssi
+                    th = non_orth_delta[tx.sf - 7][other.sf - 7]
+                    if diff < th:
+                        captured = False
+                        break
+                if captured:
+                    winners.append(tx)
+        nodes_in_collision = [tx.node for tx in overlapping]
+        if len(winners) == 1:
+            winner = winners[0]
+            for tx in overlapping:
+                if tx is winner:
+                    tx.status = "captured"
+                else:
+                    tx.status = "lost"
+            diag_logger.info(
+                f"t={current_time:.3f} gw={pair_key[0]} ch={pair_key[1]} collision={nodes_in_collision} winner={winner.node}"
+            )
+            if debug_rx:
+                for tx in overlapping:
+                    if tx is winner:
+                        logging.debug(
+                            f"t={current_time:.3f} Node {tx.node} GW {pair_key[0]} CH {pair_key[1]} reçu après collision"
+                        )
+                    else:
+                        logging.debug(
+                            f"t={current_time:.3f} Node {tx.node} GW {pair_key[0]} CH {pair_key[1]} perdu (collision)"
+                        )
+        else:
+            for tx in overlapping:
+                tx.status = "lost"
+            diag_logger.info(
+                f"t={current_time:.3f} gw={pair_key[0]} ch={pair_key[1]} collision={nodes_in_collision} none"
+            )
+            if debug_rx:
+                for tx in overlapping:
+                    logging.debug(
+                        f"t={current_time:.3f} Node {tx.node} GW {pair_key[0]} CH {pair_key[1]} perdu (collision)"
+                    )
 
     for t in sorted(events.keys()):
         nodes_ready = events[t]
         if not nodes_ready:
             continue
-        if _REAL_NUMPY:
-            nodes_ready_arr = _np.asarray(nodes_ready, dtype=_np.int32)
-            gw_ids = node_gateways[nodes_ready_arr]
-            ch_ids = node_channels[nodes_ready_arr]
-            pairs = _np.stack((gw_ids, ch_ids), axis=1)
-            unique_pairs, inverse = _np.unique(pairs, axis=0, return_inverse=True)
-            grouped_nodes = [
-                nodes_ready_arr[inverse == idx].tolist()
-                for idx in range(len(unique_pairs))
-            ]
-            pair_iterable = zip(unique_pairs.tolist(), grouped_nodes)
-        else:
-            pair_map: dict[tuple[int, int], list[int]] = {}
-            for n in nodes_ready:
-                key = (node_gateways[n], node_channels[n])
-                pair_map.setdefault(key, []).append(n)
-            pair_iterable = pair_map.items()
+        node_ids = [node for node, _ in nodes_ready]
+        end_times = {node: t_end for node, t_end in nodes_ready}
+        pair_map: dict[tuple[int, int], list[int]] = {}
+        for n in node_ids:
+            key = (int(node_gateways[n]), int(node_channels[n]))
+            pair_map.setdefault(key, []).append(int(n))
 
-        for (gw, ch), nodes_on_ch in pair_iterable:
+        for pair_key, nodes_on_ch in pair_map.items():
+            cleanup_pair(pair_key, t)
             nb_tx = len(nodes_on_ch)
             if nb_tx == 0:
                 continue
@@ -242,100 +388,27 @@ def simulate(
                 + sf_rx_energy[int(node_sf[n]) - 7]
                 for n in nodes_on_ch
             )
-            if nb_tx == 1:
-                n = nodes_on_ch[0]
-                rng = rng_manager.get_stream("traffic", n)
-                success = True
-                if (
-                    fine_fading_std > 0.0
-                    and rng.normal(0.0, fine_fading_std) < -3.0
-                ):
-                    success = False
-                if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
-                    success = False
-                if success:
-                    delivered += 1
-                    delays.append(0)
-                    if debug_rx:
-                        logging.debug(f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu")
-                else:
-                    collisions += 1
-                    if debug_rx:
-                        logging.debug(
-                            f"t={t:.3f} Node {n} GW {gw} CH {ch} rejeté (bruit)"
-                        )
-                        diag_logger.info(
-                            f"t={t:.3f} gw={gw} ch={ch} collision=[{n}] cause=noise"
-                        )
-            else:
-                # Several nodes transmit simultaneously on the same
-                # frequency. Resolve the collision using the provided
-                # non-orthogonal capture matrix when available.
-                rssi_map = {
-                    n: rng_manager.get_stream("rssi", n).normal(-100.0, 3.0)
-                    for n in nodes_on_ch
-                }
-                winners: list[int] = []
-                if non_orth_delta is None:
-                    rng = rng_manager.get_stream("traffic", nodes_on_ch[0])
-                    winners = [rng.choice(nodes_on_ch)]
-                else:
-                    for n in nodes_on_ch:
-                        rssi_n = rssi_map[n]
-                        sf_n = int(node_sf[n])
-                        captured = True
-                        for m in nodes_on_ch:
-                            if m == n:
-                                continue
-                            diff = rssi_n - rssi_map[m]
-                            th = non_orth_delta[sf_n - 7][int(node_sf[m]) - 7]
-                            if diff < th:
-                                captured = False
-                                break
-                        if captured:
-                            winners.append(n)
 
-                if len(winners) == 1:
-                    winner = winners[0]
-                    rng = rng_manager.get_stream("traffic", winner)
-                    success = True
-                    if (
-                        fine_fading_std > 0.0
-                        and rng.normal(0.0, fine_fading_std) < -3.0
-                    ):
-                        success = False
-                    if noise_std > 0.0 and rng.normal(0.0, noise_std) > 3.0:
-                        success = False
-                    if success:
-                        collisions += nb_tx - 1
-                        delivered += 1
-                        delays.append(0)
-                        if debug_rx:
-                            for n in nodes_on_ch:
-                                if n == winner:
-                                    logging.debug(
-                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu après collision"
-                                    )
-                                else:
-                                    logging.debug(
-                                        f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision)"
-                                    )
-                        diag_logger.info(
-                            f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} winner={winner}"
-                        )
-                    else:
-                        collisions += nb_tx
-                        if debug_rx:
-                            for n in nodes_on_ch:
-                                logging.debug(
-                                    f"t={t:.3f} Node {n} GW {gw} CH {ch} perdu (collision/bruit)"
-                                )
-                        diag_logger.info(
-                            f"t={t:.3f} gw={gw} ch={ch} collision={nodes_on_ch} none"
-                        )
-                else:
-                    # No unique winner -> all packets lost
-                    collisions += nb_tx
+            transmissions = active_transmissions[pair_key]
+            for n in nodes_on_ch:
+                sf_value = int(node_sf[n])
+                t_end = end_times[n]
+                transmissions.append(
+                    _Transmission(
+                        node=n,
+                        start=t,
+                        end=t_end,
+                        sf=sf_value,
+                        gateway=pair_key[0],
+                        channel=pair_key[1],
+                        rssi=rng_manager.get_stream("rssi", n).normal(-100.0, 3.0),
+                    )
+                )
+
+            resolve_collisions(pair_key, t)
+
+    for pair_key in list(active_transmissions.keys()):
+        cleanup_pair(pair_key, float("inf"))
 
     # Calcul des métriques finales
     pdr = (delivered / total_transmissions) * 100 if total_transmissions > 0 else 0

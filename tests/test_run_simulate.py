@@ -4,6 +4,7 @@ try:  # pragma: no cover - exercised via skip when NumPy missing
     import numpy as np
 except Exception:  # pragma: no cover - numpy optional in test env
     np = None
+from loraflexsim.launcher.channel import Channel
 from loraflexsim.run import simulate, PAYLOAD_SIZE
 from traffic.rng_manager import RngManager
 from traffic.exponential import sample_interval
@@ -22,7 +23,19 @@ def test_simulate_single_node_periodic():
     assert delivered == 10
     assert collisions == 0
     assert pdr == 100.0
-    assert pytest.approx(energy, rel=1e-6) == 0.132619833984
+    sf_rng = RngManager(0).get_stream("sf", 0)
+    sf_value = 7 + sf_rng.integers(0, 6)
+    channel = Channel(
+        tx_current_a=0.06,
+        rx_current_a=0.011,
+        idle_current_a=1e-6,
+        voltage_v=3.3,
+    )
+    airtime = channel.airtime(sf_value, payload_size=PAYLOAD_SIZE)
+    per_tx_energy = ((0.06 - 1e-6) + (0.011 - 1e-6)) * 3.3 * airtime
+    idle_energy = (1 + 1) * 1e-6 * 3.3 * 10
+    expected_energy = per_tx_energy * delivered + idle_energy
+    assert pytest.approx(energy, rel=1e-6) == expected_energy
     assert avg_delay == 0
     assert throughput == PAYLOAD_SIZE * 8 * delivered / 10
 
@@ -119,3 +132,22 @@ def test_simulate_random_no_rescale():
 
     assert collisions == 0
     assert delivered == len(expected)
+
+
+def test_pdr_decreases_with_overlap():
+    base_params = dict(nodes=6, gateways=1, mode="Random", interval=20.0, steps=500)
+
+    delivered_low, collisions_low, pdr_low, *_ = simulate(
+        channels=3,
+        rng_manager=RngManager(42),
+        **base_params,
+    )
+    delivered_high, collisions_high, pdr_high, *_ = simulate(
+        channels=1,
+        rng_manager=RngManager(42),
+        **base_params,
+    )
+
+    assert delivered_low >= delivered_high
+    assert collisions_high > collisions_low
+    assert pdr_high < pdr_low
