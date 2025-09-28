@@ -988,15 +988,19 @@ class Simulator:
             Event(self._seconds_to_ticks(time_s), event_type, eid, node_id),
         )
 
+    def _node_done(self, node: Node) -> bool:
+        """Vérifie si ``node`` a terminé sa mission ou n'est plus actif."""
+
+        if not node.alive:
+            return True
+        if self.packets_to_send == 0:
+            return False
+        return node.packets_sent >= self.packets_to_send
+
     def _all_nodes_done(self) -> bool:
         """Retourne ``True`` lorsque chaque nœud est mort ou a atteint son quota."""
 
-        if self.packets_to_send == 0:
-            return False
-        return all(
-            (not node.alive) or (node.packets_sent >= self.packets_to_send)
-            for node in self.nodes
-        )
+        return all(self._node_done(node) for node in self.nodes)
 
     def _finalize_at_max_time(self) -> None:
         """Arrête la simulation à ``max_sim_time`` en complétant l'énergie restante."""
@@ -1500,10 +1504,7 @@ class Simulator:
                         node, self.current_time + 1.0, reason="retransmission"
                     )
                 else:
-                    if (
-                        self.packets_to_send == 0
-                        or node.packets_sent < self.packets_to_send
-                    ):
+                    if not self._node_done(node):
                         if self.transmission_mode.lower() == "random":
                             if not self.lock_step_poisson:
                                 node.ensure_poisson_arrivals(
@@ -1696,31 +1697,34 @@ class Simulator:
                     break
                 # Replanifier selon la classe du nœud
                 if node.class_type.upper() == "C":
-                    if not self._all_nodes_done():
-                        raw_next = time + self.class_c_rx_interval
-                        limit = self.max_sim_time
-                        if limit is not None and raw_next >= limit:
+                    if self._node_done(node) or self._all_nodes_done():
+                        return True
+                    raw_next = time + self.class_c_rx_interval
+                    limit = self.max_sim_time
+                    if limit is not None and raw_next >= limit:
+                        self._request_stop_at_limit()
+                    else:
+                        nxt = self._quantize(raw_next)
+                        if limit is not None and nxt >= limit:
                             self._request_stop_at_limit()
                         else:
-                            nxt = self._quantize(raw_next)
-                            if limit is not None and nxt >= limit:
-                                self._request_stop_at_limit()
-                            else:
-                                eid = self.event_id_counter
-                                self.event_id_counter += 1
-                                self._push_event(nxt, EventType.RX_WINDOW, eid, node.id)
-                return True
+                            eid = self.event_id_counter
+                            self.event_id_counter += 1
+                            self._push_event(nxt, EventType.RX_WINDOW, eid, node.id)
+                    return True
 
             elif priority == EventType.BEACON:
+                self.last_beacon_time = time
+                self.network_server.notify_beacon(time)
+                if self._all_nodes_done():
+                    return True
                 nxt = self._quantize(self.network_server.next_beacon_time(time))
                 eid = self.event_id_counter
                 self.event_id_counter += 1
                 self._push_event(nxt, EventType.BEACON, eid, 0)
-                self.last_beacon_time = time
-                self.network_server.notify_beacon(time)
                 end_of_cycle = nxt
                 for n in self.nodes:
-                    if n.class_type.upper() == "B":
+                    if n.class_type.upper() == "B" and not self._node_done(n):
                         received = random.random() >= getattr(n, "beacon_loss_prob", 0.0)
                         if received:
                             n.register_beacon(time)
