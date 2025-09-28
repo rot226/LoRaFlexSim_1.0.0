@@ -400,7 +400,7 @@ chrono_indicator = pn.indicators.Number(name="Durée simulation (s)", value=0, f
 # Agrandir la surface d'affichage de la carte pour une meilleure lisibilité
 map_pane = pn.pane.Plotly(height=600, sizing_mode="stretch_width")
 
-# --- Pane pour l'histogramme SF ---
+# --- Pane pour l'histogramme multi-métrique (SF ou délais selon hist_metric_select) ---
 sf_hist_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
 hist_metric_select = pn.widgets.Select(name="Histogramme", options=["SF", "D\u00e9lais"], value="SF")
 
