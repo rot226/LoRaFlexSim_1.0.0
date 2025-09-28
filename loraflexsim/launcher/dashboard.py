@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 import math
@@ -10,6 +12,7 @@ import numpy as np
 import time
 import threading
 import pandas as pd
+from collections import deque
 
 # Assurer la résolution correcte des imports quel que soit le répertoire
 # depuis lequel ce fichier est exécuté. On ajoute le dossier parent
@@ -66,6 +69,9 @@ runs_metrics_timeline: list[pd.DataFrame | list[dict] | None] = []
 auto_fast_forward = False
 timeline_fig = go.Figure()
 last_event_index = 0
+_TIMELINE_MAX_SEGMENTS = 500
+timeline_success_segments: deque[tuple[float, float, int]] = deque()
+timeline_failure_segments: deque[tuple[float, float, int]] = deque()
 pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
 
@@ -555,19 +561,75 @@ def update_map():
     map_pane.object = fig
 
 
+def _ensure_timeline_traces() -> tuple[int, int]:
+    """Ensure that the timeline figure contains persistent traces."""
+
+    global timeline_fig
+
+    if not isinstance(timeline_fig, go.Figure):
+        timeline_fig = go.Figure()
+
+    name_to_index = {trace.name: idx for idx, trace in enumerate(timeline_fig.data)}
+
+    success_idx = name_to_index.get("Succès")
+    if success_idx is None:
+        timeline_fig.add_trace(
+            go.Scattergl(
+                name="Succès",
+                mode="lines",
+                line=dict(color="green"),
+                hoverinfo="none",
+                x=[],
+                y=[],
+            )
+        )
+        success_idx = len(timeline_fig.data) - 1
+
+    failure_idx = name_to_index.get("Échecs")
+    if failure_idx is None:
+        timeline_fig.add_trace(
+            go.Scattergl(
+                name="Échecs",
+                mode="lines",
+                line=dict(color="red"),
+                hoverinfo="none",
+                x=[],
+                y=[],
+            )
+        )
+        failure_idx = len(timeline_fig.data) - 1
+
+    return success_idx, failure_idx
+
+
+def _segments_to_xy(
+    segments: deque[tuple[float, float, int]]
+) -> tuple[list[float | None], list[int | None]]:
+    """Transforme des segments (start, end, node) en listes Plotly."""
+
+    x_values: list[float | None] = []
+    y_values: list[int | None] = []
+    for start, end, node in segments:
+        x_values.extend((start, end, None))
+        y_values.extend((node, node, None))
+    return x_values, y_values
+
+
 def update_timeline():
-    """Update the packet timeline figure without clearing previous data."""
+    """Mise à jour incrémentale de la timeline des paquets."""
+
     global sim, timeline_fig, last_event_index
+    global timeline_success_segments, timeline_failure_segments
 
     if sim is None or not session_alive():
         timeline_fig = go.Figure()
         last_event_index = 0
+        timeline_success_segments.clear()
+        timeline_failure_segments.clear()
         timeline_pane.object = timeline_fig
         return
 
-    if "timeline_fig" not in globals():
-        timeline_fig = go.Figure()
-        last_event_index = 0
+    _ensure_timeline_traces()
 
     if not sim.events_log:
         timeline_pane.object = timeline_fig
@@ -575,20 +637,32 @@ def update_timeline():
 
     for ev in sim.events_log[last_event_index:]:
         if ev.get("result") is None:
-            # Only plot completed transmissions to avoid color updates later
             continue
-        node_id = ev["node_id"]
-        start = ev["start_time"]
-        end = ev["end_time"]
-        color = "green" if ev.get("result") == "Success" else "red"
-        timeline_fig.add_scatter(
-            x=[start, end],
-            y=[node_id, node_id],
-            mode="lines",
-            line=dict(color=color),
-            showlegend=False,
-        )
+        node_id = int(ev["node_id"])
+        start = float(ev["start_time"])
+        end = float(ev["end_time"])
+        segment = (start, end, node_id)
+        if ev.get("result") == "Success":
+            timeline_success_segments.append(segment)
+        else:
+            timeline_failure_segments.append(segment)
+
     last_event_index = len(sim.events_log)
+
+    while len(timeline_success_segments) > _TIMELINE_MAX_SEGMENTS:
+        timeline_success_segments.popleft()
+    while len(timeline_failure_segments) > _TIMELINE_MAX_SEGMENTS:
+        timeline_failure_segments.popleft()
+
+    x_success, y_success = _segments_to_xy(timeline_success_segments)
+    x_failure, y_failure = _segments_to_xy(timeline_failure_segments)
+
+    timeline_fig.update_traces(
+        dict(x=x_success, y=y_success), selector=dict(name="Succès")
+    )
+    timeline_fig.update_traces(
+        dict(x=x_failure, y=y_failure), selector=dict(name="Échecs")
+    )
 
     timeline_fig.update_layout(
         title="Timeline des paquets",
@@ -943,6 +1017,7 @@ def setup_simulation(seed_offset: int = 0):
     """Crée et démarre un simulateur avec les paramètres du tableau de bord."""
     global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
     global timeline_fig, last_event_index, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
+    global timeline_success_segments, timeline_failure_segments
     global metrics_timeline_last_key
 
     # Empêcher de relancer si une simulation est déjà en cours
@@ -981,6 +1056,8 @@ def setup_simulation(seed_offset: int = 0):
 
     timeline_fig = go.Figure()
     last_event_index = 0
+    timeline_success_segments.clear()
+    timeline_failure_segments.clear()
     timeline_pane.object = timeline_fig
 
     seed_val = int(seed_input.value)
