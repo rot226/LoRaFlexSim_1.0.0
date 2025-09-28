@@ -2,14 +2,127 @@
 
 from __future__ import annotations
 
+import csv
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
 
-try:  # pandas is optional when simply parsing raw simulator metrics
+try:  # pandas est optionnel pour analyser les métriques de référence
     import pandas as pd
-except Exception:  # pragma: no cover - pandas may not be installed
+except Exception:  # pragma: no cover - pandas peut ne pas être installé
     pd = None
+
+from loraflexsim.validation.reference_loader import load_reference_metrics
+
+
+def _metrics_from_reference(reference: dict[str, Any]) -> dict[str, Any]:
+    collisions = int(round(reference.get("collisions", 0.0)))
+    return {
+        "PDR": float(reference.get("PDR", 0.0)),
+        "sf_distribution": {},
+        "throughput_bps": float(reference.get("throughput_bps", 0.0)),
+        "energy_J": float(reference.get("energy_J", 0.0)),
+        "avg_delay_s": float(reference.get("avg_delay_s", 0.0)),
+        "collision_distribution": {},
+        "collisions": collisions,
+    }
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with open(path, "r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for raw in reader:
+            parsed: dict[str, Any] = {}
+            for key, value in raw.items():
+                if value in (None, ""):
+                    continue
+                lowered = value.lower()
+                if lowered == "true":
+                    parsed[key] = True
+                    continue
+                if lowered == "false":
+                    parsed[key] = False
+                    continue
+                try:
+                    number = float(value)
+                except ValueError:
+                    parsed[key] = value
+                    continue
+                if number.is_integer():
+                    parsed[key] = int(number)
+                else:
+                    parsed[key] = number
+            rows.append(parsed)
+    return rows
+
+
+def _aggregate_rows_no_pandas(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "sf_distribution": {},
+            "throughput_bps": 0.0,
+            "energy_J": 0.0,
+            "avg_delay_s": 0.0,
+            "collision_distribution": {},
+            "collisions": 0,
+        }
+
+    sf_hist: dict[int, int] = {}
+    collision_hist: dict[int, int] = {}
+    energy_values: list[float] = []
+    throughput_values: list[float] = []
+    avg_delay_values: list[float] = []
+    energy_class_values: dict[str, list[float]] = {}
+    total_collisions = 0
+
+    for row in rows:
+        if "collisions" in row and row["collisions"] is not None:
+            total_collisions += int(row["collisions"])
+        if "throughput_bps" in row and row["throughput_bps"] is not None:
+            throughput_values.append(float(row["throughput_bps"]))
+        if "avg_delay_s" in row and row["avg_delay_s"] is not None:
+            avg_delay_values.append(float(row["avg_delay_s"]))
+        if "energy_J" in row and row["energy_J"] is not None:
+            energy_values.append(float(row["energy_J"]))
+        elif "energy" in row and row["energy"] is not None:
+            energy_values.append(float(row["energy"]))
+
+        for key, value in row.items():
+            if value is None:
+                continue
+            if key.startswith("sf") and key[2:].isdigit():
+                sf = int(key[2:])
+                sf_hist[sf] = sf_hist.get(sf, 0) + int(value)
+            elif key.startswith("collisions_sf"):
+                suffix = key.split("sf", 1)[1]
+                if suffix.isdigit():
+                    sf = int(suffix)
+                    collision_hist[sf] = collision_hist.get(sf, 0) + int(value)
+            elif key.startswith("energy_class_"):
+                parts = key.split("_")
+                if len(parts) >= 3:
+                    cls = parts[2]
+                    energy_class_values.setdefault(cls, []).append(float(value))
+
+    throughput = sum(throughput_values) / len(throughput_values) if throughput_values else 0.0
+    avg_delay = sum(avg_delay_values) / len(avg_delay_values) if avg_delay_values else 0.0
+    energy = sum(energy_values) / len(energy_values) if energy_values else 0.0
+    energy_class = {
+        f"energy_class_{cls}_J": sum(values) / len(values)
+        for cls, values in energy_class_values.items()
+        if values
+    }
+
+    return {
+        "sf_distribution": sf_hist,
+        "throughput_bps": throughput,
+        "energy_J": energy,
+        "avg_delay_s": avg_delay,
+        "collision_distribution": collision_hist,
+        "collisions": total_collisions,
+        **energy_class,
+    }
 
 from .adr_standard_1 import apply as apply_adr_standard
 from .lorawan import DR_TO_SF, LinkADRReq, TX_POWER_INDEX_TO_DBM
@@ -109,7 +222,11 @@ def _aggregate_df(df: 'pd.DataFrame') -> dict[str, Any]:
 def _load_sca_file(path: Path) -> dict[str, Any]:
     """Parse a single ``.sca`` file and compute aggregated metrics."""
     if pd is None:
-        raise RuntimeError("pandas is required for this function")
+        reference = load_reference_metrics(path)
+        extras = _aggregate_rows_no_pandas([_parse_sca_file(path)])
+        metrics = _metrics_from_reference(reference)
+        metrics.update(extras)
+        return metrics
     row = _parse_sca_file(path)
     df = pd.DataFrame([row])
     return _aggregate_df(df)
@@ -134,7 +251,18 @@ def load_flora_metrics(path: str | Path) -> dict[str, Any]:
         Number of collisions that occurred with spreading factor ``X``.
     """
     if pd is None:
-        raise RuntimeError("pandas is required for this function")
+        path = Path(path)
+        reference = load_reference_metrics(path)
+        if path.is_dir():
+            rows = [_parse_sca_file(p) for p in sorted(path.glob("*.sca"))]
+        elif path.suffix.lower() == ".sca":
+            rows = [_parse_sca_file(path)]
+        else:
+            rows = _read_csv_rows(path)
+        extras = _aggregate_rows_no_pandas(rows)
+        metrics = _metrics_from_reference(reference)
+        metrics.update(extras)
+        return metrics
     path = Path(path)
     if path.is_dir():
         rows = [_parse_sca_file(p) for p in sorted(path.glob("*.sca"))]
@@ -418,7 +546,22 @@ def replay_flora_txconfig(
 def load_flora_rx_stats(path: str | Path) -> dict[str, Any]:
     """Load average RSSI/SNR and collisions from a FLoRa export."""
     if pd is None:
-        raise RuntimeError("pandas is required for this function")
+        path = Path(path)
+        if path.is_dir():
+            rows = [_parse_sca_file(p) for p in sorted(path.glob("*.sca"))]
+        elif path.suffix.lower() == ".sca":
+            rows = [_parse_sca_file(path)]
+        else:
+            rows = _read_csv_rows(path)
+
+        rssi_values = [float(row["rssi"]) for row in rows if "rssi" in row]
+        snr_values = [float(row["snr"]) for row in rows if "snr" in row]
+        collisions = sum(int(row["collisions"]) for row in rows if "collisions" in row)
+
+        avg_rssi = sum(rssi_values) / len(rssi_values) if rssi_values else 0.0
+        avg_snr = sum(snr_values) / len(snr_values) if snr_values else 0.0
+
+        return {"rssi": avg_rssi, "snr": avg_snr, "collisions": collisions}
     path = Path(path)
     if path.is_dir():
         rows = [_parse_sca_file(p) for p in sorted(path.glob("*.sca"))]
