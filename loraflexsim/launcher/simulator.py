@@ -307,7 +307,7 @@ class Simulator:
         :param min_interference_time: Chevauchement temporel toléré entre
             transmissions avant de les considérer en collision (s).
         :param flora_mode: Active automatiquement les réglages du mode FLoRa
-            complet (seuil -110 dBm et 5 s d'interférence minimale).
+            complet (seuil -110 dBm et chevauchement minimal nul).
         :param flora_timing: Utilise les temporisations du projet FLoRa
             (délai réseau de 10 ms et traitement serveur de 1,2 s).
         :param config_file: Fichier INI listant les positions des nœuds et
@@ -433,8 +433,6 @@ class Simulator:
                     energy_detection_dBm = min(floors) if floors else Channel.FLORA_ENERGY_DETECTION_DBM
                 else:
                     energy_detection_dBm = Channel.flora_energy_threshold(125000.0)
-            if min_interference_time == 0.0:
-                min_interference_time = 5.0
             if self.first_packet_min_delay == 0.0:
                 self.first_packet_min_delay = 5.0
         if pure_poisson_mode:
