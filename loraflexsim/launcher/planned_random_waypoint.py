@@ -5,6 +5,7 @@ import numpy as np
 
 from .waypoint_planner import WaypointPlanner3D
 from .map_loader import load_map
+from ._random import SeedLike, ensure_rng
 
 
 class PlannedRandomWaypoint:
@@ -23,6 +24,7 @@ class PlannedRandomWaypoint:
         slope_scale: float = 0.1,
         slope_limit: float | None = None,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         """Initialise le modèle de mobilité planifié."""
         if terrain is None:
@@ -33,7 +35,7 @@ class PlannedRandomWaypoint:
             elevation = load_map(elevation)
         if obstacle_height_map is not None and isinstance(obstacle_height_map, (str, Path)):
             obstacle_height_map = load_map(obstacle_height_map)
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
         self.planner = WaypointPlanner3D(
             area_size,
             terrain,
@@ -53,8 +55,17 @@ class PlannedRandomWaypoint:
         node.speed = float(
             self.min_speed + (self.max_speed - self.min_speed) * self.rng.random()
         )
-        goal = self.planner.random_free_point()
-        node.path = self.planner.find_path((node.x, node.y), goal)
+        start = (node.x, node.y)
+        path = [start]
+        for _ in range(20):
+            goal = self.planner.random_free_point()
+            candidate = self.planner.find_path(start, goal)
+            if len(candidate) >= 2:
+                path = candidate
+                break
+        else:
+            path = self.planner.find_path(start, goal)
+        node.path = path
         node.path_index = 0
         node.last_move_time = 0.0
         node.altitude = self.planner.elevation_at(node.x, node.y)
@@ -80,8 +91,17 @@ class PlannedRandomWaypoint:
             if ratio >= 1.0:
                 node.path_index += 1
         if node.path_index >= len(node.path) - 1:
-            goal = self.planner.random_free_point()
-            node.path = self.planner.find_path((node.x, node.y), goal)
+            start = (node.x, node.y)
+            path = [start]
+            for _ in range(20):
+                goal = self.planner.random_free_point()
+                candidate = self.planner.find_path(start, goal)
+                if len(candidate) >= 2:
+                    path = candidate
+                    break
+            else:
+                path = self.planner.find_path(start, goal)
+            node.path = path
             node.path_index = 0
         node.altitude = self.planner.elevation_at(node.x, node.y)
         node.last_move_time = current_time

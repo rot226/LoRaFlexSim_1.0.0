@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Iterable
 
+from ._random import SeedLike, ensure_rng
 
 class PathMobility:
     """Simple grid-based mobility that plans shortest paths avoiding obstacles."""
@@ -24,6 +25,7 @@ class PathMobility:
         slope_limit: float | None = None,
         dynamic_obstacles: Iterable[dict] | str | Path | None = None,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         """\
         :param slope_limit: Pente maximale autorisée entre deux cellules
@@ -55,7 +57,7 @@ class PathMobility:
             data = Path(dynamic_obstacles).read_text()
             dynamic_obstacles = json.loads(data)
         self.dynamic_obstacles = [dict(o) for o in (dynamic_obstacles or [])]
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
         self._last_obs_update = 0.0
 
     # ------------------------------------------------------------------

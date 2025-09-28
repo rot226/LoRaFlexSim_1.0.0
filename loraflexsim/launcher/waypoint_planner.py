@@ -3,6 +3,8 @@ import math
 import numpy as np
 from typing import List, Tuple
 
+from ._random import SeedLike, ensure_rng
+
 
 class WaypointPlanner3D:
     """A* planner avoiding obstacles and high buildings."""
@@ -18,6 +20,7 @@ class WaypointPlanner3D:
         slope_scale: float = 0.1,
         slope_limit: float | None = None,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         self.area_size = float(area_size)
         self.terrain = terrain
@@ -38,7 +41,7 @@ class WaypointPlanner3D:
             self.h_rows = self.h_cols = 0
         self.slope_scale = slope_scale
         self.slope_limit = slope_limit
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
 
     # --------------------------------------------------------------
     def _terrain_factor_cell(self, cx: int, cy: int) -> float | None:

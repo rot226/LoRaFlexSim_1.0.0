@@ -2,6 +2,8 @@ import math
 import numpy as np
 from typing import List, Tuple
 
+from ._random import SeedLike, ensure_rng
+
 
 class TerrainMapMobility:
     """Mobility following a raster terrain map with optional 3D obstacles."""
@@ -19,6 +21,7 @@ class TerrainMapMobility:
         slope_scale: float = 0.1,
         slope_limit: float | None = None,
         rng: np.random.Generator | None = None,
+        seed: SeedLike = 0,
     ) -> None:
         self.area_size = float(area_size)
         self.terrain = terrain
@@ -41,7 +44,7 @@ class TerrainMapMobility:
             self.h_cols = len(obstacle_height_map[0]) if self.h_rows else 0
         else:
             self.h_rows = self.h_cols = 0
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        self.rng = ensure_rng(rng, seed)
 
     # ------------------------------------------------------------------
     def _speed_factor_cell(self, cx: int, cy: int) -> float:

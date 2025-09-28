@@ -18,6 +18,7 @@ def test_planner_avoids_high_obstacle():
         terrain=terrain,
         obstacle_height_map=heights,
         max_height=5,
+        seed=123,
     )
     node = Node(1, 0.0, 0.0, 7, 14)
     mobility.assign(node)
@@ -27,7 +28,7 @@ def test_planner_avoids_high_obstacle():
 
 def test_assign_sets_path():
     terrain = [[1, 1], [1, 1]]
-    mobility = PlannedRandomWaypoint(area_size=20.0, terrain=terrain)
+    mobility = PlannedRandomWaypoint(area_size=20.0, terrain=terrain, seed=123)
     node = Node(1, 5.0, 5.0, 7, 14)
     mobility.assign(node)
     assert len(node.path) >= 2
