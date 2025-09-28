@@ -493,6 +493,8 @@ class NetworkServer:
             frame,
             at_time,
         )
+        if hasattr(self.simulator, "register_pending_uplink"):
+            self.simulator.register_pending_uplink(event_id, node_id)
         if hasattr(self.simulator, "_push_event"):
             self.simulator._push_event(arrival_time, EventType.SERVER_RX, eid, node_id)
         else:
@@ -664,6 +666,7 @@ class NetworkServer:
 
         snr_value = None
         noise_floor = None
+        notify_required = False
         if snir is not None:
             snr_value = snir
         else:
@@ -725,6 +728,8 @@ class NetworkServer:
                 selected_rssi,
                 self.energy_detection_dBm,
             )
+            if self.simulator is not None:
+                self.simulator.notify_uplink_result(event_id, "no_signal")
             return
 
         selection_changed = (
@@ -786,6 +791,7 @@ class NetworkServer:
                 node_id,
                 selected_gateway_id,
             )
+            notify_required = True
 
         if node is not None and not already_processed:
             if hasattr(node, "frames_since_last_adr_command"):
@@ -803,12 +809,22 @@ class NetworkServer:
             try:
                 accept, nwk_skey, app_skey = self.join_server.handle_join(frame)
             except Exception:
+                if self.simulator is not None:
+                    self.simulator.notify_uplink_result(event_id, "collision")
                 return
             node.nwkskey = nwk_skey
             node.appskey = app_skey
             node.devaddr = accept.dev_addr
             node.activated = True
             self.send_downlink(node, accept, gateway=gw)
+            if self.simulator is not None:
+                self.simulator.notify_uplink_result(
+                    event_id,
+                    "success",
+                    gateway_id=selected_gateway_id,
+                    rssi=rssi,
+                    snr=snr_value,
+                )
             return
 
         if node and frame is not None and node.security_enabled:
@@ -821,6 +837,8 @@ class NetworkServer:
                 node.devaddr,
                 0,
             ):
+                if self.simulator is not None:
+                    self.simulator.notify_uplink_result(event_id, "collision")
                 return
 
         if node and not getattr(node, "activated", True):
@@ -982,3 +1000,12 @@ class NetworkServer:
                         adr_command=(sf, power, node.chmask, node.nb_trans),
                         gateway=gw,
                     )
+
+        if notify_required and self.simulator is not None:
+            self.simulator.notify_uplink_result(
+                event_id,
+                "success",
+                gateway_id=selected_gateway_id,
+                rssi=rssi,
+                snr=snr_value,
+            )

@@ -522,6 +522,81 @@ def test_step_simulation_updates_indicators(monkeypatch):
         assert timeline_recorded == timeline_expected
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_step_simulation_updates_after_server_delay(monkeypatch):
+    monkeypatch.setattr(dashboard, "pdr_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "collisions_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "energy_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "delay_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "throughput_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "retrans_indicator", _DummyIndicator())
+    monkeypatch.setattr(dashboard, "pdr_table", _DummyTable())
+    monkeypatch.setattr(dashboard, "pause_button", _DummyButton())
+    monkeypatch.setattr(dashboard, "fast_forward_button", _DummyButton())
+
+    monkeypatch.setattr(dashboard, "update_histogram", lambda metrics: None)
+    monkeypatch.setattr(dashboard, "update_map", lambda: None)
+    monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
+    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
+    monkeypatch.setattr(dashboard, "session_alive", lambda doc=None, state_container=None: True)
+
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        packets_to_send=1,
+        mobility=False,
+        flora_mode=True,
+        flora_timing=True,
+        duty_cycle=None,
+        area_size=10.0,
+        seed=42,
+    )
+    if sim.nodes and sim.gateways:
+        node = sim.nodes[0]
+        gateway = sim.gateways[0]
+        node.x = node.y = 0.0
+        node.initial_x = node.initial_y = 0.0
+        gateway.x = gateway.y = 0.0
+
+    dashboard.sim = sim
+    dashboard.current_run = 1
+    dashboard.runs_metrics_timeline = [None]
+
+    metrics_history: list[dict] = []
+    original_set_metrics = dashboard._set_metric_indicators
+
+    def _capture_metrics(metrics: dict | None) -> None:
+        original_set_metrics(metrics)
+        if metrics:
+            metrics_history.append(dict(metrics))
+
+    monkeypatch.setattr(dashboard, "_set_metric_indicators", _capture_metrics)
+
+    while True:
+        result = dashboard.step_simulation()
+        if result is False:
+            break
+        if not getattr(sim, "running", False):
+            break
+
+    assert metrics_history, "Aucun instantané métrique enregistré"
+    delivered_indices = [idx for idx, entry in enumerate(metrics_history) if entry["delivered"] > 0]
+    assert delivered_indices, "La livraison n'a jamais été enregistrée"
+    first_success = delivered_indices[0]
+
+    for idx in range(first_success):
+        entry = metrics_history[idx]
+        assert entry["delivered"] == 0
+        assert entry["PDR"] == pytest.approx(0.0)
+        assert entry["instant_avg_delay_s"] == pytest.approx(0.0)
+        assert entry["instant_throughput_bps"] == pytest.approx(0.0)
+
+    success_entry = metrics_history[first_success]
+    assert success_entry["PDR"] == pytest.approx(1.0)
+    assert success_entry["instant_avg_delay_s"] > 0.0
+    assert success_entry["instant_throughput_bps"] > 0.0
+
+
 def test_set_metric_indicators_prefers_instant_values(monkeypatch):
     """Les indicateurs doivent refléter les métriques instantanées si présentes."""
 
