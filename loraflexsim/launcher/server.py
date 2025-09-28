@@ -721,6 +721,16 @@ class NetworkServer:
             and not math.isinf(self.energy_detection_dBm)
             and selected_rssi < self.energy_detection_dBm
         ):
+            snr_samples = self.gateway_snr_samples.get(gateway_id)
+            if snr_samples is not None:
+                snr_samples.pop(event_id, None)
+                if not snr_samples:
+                    self.gateway_snr_samples.pop(gateway_id, None)
+            rssi_samples = self.gateway_rssi_samples.get(gateway_id)
+            if rssi_samples is not None:
+                rssi_samples.pop(event_id, None)
+                if not rssi_samples:
+                    self.gateway_rssi_samples.pop(gateway_id, None)
             logger.debug(
                 "NetworkServer: packet event %s from node %s below energy detection threshold (%.2f < %.2f).",
                 event_id,
