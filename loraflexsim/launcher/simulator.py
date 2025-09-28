@@ -2031,6 +2031,7 @@ class Simulator:
             "pdr_by_sf": pdr_by_sf,
             "pdr_by_gateway": pdr_by_gateway,
             "pdr_by_class": pdr_by_class,
+            "energy_by_class": energy_by_class,
             "energy_by_node": energy_by_node,
             "airtime_by_node": airtime_by_node,
             "energy_by_gateway": energy_by_gateway,
