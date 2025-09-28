@@ -66,3 +66,19 @@ def test_multi_gateway_adr_history_evolution():
     history_gw2 = node.gateway_snr_history.get(gw2.id, [])
     assert len(history_gw2) == ADR_WINDOW_SIZE
     assert history_gw2[-1] == float(3 + ADR_WINDOW_SIZE)
+
+
+def test_adr_max_does_not_raise_sf_when_power_already_max():
+    server = NetworkServer(adr_method="adr-max")
+    server.adr_enabled = True
+
+    gateway = Gateway(0, 0, 0)
+    node = Node(0, 0, 0, 7, 14)
+    server.gateways = [gateway]
+    server.nodes = [node]
+
+    for event_id in range(1, ADR_WINDOW_SIZE + 1):
+        server.receive(event_id, node.id, gateway.id, snir=-5.0)
+
+    assert node.sf == 7
+    assert node.tx_power == 14

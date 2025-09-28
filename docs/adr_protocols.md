@@ -23,6 +23,13 @@ Lorsque ce SNR offre une marge suffisante, l'algorithme réduit d'abord le
 spreading factor puis la puissance d'émission afin d'augmenter le débit tout en
 restant compatible avec LoRaWAN.
 
+Lorsque la marge devient négative, la puissance d'émission est relevée par pas
+de 3 dB jusqu'à retrouver une marge positive. Si la puissance atteint déjà sa
+valeur maximale (14 dBm dans le profil FLoRa), le spreading factor est
+désormais conservé, ce qui aligne LoRaFlexSim sur la logique de
+`NetworkServerApp::evaluateADR` et évite d'allonger inutilement l'airtime lorsque
+le lien est seulement limité en puissance.
+
 Dans LoRaFlexSim, la mesure utilisée correspond désormais au **SNIR remonté par
 la passerelle** ayant décodé l'uplink. Le serveur conserve un historique par
 passerelle, ce qui reproduit fidèlement le comportement de FLoRa dans les
