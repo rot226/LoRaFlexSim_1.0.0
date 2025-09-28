@@ -243,6 +243,7 @@ class Channel:
         channel_index: int = 0,
         orthogonal_sf: bool = True,
         rng: np.random.Generator | None = None,
+        seed: int | None = None,
     ):
         """
         Initialise le canal radio avec paramètres de propagation.
