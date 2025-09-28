@@ -269,7 +269,7 @@ mobility_checkbox = pn.widgets.Checkbox(name="Activer la mobilité des nœuds", 
 # Widgets pour régler la vitesse minimale et maximale des nœuds mobiles
 mobility_speed_min_input = pn.widgets.FloatInput(name="Vitesse min (m/s)", value=2.0, step=0.5, start=0.1)
 mobility_speed_max_input = pn.widgets.FloatInput(name="Vitesse max (m/s)", value=10.0, step=0.5, start=0.1)
-show_paths_checkbox = pn.widgets.Checkbox(name="Afficher trajectoires", value=False)
+show_paths_checkbox = pn.widgets.Checkbox(name="Afficher les trajectoires", value=False)
 
 # Choix du modèle de mobilité
 mobility_model_select = pn.widgets.Select(
