@@ -348,6 +348,12 @@ class Channel:
         :param obstacle_map: Chemin vers une carte d'obstacles (GeoJSON ou raster)
             pour appliquer une perte additionnelle due aux bâtiments.
         :param obstacle_loss: Instance préconfigurée de :class:`ObstacleLoss`.
+        :param rng: Générateur NumPy externe à utiliser pour tous les tirages.
+            Lorsqu'il est absent, ``seed`` permet de créer un générateur
+            interne reproductible basé sur MT19937.
+        :param seed: Graine optionnelle utilisée lorsque ``rng`` n'est pas
+            fourni. Si ``None`` (par défaut), le générateur interne est
+            initialisé comme auparavant.
         """
 
         self.energy_detection_dBm = energy_detection_dBm
@@ -385,7 +391,13 @@ class Channel:
             self.region = None
             self.channel_index = channel_index
 
-        self.rng = rng or np.random.Generator(np.random.MT19937())
+        if rng is not None:
+            self.rng = rng
+        else:
+            bit_generator = (
+                np.random.MT19937(seed) if seed is not None else np.random.MT19937()
+            )
+            self.rng = np.random.Generator(bit_generator)
         self.frequency_hz = frequency_hz
         self.path_loss_exp = path_loss_exp
         self.shadowing_std = shadowing_std  # σ en dB (ex: 6.0 pour environnement urbain/suburbain)
@@ -473,6 +485,7 @@ class Channel:
             freq_drift_std=freq_drift_std_hz,
             clock_drift_std=clock_drift_std_s,
             temperature_K=temperature_K,
+            rng=self.rng,
         )
         self._temperature = _CorrelatedValue(
             temperature_K, temperature_std_K, fading_correlation, rng=self.rng
@@ -552,6 +565,7 @@ class Channel:
                 voltage_v=self.voltage_v,
                 flora_capture=self.flora_capture,
                 capture_window_symbols=self.capture_window_symbols,
+                rng=self.rng,
             )
             self.flora_phy = None
             self.advanced_capture = True
@@ -727,6 +741,19 @@ class Channel:
         self.propagation_cache = PropagationCache(
             resolution=resolution, max_entries=max_entries
         )
+
+    def set_rng(self, rng: np.random.Generator) -> None:
+        """Propager ``rng`` vers toutes les composantes dépendantes du hasard."""
+
+        self.rng = rng
+        self.omnet.rng = rng
+        for attr in ("_temperature", "_phase_noise", "_pa_nl", "_humidity", "_impulse"):
+            if hasattr(self, attr):
+                component = getattr(self, attr)
+                if hasattr(component, "rng"):
+                    component.rng = rng
+        if getattr(self, "omnet_phy", None):
+            self.omnet_phy.set_rng(rng)
 
     def compute_rssi(
         self,

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-import random
+
+import numpy as np
 
 
 class OmnetModel:
@@ -18,6 +19,7 @@ class OmnetModel:
         freq_drift_std: float = 0.0,
         clock_drift_std: float = 0.0,
         temperature_K: float = 290.0,
+        rng: np.random.Generator | None = None,
     ) -> None:
         self.fading_std = fading_std
         self.correlation = correlation
@@ -29,12 +31,16 @@ class OmnetModel:
         self._noise = 0.0
         self._freq = 0.0
         self._clock = 0.0
+        if rng is not None:
+            self.rng = rng
+        else:
+            self.rng = np.random.Generator(np.random.MT19937())
 
     def fine_fading(self) -> float:
         """Return a temporally correlated fading term (dB)."""
         if self.fading_std <= 0.0:
             return 0.0
-        gaussian = random.gauss(0.0, self.fading_std)
+        gaussian = self.rng.normal(0.0, self.fading_std)
         self._fading = self.correlation * self._fading + (1 - self.correlation) * gaussian
         return self._fading
 
@@ -42,7 +48,7 @@ class OmnetModel:
         """Return a temporally correlated noise variation (dB)."""
         if self.noise_std <= 0.0:
             return 0.0
-        gaussian = random.gauss(0.0, self.noise_std)
+        gaussian = self.rng.normal(0.0, self.noise_std)
         self._noise = self.correlation * self._noise + (1 - self.correlation) * gaussian
         return self._noise
 
@@ -50,7 +56,7 @@ class OmnetModel:
         """Return a correlated frequency drift sample (Hz)."""
         if self.freq_drift_std <= 0.0:
             return 0.0
-        gaussian = random.gauss(0.0, self.freq_drift_std)
+        gaussian = self.rng.normal(0.0, self.freq_drift_std)
         self._freq = self.correlation * self._freq + (1 - self.correlation) * gaussian
         return self._freq
 
@@ -58,7 +64,7 @@ class OmnetModel:
         """Return a correlated clock drift sample (s)."""
         if self.clock_drift_std <= 0.0:
             return 0.0
-        gaussian = random.gauss(0.0, self.clock_drift_std)
+        gaussian = self.rng.normal(0.0, self.clock_drift_std)
         self._clock = self.correlation * self._clock + (1 - self.correlation) * gaussian
         return self._clock
 

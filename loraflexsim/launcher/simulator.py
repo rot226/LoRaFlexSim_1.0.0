@@ -526,6 +526,15 @@ class Simulator:
                     flora_phy_cls = _FloraPHY
                 ch.flora_phy = flora_phy_cls(ch, loss_model=ch.flora_loss_model)
 
+        # Gestion centralisée des générateurs pseudo-aléatoires.
+        self.seed = seed
+        stream_hash = 3091881735
+        self.rng_manager = RngManager((self.seed or 0) ^ stream_hash)
+        self.pos_rng = random.Random(self.seed)
+        self.interval_rng = self.rng_manager.get_stream("traffic", 0)
+        if self.seed is not None:
+            random.seed(self.seed)
+
         # Initialiser la gestion multi-canaux
         if isinstance(channels, MultiChannel):
             self.multichannel = channels
@@ -582,6 +591,7 @@ class Simulator:
                         clock_jitter_std_s=clock_jitter_std_s,
                         pa_ramp_up_s=pa_ramp_up_s,
                         pa_ramp_down_s=pa_ramp_down_s,
+                        rng=self.rng_manager.get_stream("channel", 0),
                     )
                 ]
                 for ch in ch_list:
@@ -639,6 +649,9 @@ class Simulator:
                             clock_jitter_std_s=clock_jitter_std_s,
                             pa_ramp_up_s=pa_ramp_up_s,
                             pa_ramp_down_s=pa_ramp_down_s,
+                            rng=self.rng_manager.get_stream(
+                                "channel", len(ch_list)
+                            ),
                         )
                         _apply_flora_curves(channel_obj)
                         ch_list.append(channel_obj)
@@ -646,6 +659,10 @@ class Simulator:
             if force_flora_curves:
                 for ch in self.multichannel.channels:
                     _apply_flora_curves(ch)
+
+        for idx, ch in enumerate(self.multichannel.channels):
+            if isinstance(ch, Channel):
+                ch.set_rng(self.rng_manager.get_stream("channel", idx))
 
         non_orth_required = flora_mode or phy_model.startswith("flora")
         if not non_orth_required:
@@ -677,15 +694,6 @@ class Simulator:
         self.network_server.beacon_drift = self.beacon_drift
         self.network_server.ping_slot_interval = self.ping_slot_interval
         self.network_server.ping_slot_offset = self.ping_slot_offset
-
-        # Graine commune pour reproduire FLoRa (placement et tirages aléatoires)
-        self.seed = seed
-        stream_hash = 3091881735
-        self.rng_manager = RngManager((self.seed or 0) ^ stream_hash)
-        self.pos_rng = random.Random(self.seed)
-        self.interval_rng = self.rng_manager.get_stream("traffic", 0)
-        if self.seed is not None:
-            random.seed(self.seed)
 
         # Générer les passerelles
         self.gateways = []
