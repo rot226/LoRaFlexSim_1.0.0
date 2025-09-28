@@ -992,16 +992,25 @@ class Simulator:
 
         if node.class_type.upper() != "C":
             return
-        current_time = self.current_time if time is None else time
-        current_time = max(current_time, self.current_time)
+        requested = self.current_time if time is None else time
+        current_time = max(requested, self.current_time)
         target_tick = self._seconds_to_ticks(current_time)
-        for evt in self.event_queue:
-            if (
-                evt.node_id == node.id
-                and evt.type == EventType.RX_WINDOW
-                and evt.time >= target_tick
-            ):
-                return
+        if time is None:
+            for evt in self.event_queue:
+                if (
+                    evt.node_id == node.id
+                    and evt.type == EventType.RX_WINDOW
+                    and evt.time >= target_tick
+                ):
+                    return
+        else:
+            for evt in self.event_queue:
+                if (
+                    evt.node_id == node.id
+                    and evt.type == EventType.RX_WINDOW
+                    and evt.time == target_tick
+                ):
+                    return
         schedule_time = self._ticks_to_seconds(target_tick)
         limit = self.max_sim_time
         if limit is not None and schedule_time >= limit:
@@ -1524,7 +1533,9 @@ class Simulator:
                     if node.class_type.upper() != "C"
                     else 0.0
                 )
-                if node.class_type.upper() != "C":
+                if node.class_type.upper() == "C":
+                    node.state = "rx"
+                else:
                     node.state = "sleep"
                 self.network_server.deliver_scheduled(node.id, time)
                 for gw in self.gateways:

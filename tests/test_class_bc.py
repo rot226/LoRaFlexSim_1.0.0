@@ -1,10 +1,31 @@
+import heapq
 import math
 
 from loraflexsim.launcher.downlink_scheduler import DownlinkScheduler
 from loraflexsim.launcher.gateway import Gateway
 from loraflexsim.launcher.lorawan import DR_TO_SF, next_beacon_time
 from loraflexsim.launcher.node import Node
+from loraflexsim.launcher.channel import Channel
+from loraflexsim.launcher.simulator import EventType, Simulator
 from loraflexsim.launcher.server import NetworkServer
+
+
+def _make_static_channel() -> Channel:
+    return Channel(
+        shadowing_std=0.0,
+        fast_fading_std=0.0,
+        time_variation_std=0.0,
+        variable_noise_std=0.0,
+        noise_floor_std=0.0,
+        multipath_taps=1,
+        impulsive_noise_prob=0.0,
+        impulsive_noise_dB=0.0,
+        phase_noise_std_dB=0.0,
+        clock_jitter_std_s=0.0,
+        pa_ramp_up_s=0.0,
+        pa_ramp_down_s=0.0,
+        fine_fading_std=0.0,
+    )
 
 
 def test_schedule_beacon_time():
@@ -42,6 +63,44 @@ def test_schedule_class_c_delay():
     assert math.isclose(t, 1.5)
     entry = scheduler.pop_ready(node.id, t)
     assert entry and entry.frame == b"b" and entry.gateway is gw
+
+
+def test_class_c_downlink_delivered_at_scheduled_time():
+    channel = _make_static_channel()
+    sim = Simulator(
+        num_nodes=1,
+        num_gateways=1,
+        area_size=1.0,
+        transmission_mode="Periodic",
+        packet_interval=10.0,
+        packets_to_send=0,
+        mobility=False,
+        channels=[channel],
+        node_class="C",
+        fixed_sf=7,
+        fixed_tx_power=14,
+        seed=321,
+    )
+
+    node = sim.nodes[0]
+    sim.network_server.scheduler.link_delay = 0.5
+    sim.event_queue = [
+        evt for evt in sim.event_queue if evt.type == EventType.RX_WINDOW
+    ]
+    heapq.heapify(sim.event_queue)
+
+    sim.network_server.send_downlink(node, b"payload")
+    scheduled_time = sim.network_server.scheduler.next_time(node.id)
+    assert scheduled_time is not None
+
+    sim.step()
+    assert sim.event_queue
+    next_event_time = sim._ticks_to_seconds(sim.event_queue[0].time)
+    assert math.isclose(next_event_time, scheduled_time, abs_tol=1e-9)
+
+    sim.step()
+    assert node.fcnt_down == 1
+    assert math.isclose(sim.current_time, scheduled_time, abs_tol=1e-9)
 
 
 def test_next_beacon_time_with_drift():
