@@ -2073,6 +2073,13 @@ class Simulator:
         }
         self.metrics_timeline.append(snapshot)
 
+    def get_latest_metrics_snapshot(self) -> dict[str, float | int] | None:
+        """Retourne une copie du dernier point de la timeline des métriques."""
+
+        if not self.metrics_timeline:
+            return None
+        return dict(self.metrics_timeline[-1])
+
     def get_metrics(self) -> dict:
         """Retourne un dictionnaire des métriques actuelles de la simulation."""
         total_sent = self.tx_attempted
