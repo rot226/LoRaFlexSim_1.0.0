@@ -1,5 +1,6 @@
 """Tests pour la fonction ``step_simulation`` du tableau de bord Panel."""
 
+import csv
 import sys
 import types
 
@@ -122,6 +123,29 @@ def _install_pandas_stub():
     if "pandas" in sys.modules:
         return
 
+    def _convert_value(value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, (int, float, bool)):
+            return value
+        lower = value.lower()
+        if lower == "true":
+            return True
+        if lower == "false":
+            return False
+        try:
+            if any(ch in lower for ch in ["e", "."]):
+                number = float(value)
+                return number
+            number = int(value)
+            return number
+        except (TypeError, ValueError):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return value
+        return value
+
     class _FakeILoc:
         def __init__(self, data):
             self._data = list(data)
@@ -138,6 +162,28 @@ def _install_pandas_stub():
         def __eq__(self, other):
             return [value == other for value in self._data]
 
+        def sum(self):
+            return sum(value for value in self._data if value is not None)
+
+        def mean(self):
+            values = [value for value in self._data if value is not None]
+            return sum(values) / len(values) if values else 0
+
+        def max(self):
+            values = [value for value in self._data if value is not None]
+            return max(values) if values else None
+
+        def min(self):
+            values = [value for value in self._data if value is not None]
+            return min(values) if values else None
+
+        def isin(self, candidates):
+            candidate_set = set(candidates)
+            return _FakeSeries([value in candidate_set for value in self._data])
+
+        def tolist(self):
+            return list(self._data)
+
     class _FakeLoc:
         def __init__(self, frame):
             self._frame = frame
@@ -147,6 +193,9 @@ def _install_pandas_stub():
             for key, values in self._frame._data.items():
                 filtered[key] = [val for val, keep in zip(values, mask) if keep]
             return _FakeDataFrame(filtered)
+
+    class _FakeRow(dict):
+        pass
 
     class _FakeDataFrame:
         def __init__(self, data=None, columns=None):
@@ -170,7 +219,19 @@ def _install_pandas_stub():
             self.loc = _FakeLoc(self)
 
         def __getitem__(self, key):
-            return _FakeSeries(self._data[key])
+            if isinstance(key, str):
+                if key not in self._data:
+                    raise KeyError(key)
+                return _FakeSeries(self._data[key])
+            if isinstance(key, (list, tuple)):
+                if key and all(isinstance(item, str) for item in key):
+                    return _FakeDataFrame({col: self._data.get(col, []) for col in key})
+                return self._filter_rows(list(key))
+            if isinstance(key, _FakeSeries):
+                return self._filter_rows(list(key))
+            if isinstance(key, list):
+                return self._filter_rows(key)
+            raise KeyError(key)
 
         def __setitem__(self, key, value):
             length = len(self)
@@ -198,6 +259,25 @@ def _install_pandas_stub():
                 return records
             raise ValueError(f"Unsupported orient: {orient}")
 
+        def to_csv(self, path, index=True, **_kwargs):
+            records = self.to_dict("records")
+            if not records:
+                with open(path, "w", encoding="utf-8", newline="") as handle:
+                    if index:
+                        handle.write("index\n")
+                return
+            columns = list(self._data.keys())
+            with open(path, "w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                if index:
+                    writer.writerow(["index", *columns])
+                    for idx, row in enumerate(records):
+                        writer.writerow([idx] + [row.get(col) for col in columns])
+                else:
+                    writer.writerow(columns)
+                    for row in records:
+                        writer.writerow([row.get(col) for col in columns])
+
         def copy(self):
             return _FakeDataFrame(self.to_dict())
 
@@ -223,6 +303,50 @@ def _install_pandas_stub():
             else:
                 self._data[column] = [value] * len(self)
 
+        def drop_duplicates(self, subset=None):
+            seen = set()
+            unique_rows = []
+            records = self.to_dict("records")
+            for record in records:
+                if subset is None:
+                    key = tuple(sorted(record.items()))
+                else:
+                    key = tuple(record.get(col) for col in subset)
+                if key in seen:
+                    continue
+                seen.add(key)
+                unique_rows.append(record)
+            return _FakeDataFrame(unique_rows)
+
+        def apply(self, func, axis=0):
+            if axis == 1:
+                results = []
+                for record in self.to_dict("records"):
+                    results.append(func(_FakeRow(record)))
+                return _FakeSeries(results)
+            raise NotImplementedError("Only axis=1 is supported in the stub")
+
+        def sum(self):
+            totals = {}
+            for key, values in self._data.items():
+                totals[key] = sum(v for v in values if v is not None)
+            return totals
+
+        def mean(self):
+            averages = {}
+            for key, values in self._data.items():
+                valid = [v for v in values if v is not None]
+                averages[key] = sum(valid) / len(valid) if valid else 0
+            return averages
+
+        def _filter_rows(self, mask):
+            if len(mask) != len(self):
+                raise ValueError("Boolean index has wrong length")
+            filtered = {}
+            for key, values in self._data.items():
+                filtered[key] = [val for val, keep in zip(values, mask) if bool(keep)]
+            return _FakeDataFrame(filtered)
+
     def _concat(frames, ignore_index=False):
         data = {}
         for frame in frames:
@@ -239,10 +363,20 @@ def _install_pandas_stub():
     def _assert_frame_equal(left, right):
         assert left.to_dict() == right.to_dict()
 
+    def _read_csv(path, **_kwargs):
+        with open(path, "r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            rows = []
+            for raw in reader:
+                parsed = {key: _convert_value(value) for key, value in raw.items()}
+                rows.append(parsed)
+        return _FakeDataFrame(rows)
+
     pandas_module = types.ModuleType("pandas")
     pandas_module.DataFrame = _FakeDataFrame
     pandas_module.concat = _concat
     pandas_module.json_normalize = _json_normalize
+    pandas_module.read_csv = _read_csv
 
     testing_module = types.ModuleType("pandas.testing")
     testing_module.assert_frame_equal = _assert_frame_equal
