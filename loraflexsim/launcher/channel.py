@@ -139,6 +139,21 @@ class Channel:
 
         return cls.FLORA_SENSITIVITY.get(sf, {}).get(int(bandwidth), -110.0)
 
+    def detection_threshold(self, sf: int) -> float:
+        """Return the detection threshold to apply for ``sf`` in dBm.
+
+        When an explicit ``detection_threshold_dBm`` override is configured it
+        is returned as-is. Otherwise the FLoRa sensitivity table is queried so
+        that each spreading factor can rely on its dedicated detection
+        threshold augmented by the channel specific
+        ``sensitivity_margin_dB``.
+        """
+
+        if self.detection_threshold_dBm != -float("inf"):
+            return self.detection_threshold_dBm
+        base = self.flora_detection_threshold(sf, self.bandwidth)
+        return base + self.sensitivity_margin_dB
+
     @staticmethod
     def parse_flora_noise_table(path: str | os.PathLike) -> dict[int, dict[int, float]]:
         """Parse LoRaAnalogModel.cc to load exact noise values."""

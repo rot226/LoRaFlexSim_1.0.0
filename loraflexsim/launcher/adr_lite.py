@@ -24,9 +24,6 @@ def apply(sim: Simulator) -> None:
         if getattr(sim, "fixed_sf", None) is None:
             node.sf = 12
         node.initial_sf = node.sf
-        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-            node.sf, node.channel.bandwidth
-        ) + node.channel.sensitivity_margin_dB
         max_tx_power = TX_POWER_INDEX_TO_DBM[0]
         node.tx_power = max_tx_power
         node.initial_tx_power = max_tx_power
@@ -34,7 +31,5 @@ def apply(sim: Simulator) -> None:
         node.adr_ack_limit = 64
         node.adr_ack_delay = 32
 
-    for ch in sim.multichannel.channels:
-        ch.detection_threshold_dBm = Channel.flora_detection_threshold(
-            12, ch.bandwidth
-        ) + ch.sensitivity_margin_dB
+    # ``Channel.detection_threshold`` fournit désormais le seuil adapté à
+    # chaque SF sans mise à jour globale du canal.

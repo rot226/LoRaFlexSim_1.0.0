@@ -42,7 +42,7 @@ def test_explora_at_initialisation_margin_and_sf():
     assert server.MARGIN_DB == 10.0
     assert node.sf == node.initial_sf == 12
     expected_thr = Channel.flora_detection_threshold(12, node.channel.bandwidth) + node.channel.sensitivity_margin_dB
-    assert node.channel.detection_threshold_dBm == expected_thr
+    assert node.channel.detection_threshold(node.sf) == expected_thr
 
 
 def test_explora_at_uniform_airtime_groups():

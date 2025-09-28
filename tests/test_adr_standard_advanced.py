@@ -28,7 +28,7 @@ def test_advanced_degradation_uses_advanced_capture_and_thresholds():
         assert channel.flora_capture is False
         expected_threshold = Channel.flora_detection_threshold(12, channel.bandwidth)
         expected_threshold += channel.sensitivity_margin_dB
-        assert channel.detection_threshold_dBm == expected_threshold
+        assert channel.detection_threshold(12) == expected_threshold
 
     assert sim.channel is sim.multichannel.channels[0]
     assert sim.channel.orthogonal_sf is False

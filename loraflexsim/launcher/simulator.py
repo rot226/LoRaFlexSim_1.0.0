@@ -1039,9 +1039,6 @@ class Simulator:
             self._request_stop_at_limit()
             return
         node.channel = self.multichannel.select_mask(getattr(node, "chmask", 0xFFFF))
-        node.channel.detection_threshold_dBm = Channel.flora_detection_threshold(
-            node.sf, node.channel.bandwidth
-        ) + node.channel.sensitivity_margin_dB
         self._push_event(time, EventType.TX_START, event_id, node.id)
         node.interval_log.append(
             {
@@ -1254,7 +1251,8 @@ class Simulator:
                         start_time=time,
                     )
                     if not self.pure_poisson_mode:
-                        if rssi < node.channel.detection_threshold_dBm:
+                        detection_threshold = node.channel.detection_threshold(sf)
+                        if rssi < detection_threshold:
                             continue  # trop faible pour être détecté
                         snr_threshold = (
                             node.channel.sensitivity_dBm.get(sf, -float("inf"))
@@ -1616,7 +1614,8 @@ class Simulator:
                     )
                     noise_dBm = node.channel.last_noise_dBm
                     if not self.pure_poisson_mode:
-                        if rssi < node.channel.detection_threshold_dBm:
+                        detection_threshold = node.channel.detection_threshold(sf)
+                        if rssi < detection_threshold:
                             node.downlink_pending = max(0, node.downlink_pending - 1)
                             continue
                         snr_threshold = (
@@ -1787,7 +1786,8 @@ class Simulator:
                     )
                     noise_dBm = node.channel.last_noise_dBm
                     if not self.pure_poisson_mode:
-                        if rssi < node.channel.detection_threshold_dBm:
+                        detection_threshold = node.channel.detection_threshold(sf)
+                        if rssi < detection_threshold:
                             node.downlink_pending = max(0, node.downlink_pending - 1)
                             continue
                         snr_threshold = (

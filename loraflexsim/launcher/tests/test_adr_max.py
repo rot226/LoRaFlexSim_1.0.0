@@ -26,7 +26,7 @@ def test_adr_max_apply_configures_simulator():
     expected_thr = Channel.flora_detection_threshold(
         node.sf, node.channel.bandwidth
     ) + node.channel.sensitivity_margin_dB
-    assert node.channel.detection_threshold_dBm == expected_thr
+    assert node.channel.detection_threshold(node.sf) == expected_thr
     assert node.tx_power == 14.0
     assert node.adr_ack_limit == 64
     assert node.adr_ack_delay == 32

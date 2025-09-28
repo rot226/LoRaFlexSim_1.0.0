@@ -26,7 +26,7 @@ def test_adr_lite_apply_configures_simulator():
     assert sim.network_server.adr_method == "adr-lite"
     assert node.sf == 12
     expected_thr = Channel.flora_detection_threshold(12, node.channel.bandwidth) + node.channel.sensitivity_margin_dB
-    assert node.channel.detection_threshold_dBm == expected_thr
+    assert node.channel.detection_threshold(node.sf) == expected_thr
     assert node.tx_power == TX_POWER_INDEX_TO_DBM[0]
     assert node.adr_ack_limit == 64
     assert node.adr_ack_delay == 32
