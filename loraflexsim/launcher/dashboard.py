@@ -70,6 +70,15 @@ pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
 
 
+def _get_last_metrics_timeline() -> pd.DataFrame | list[dict] | None:
+    """Retourne la dernière timeline de métriques disponible parmi les runs."""
+
+    for timeline in reversed(runs_metrics_timeline):
+        if timeline is not None:
+            return timeline
+    return None
+
+
 def aggregate_run_metrics(metrics_list: list[dict]) -> dict:
     """Agrège les métriques de plusieurs runs en pondérant correctement."""
 
@@ -407,6 +416,9 @@ hist_metric_select = pn.widgets.Select(name="Histogramme", options=["SF", "D\u00
 # --- Timeline des paquets ---
 timeline_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
 
+# --- Timeline des métriques cumulées ---
+metrics_timeline_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
+
 # --- Heatmap de couverture ---
 heatmap_button = pn.widgets.Button(name="Afficher la heatmap", button_type="primary")
 heatmap_pane = pn.pane.Plotly(height=600, sizing_mode="stretch_width", visible=False)
@@ -546,6 +558,81 @@ def update_timeline():
         margin=dict(l=20, r=20, t=40, b=20),
     )
     timeline_pane.object = timeline_fig
+
+
+def _metrics_timeline_to_dataframe(
+    timeline: pd.DataFrame | list[dict] | None,
+) -> pd.DataFrame | None:
+    """Convertit une timeline quelconque en DataFrame pour faciliter le tracé."""
+
+    if timeline is None:
+        return None
+    if isinstance(timeline, pd.DataFrame):
+        if timeline.empty:
+            return None
+        return timeline.copy()
+    if not timeline:
+        return None
+    if pd is None:
+        return None
+    df = pd.DataFrame(list(timeline))
+    return df if not df.empty else None
+
+
+def _build_metrics_timeline_figure(
+    timeline: pd.DataFrame | list[dict] | None,
+) -> go.Figure:
+    """Construit un graphique Plotly représentant l'évolution des métriques."""
+
+    df = _metrics_timeline_to_dataframe(timeline)
+    fig = go.Figure()
+    if df is None or "time_s" not in df.columns:
+        fig.update_layout(
+            title="Évolution des métriques",
+            xaxis_title="Temps (s)",
+            yaxis_title="Valeur",
+            margin=dict(l=20, r=20, t=40, b=20),
+            legend_title="Métrique",
+        )
+        return fig
+
+    time_values = df["time_s"]
+    metric_labels = [
+        ("PDR", "PDR"),
+        ("collisions", "Collisions"),
+        ("duplicates", "Duplicats"),
+        ("packets_lost_no_signal", "Perdus (sans signal)"),
+        ("energy_J", "Énergie (J)"),
+        ("instant_throughput_bps", "Débit instantané (bps)"),
+    ]
+
+    for column, label in metric_labels:
+        if column in df.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=time_values,
+                    y=df[column],
+                    mode="lines+markers",
+                    name=label,
+                )
+            )
+
+    fig.update_layout(
+        title="Évolution des métriques",
+        xaxis_title="Temps (s)",
+        yaxis_title="Valeur",
+        margin=dict(l=20, r=20, t=40, b=20),
+        legend_title="Métrique",
+    )
+    return fig
+
+
+def _update_metrics_timeline_pane(
+    timeline: pd.DataFrame | list[dict] | None,
+) -> None:
+    """Actualise le pane Plotly dédié à la timeline des métriques."""
+
+    metrics_timeline_pane.object = _build_metrics_timeline_figure(timeline)
 
 
 def update_histogram(metrics: dict | None = None) -> None:
@@ -726,6 +813,7 @@ def step_simulation():
     update_histogram(metrics)
     update_map()
     update_timeline()
+    _update_metrics_timeline_pane(timeline)
     if not cont:
         on_stop(None)
         return
@@ -899,6 +987,7 @@ def setup_simulation(seed_offset: int = 0):
     initial_metrics = sim.get_metrics()
     update_map()
     _set_metric_indicators(initial_metrics)
+    _update_metrics_timeline_pane(sim.get_metrics_timeline())
     chrono_indicator.value = 0
     global node_paths
     node_paths = {n.id: [(n.x, n.y)] for n in sim.nodes}
@@ -1017,6 +1106,7 @@ def on_stop(event):
         runs_metrics.append(sim.get_metrics())
     except Exception:
         pass
+    timeline = None
     try:
         timeline = sim.get_metrics_timeline()
         if len(runs_metrics_timeline) < max(current_run, 1):
@@ -1026,7 +1116,7 @@ def on_stop(event):
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = timeline
     except Exception:
-        pass
+        timeline = None
 
     if current_run < total_runs:
         if runs_metrics:
@@ -1105,6 +1195,8 @@ def on_stop(event):
     global pause_prev_disabled
     pause_button.disabled = pause_prev_disabled
 
+    _update_metrics_timeline_pane(_get_last_metrics_timeline())
+
 
 # --- Export CSV local : Méthode universelle ---
 def exporter_csv(event=None):
@@ -1159,6 +1251,8 @@ def exporter_csv(event=None):
             message_lines.append(f"Timeline : <b>{timeline_path}</b>")
         message_lines.append("(Ouvre-les avec Excel ou pandas)")
         export_message.object = "<br>".join(message_lines)
+
+        _update_metrics_timeline_pane(_get_last_metrics_timeline())
 
         try:
             folder = dest_dir
@@ -1526,6 +1620,8 @@ center_col = pn.Column(
     heatmap_pane,
     hist_metric_select,
     sf_hist_pane,
+    timeline_pane,
+    metrics_timeline_pane,
     pn.Row(
         pn.Column(manual_pos_toggle, position_textarea, width=650),
     ),
