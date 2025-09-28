@@ -655,10 +655,7 @@ def select_adr(module, name: str) -> None:
     if adr_select.value != name:
         adr_select.value = name
     if sim is not None:
-        if module is adr_standard_1:
-            module.apply(sim, degrade_channel=True, profile="flora")
-        else:
-            module.apply(sim)
+        module.apply(sim)
 
 # --- Callback chrono ---
 def periodic_chrono_update():
@@ -863,10 +860,7 @@ def setup_simulation(seed_offset: int = 0):
 
     # Appliquer le profil ADR sélectionné
     if selected_adr_module:
-        if selected_adr_module is adr_standard_1:
-            selected_adr_module.apply(sim, degrade_channel=True, profile="flora")
-        else:
-            selected_adr_module.apply(sim)
+        selected_adr_module.apply(sim)
 
     # La mobilité est désormais gérée directement par le simulateur
     start_time = time.time()
