@@ -1953,6 +1953,14 @@ class Simulator:
         pdr = delivered / total_sent if total_sent > 0 else 0.0
 
         instant_throughput = 0.0
+        avg_delay = (
+            self.total_delay / self.delivered_count if self.delivered_count > 0 else 0.0
+        )
+        instant_avg_delay = avg_delay
+        total_delay = self.total_delay
+        delivered_count = self.delivered_count
+        total_losses = total_sent - delivered
+        recent_losses = total_losses
         if self.metrics_timeline:
             prev = self.metrics_timeline[-1]
             dt = current_time - float(prev.get("time_s", 0.0))
@@ -1961,10 +1969,29 @@ class Simulator:
                 instant_throughput = (
                     delivered_delta * self.payload_size_bytes * 8 / dt
                 )
-        elif current_time > 0.0:
-            instant_throughput = (
-                delivered * self.payload_size_bytes * 8 / current_time
+            prev_total_delay = float(prev.get("total_delay_s", 0.0))
+            prev_delivered_count = float(prev.get("delivered_count", 0.0))
+            delay_delta = total_delay - prev_total_delay
+            delivered_delta_count = delivered_count - prev_delivered_count
+            if delivered_delta_count > 0 and delay_delta >= 0.0:
+                instant_avg_delay = delay_delta / delivered_delta_count
+            prev_losses = float(
+                prev.get(
+                    "losses_total",
+                    float(prev.get("tx_attempted", 0.0))
+                    - float(prev.get("delivered", 0.0)),
+                )
             )
+            recent_losses = total_losses - prev_losses
+        else:
+            if current_time > 0.0:
+                instant_throughput = (
+                    delivered * self.payload_size_bytes * 8 / current_time
+                )
+            if delivered_count > 0:
+                instant_avg_delay = total_delay / delivered_count
+        if recent_losses < 0.0:
+            recent_losses = 0.0
 
         snapshot = {
             "time_s": current_time,
@@ -1976,6 +2003,12 @@ class Simulator:
             "packets_lost_no_signal": no_signal,
             "energy_J": energy,
             "instant_throughput_bps": instant_throughput,
+            "avg_delay_s": avg_delay,
+            "instant_avg_delay_s": instant_avg_delay,
+            "total_delay_s": total_delay,
+            "delivered_count": delivered_count,
+            "losses_total": total_losses,
+            "recent_losses": recent_losses,
         }
         self.metrics_timeline.append(snapshot)
 
@@ -2054,7 +2087,7 @@ class Simulator:
             p = node.tx_power
             tx_power_distribution[p] = tx_power_distribution.get(p, 0) + 1
 
-        return {
+        metrics = {
             "PDR": pdr,
             "tx_attempted": total_sent,
             "delivered": delivered,
@@ -2086,6 +2119,35 @@ class Simulator:
             **{f"energy_class_{ct}_J": energy_by_class[ct] for ct in energy_by_class},
             "retransmissions": self.retransmissions,
         }
+
+        latest_snapshot = self.metrics_timeline[-1] if self.metrics_timeline else None
+        total_losses = total_sent - delivered
+        instant_throughput = throughput_bps
+        instant_delay = avg_delay
+        recent_losses = total_losses
+        losses_total = total_losses
+        if latest_snapshot is not None:
+            instant_throughput = float(
+                latest_snapshot.get("instant_throughput_bps", throughput_bps) or 0.0
+            )
+            instant_delay = float(
+                latest_snapshot.get(
+                    "instant_avg_delay_s",
+                    latest_snapshot.get("avg_delay_s", avg_delay),
+                )
+                or 0.0
+            )
+            recent_losses = float(latest_snapshot.get("recent_losses", recent_losses) or 0.0)
+            losses_total = float(latest_snapshot.get("losses_total", losses_total) or 0.0)
+        metrics.update(
+            {
+                "instant_throughput_bps": instant_throughput,
+                "instant_avg_delay_s": instant_delay,
+                "recent_losses": recent_losses if recent_losses > 0.0 else 0.0,
+                "losses_total": losses_total,
+            }
+        )
+        return metrics
 
     def get_metrics_timeline(self):
         """Retourne l'historique des métriques cumulées après chaque ``TX_END``."""

@@ -172,6 +172,13 @@ def _install_pandas_stub():
         def __getitem__(self, key):
             return _FakeSeries(self._data[key])
 
+        def __setitem__(self, key, value):
+            length = len(self)
+            if isinstance(value, list):
+                self._data[key] = list(value)
+            else:
+                self._data[key] = [value] * length
+
         def __len__(self):
             if not self._data:
                 return 0
@@ -181,8 +188,22 @@ def _install_pandas_stub():
         def empty(self):
             return len(self) == 0
 
-        def to_dict(self):
-            return {key: list(values) for key, values in self._data.items()}
+        def to_dict(self, orient=None):
+            if orient in (None, "dict"):
+                return {key: list(values) for key, values in self._data.items()}
+            if orient in ("records",):
+                records = []
+                for idx in range(len(self)):
+                    records.append({key: values[idx] for key, values in self._data.items()})
+                return records
+            raise ValueError(f"Unsupported orient: {orient}")
+
+        def copy(self):
+            return _FakeDataFrame(self.to_dict())
+
+        @property
+        def columns(self):
+            return list(self._data.keys())
 
         def assign(self, **kwargs):
             data = self.to_dict()
@@ -193,6 +214,14 @@ def _install_pandas_stub():
                 else:
                     data[key] = [value] * length
             return _FakeDataFrame(data)
+
+        def insert(self, _loc, column, value):
+            if column in self._data:
+                return
+            if isinstance(value, list):
+                self._data[column] = list(value)
+            else:
+                self._data[column] = [value] * len(self)
 
     def _concat(frames, ignore_index=False):
         data = {}
@@ -271,6 +300,26 @@ def test_step_simulation_updates_indicators(monkeypatch):
     monkeypatch.setattr(dashboard, "update_histogram", lambda metrics: None)
     monkeypatch.setattr(dashboard, "update_map", lambda: None)
     monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
+    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
+    original_set_metrics = dashboard._set_metric_indicators
+    instant_history: list[tuple[dict, float, float, float, float, float, float]] = []
+
+    def _record_and_set(metrics: dict | None) -> None:
+        original_set_metrics(metrics)
+        if metrics and "instant_throughput_bps" in metrics:
+            instant_history.append(
+                (
+                    dict(metrics),
+                    dashboard.pdr_indicator.value,
+                    dashboard.collisions_indicator.value,
+                    dashboard.energy_indicator.value,
+                    dashboard.delay_indicator.value,
+                    dashboard.throughput_indicator.value,
+                    dashboard.retrans_indicator.value,
+                )
+            )
+
+    monkeypatch.setattr(dashboard, "_set_metric_indicators", _record_and_set)
     monkeypatch.setattr(
         dashboard,
         "session_alive",
@@ -297,15 +346,25 @@ def test_step_simulation_updates_indicators(monkeypatch):
             break
 
     metrics = sim.get_metrics()
+    assert instant_history
+    (
+        metrics_from_step,
+        pdr_value,
+        collisions_value,
+        energy_value,
+        delay_value,
+        throughput_value,
+        retrans_value,
+    ) = instant_history[-1]
 
-    assert dashboard.pdr_indicator.value == pytest.approx(metrics["PDR"])
-    assert dashboard.collisions_indicator.value == metrics["collisions"]
-    assert dashboard.energy_indicator.value == pytest.approx(metrics["energy_J"])
-    assert dashboard.delay_indicator.value == pytest.approx(metrics["avg_delay_s"])
-    assert dashboard.throughput_indicator.value == pytest.approx(
-        metrics["throughput_bps"]
+    assert pdr_value == pytest.approx(metrics_from_step["PDR"])
+    assert collisions_value == metrics_from_step["collisions"]
+    assert energy_value == pytest.approx(metrics_from_step["energy_J"])
+    assert delay_value == pytest.approx(metrics_from_step["instant_avg_delay_s"])
+    assert throughput_value == pytest.approx(
+        metrics_from_step["instant_throughput_bps"]
     )
-    assert dashboard.retrans_indicator.value == metrics["retransmissions"]
+    assert retrans_value == metrics_from_step["retransmissions"]
 
     table_df = dashboard.pdr_table.object
     expected_pdr = metrics["pdr_by_node"]
@@ -327,3 +386,76 @@ def test_step_simulation_updates_indicators(monkeypatch):
         pd.testing.assert_frame_equal(timeline_recorded, timeline_expected)
     else:
         assert timeline_recorded == timeline_expected
+
+
+def test_set_metric_indicators_prefers_instant_values(monkeypatch):
+    """Les indicateurs doivent refléter les métriques instantanées si présentes."""
+
+    pdr = _DummyIndicator()
+    collisions = _DummyIndicator()
+    energy = _DummyIndicator()
+    delay = _DummyIndicator()
+    throughput = _DummyIndicator()
+    retrans = _DummyIndicator()
+
+    monkeypatch.setattr(dashboard, "pdr_indicator", pdr)
+    monkeypatch.setattr(dashboard, "collisions_indicator", collisions)
+    monkeypatch.setattr(dashboard, "energy_indicator", energy)
+    monkeypatch.setattr(dashboard, "delay_indicator", delay)
+    monkeypatch.setattr(dashboard, "throughput_indicator", throughput)
+    monkeypatch.setattr(dashboard, "retrans_indicator", retrans)
+
+    first_metrics = {
+        "PDR": 0.25,
+        "collisions": 1.0,
+        "energy_J": 0.5,
+        "instant_avg_delay_s": 2.5,
+        "avg_delay_s": 3.0,
+        "instant_throughput_bps": 128.0,
+        "throughput_bps": 64.0,
+        "retransmissions": 0.0,
+    }
+    dashboard._set_metric_indicators(first_metrics)
+
+    assert pdr.value == pytest.approx(0.25)
+    assert collisions.value == pytest.approx(1.0)
+    assert energy.value == pytest.approx(0.5)
+    assert delay.value == pytest.approx(2.5)
+    assert throughput.value == pytest.approx(128.0)
+    assert retrans.value == pytest.approx(0.0)
+
+    second_metrics = {
+        "PDR": 0.5,
+        "collisions": 2.0,
+        "energy_J": 1.5,
+        "instant_avg_delay_s": 1.5,
+        "avg_delay_s": 1.8,
+        "instant_throughput_bps": 256.0,
+        "throughput_bps": 180.0,
+        "retransmissions": 1.0,
+    }
+    dashboard._set_metric_indicators(second_metrics)
+
+    assert pdr.value == pytest.approx(0.5)
+    assert collisions.value == pytest.approx(2.0)
+    assert energy.value == pytest.approx(1.5)
+    assert delay.value == pytest.approx(1.5)
+    assert throughput.value == pytest.approx(256.0)
+    assert retrans.value == pytest.approx(1.0)
+
+    fallback_metrics = {
+        "PDR": 0.75,
+        "collisions": 3.0,
+        "energy_J": 2.5,
+        "avg_delay_s": 4.0,
+        "throughput_bps": 512.0,
+        "retransmissions": 2.0,
+    }
+    dashboard._set_metric_indicators(fallback_metrics)
+
+    assert pdr.value == pytest.approx(0.75)
+    assert collisions.value == pytest.approx(3.0)
+    assert energy.value == pytest.approx(2.5)
+    assert delay.value == pytest.approx(4.0)
+    assert throughput.value == pytest.approx(512.0)
+    assert retrans.value == pytest.approx(2.0)
