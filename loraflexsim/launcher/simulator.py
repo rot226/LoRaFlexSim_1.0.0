@@ -988,6 +988,16 @@ class Simulator:
             Event(self._seconds_to_ticks(time_s), event_type, eid, node_id),
         )
 
+    def _all_nodes_done(self) -> bool:
+        """Retourne ``True`` lorsque chaque nœud est mort ou a atteint son quota."""
+
+        if self.packets_to_send == 0:
+            return False
+        return all(
+            (not node.alive) or (node.packets_sent >= self.packets_to_send)
+            for node in self.nodes
+        )
+
     def _finalize_at_max_time(self) -> None:
         """Arrête la simulation à ``max_sim_time`` en complétant l'énergie restante."""
 
@@ -1528,9 +1538,7 @@ class Simulator:
                             node.id,
                         )
 
-                    if self.packets_to_send != 0 and all(
-                        n.packets_sent >= self.packets_to_send for n in self.nodes
-                    ):
+                    if self._all_nodes_done():
                         new_queue = []
                         for evt in self.event_queue:
                             if evt.type in (EventType.TX_END, EventType.RX_WINDOW):
@@ -1688,10 +1696,7 @@ class Simulator:
                     break
                 # Replanifier selon la classe du nœud
                 if node.class_type.upper() == "C":
-                    if not (
-                        self.packets_to_send != 0
-                        and all(n.packets_sent >= self.packets_to_send for n in self.nodes)
-                    ):
+                    if not self._all_nodes_done():
                         raw_next = time + self.class_c_rx_interval
                         limit = self.max_sim_time
                         if limit is not None and raw_next >= limit:
