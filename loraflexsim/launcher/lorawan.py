@@ -176,6 +176,20 @@ class DutyCycleReq:
 
 
 @dataclass
+class DutyCycleAns:
+    """Acknowledge a DutyCycleReq."""
+
+    def to_bytes(self) -> bytes:
+        return bytes([0x04])
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "DutyCycleAns":
+        if len(data) < 1 or data[0] != 0x04:
+            raise ValueError("Invalid DutyCycleAns")
+        return DutyCycleAns()
+
+
+@dataclass
 class RXParamSetupReq:
     rx1_dr_offset: int
     rx2_datarate: int
