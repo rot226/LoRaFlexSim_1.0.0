@@ -157,8 +157,10 @@ def simulate(
         channel.non_orth_delta = non_orth_delta
     sf_tx_energy: list[float] = [0.0] * 6
     sf_rx_energy: list[float] = [0.0] * 6
+    sf_airtime: list[float] = [0.0] * 6
     for idx, sf in enumerate(range(7, 13)):
         airtime = channel.airtime(sf, payload_size=PAYLOAD_SIZE)
+        sf_airtime[idx] = airtime
         sf_tx_energy[idx] = (tx_current - idle_current) * voltage * airtime
         sf_rx_energy[idx] = (rx_current - idle_current) * voltage * airtime
     # Liste des délais de livraison (0 pour chaque paquet car la transmission
@@ -255,7 +257,7 @@ def simulate(
                     success = False
                 if success:
                     delivered += 1
-                    delays.append(0)
+                    delays.append(sf_airtime[int(node_sf[n]) - 7])
                     if debug_rx:
                         logging.debug(f"t={t:.3f} Node {n} GW {gw} CH {ch} reçu")
                 else:
@@ -309,7 +311,7 @@ def simulate(
                     if success:
                         collisions += nb_tx - 1
                         delivered += 1
-                        delays.append(0)
+                        delays.append(sf_airtime[int(node_sf[winner]) - 7])
                         if debug_rx:
                             for n in nodes_on_ch:
                                 if n == winner:
