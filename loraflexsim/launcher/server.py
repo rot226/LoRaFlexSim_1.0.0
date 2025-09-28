@@ -713,6 +713,20 @@ class NetworkServer:
             else previous_rssi if previous_rssi is not None else rssi
         )
 
+        if (
+            selected_rssi is not None
+            and not math.isinf(self.energy_detection_dBm)
+            and selected_rssi < self.energy_detection_dBm
+        ):
+            logger.debug(
+                "NetworkServer: packet event %s from node %s below energy detection threshold (%.2f < %.2f).",
+                event_id,
+                node_id,
+                selected_rssi,
+                self.energy_detection_dBm,
+            )
+            return
+
         selection_changed = (
             selected_gateway_id != previous_gateway_id
             or (selected_snr is not None and selected_snr != previous_snr)
