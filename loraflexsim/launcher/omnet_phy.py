@@ -328,23 +328,35 @@ class OmnetPHY:
             else:
                 eff_bw = min(ch.bandwidth, ch.frontend_filter_bw)
                 thermal = self.model.thermal_noise_dBm(eff_bw)
-        noise = thermal + ch.noise_figure_dB + ch.interference_dB
+        base_noise_dB = thermal + ch.noise_figure_dB
+        humidity = 0.0
         if ch.humidity_noise_coeff_dB != 0.0:
-            noise += ch.humidity_noise_coeff_dB * (ch._humidity.sample() / 100.0)
+            humidity = ch.humidity_noise_coeff_dB * (ch._humidity.sample() / 100.0)
+        base_power_mW = 10 ** ((base_noise_dB + humidity) / 10.0)
+        power_mW = base_power_mW
+        if ch.interference_dB != 0.0:
+            power_mW += 10 ** (ch.interference_dB / 10.0)
         for f, bw, power in ch.band_interference:
             half = (bw + ch.bandwidth) / 2.0
             diff = abs(ch.frequency_hz - f)
             if diff <= half:
-                noise += power
+                power_mW += 10 ** (power / 10.0)
             elif ch.adjacent_interference_dB > 0 and diff <= half + ch.bandwidth:
-                noise += max(power - ch.adjacent_interference_dB, 0.0)
+                attenuated = max(power - ch.adjacent_interference_dB, 0.0)
+                if attenuated > 0.0:
+                    power_mW += 10 ** (attenuated / 10.0)
         if ch.noise_floor_std > 0:
-            noise += self.rng.normal(0.0, ch.noise_floor_std)
+            variation = self.rng.normal(0.0, ch.noise_floor_std)
+            power_mW *= 10 ** (variation / 10.0)
         if ch.impulsive_noise_prob > 0.0 and self.rng.random() < ch.impulsive_noise_prob:
-            noise += ch.impulsive_noise_dB
-        noise += self.model.noise_variation()
-        noise += self._osc_leak.sample()
-        return noise
+            power_mW += 10 ** (ch.impulsive_noise_dB / 10.0)
+        delta = self.model.noise_variation()
+        if delta != 0.0:
+            power_mW *= 10 ** (delta / 10.0)
+        osc_leak = self._osc_leak.sample()
+        if osc_leak != 0.0:
+            power_mW *= 10 ** (osc_leak / 10.0)
+        return 10 * math.log10(power_mW)
 
     def compute_rssi(
         self,
