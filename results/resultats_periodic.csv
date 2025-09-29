@@ -1,0 +1,4 @@
+nodes,gateways,channels,mode,interval,steps,run,delivered,collisions,PDR(%),energy_J,avg_delay,throughput_bps
+5,1,1,periodic,10.0,100,1,50,0,100.00,4.769,0.41,80.00
+5,1,1,periodic,10.0,100,2,50,0,100.00,4.962,0.42,80.00
+5,1,1,periodic,10.0,100,3,30,20,60.00,5.020,0.42,48.00
