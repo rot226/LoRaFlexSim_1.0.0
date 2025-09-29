@@ -1,5 +1,6 @@
 import logging
 import math
+from os import PathLike
 
 from .non_orth_delta import (
     DEFAULT_NON_ORTH_DELTA as FLORA_NON_ORTH_DELTA,
@@ -159,6 +160,9 @@ class Gateway:
             ΔRSSI (dB) minimal entre ``SF_signal`` (ligne) et
             ``SF_interférence`` (colonne) pour autoriser la capture.
         """
+        if isinstance(non_orth_delta, (str, PathLike)):
+            non_orth_delta = load_non_orth_delta(str(non_orth_delta))
+
         if rssi < getattr(self, "energy_detection_dBm", -float("inf")):
             logger.debug(
                 "Gateway %s: ignore un paquet sous le seuil d'énergie (RSSI=%.1f dBm)",
