@@ -658,22 +658,32 @@ class AdvancedChannel:
         thermal = model.thermal_noise_dBm(eff_bw)
         model.temperature_K = original_temp
         if self.base.phy_model == "flora_full" and sf is not None:
-            noise = self.base._flora_noise_dBm(sf)
+            base_noise_dB = self.base._flora_noise_dBm(sf)
         else:
-            noise = thermal + self.base.noise_figure_dB + self.base.interference_dB
-        noise += self.base.humidity_noise_coeff_dB * (self._humidity.sample() / 100.0)
+            base_noise_dB = thermal + self.base.noise_figure_dB
+        humidity = 0.0
+        if self.base.humidity_noise_coeff_dB != 0.0:
+            humidity = self.base.humidity_noise_coeff_dB * (self._humidity.sample() / 100.0)
+        power_mW = 10 ** ((base_noise_dB + humidity) / 10.0)
+        if self.base.interference_dB != 0.0:
+            power_mW += 10 ** (self.base.interference_dB / 10.0)
         for f, bw, power in self.base.band_interference:
             half = (bw + self.base.bandwidth) / 2.0
             diff = abs(self.base.frequency_hz - f)
             if diff <= half:
-                noise += power
+                power_mW += 10 ** (power / 10.0)
             elif self.base.adjacent_interference_dB > 0 and diff <= half + self.base.bandwidth:
-                noise += max(power - self.base.adjacent_interference_dB, 0.0)
+                attenuated = max(power - self.base.adjacent_interference_dB, 0.0)
+                if attenuated > 0.0:
+                    power_mW += 10 ** (attenuated / 10.0)
         if self.base.noise_floor_std > 0:
-            noise += self.rng.normal(0, self.base.noise_floor_std)
+            variation = self.rng.normal(0, self.base.noise_floor_std)
+            power_mW *= 10 ** (variation / 10.0)
         if self.base.impulsive_noise_prob > 0.0 and self.rng.random() < self.base.impulsive_noise_prob:
-            noise += self.base.impulsive_noise_dB
-        noise += model.noise_variation()
+            power_mW += 10 ** (self.base.impulsive_noise_dB / 10.0)
+        delta = model.noise_variation()
+        if delta != 0.0:
+            power_mW *= 10 ** (delta / 10.0)
         rssi += self.fading_model.sample_db()
 
         rssi -= self.base._filter_attenuation_db(freq_offset_hz)
@@ -681,7 +691,10 @@ class AdvancedChannel:
         phase = self._phase_offset.sample()
         # Additional penalty if transmissions are not perfectly aligned
         penalty = self._interference_penalty_db(freq_offset_hz, sync_offset_s, phase, sf)
-        noise += penalty
+        if penalty != 0.0:
+            power_mW *= 10 ** (penalty / 10.0)
+
+        noise = 10 * math.log10(power_mW)
 
         snr = rssi - noise - abs(self._phase_noise.sample())
         if sf is not None and self.base.processing_gain:
