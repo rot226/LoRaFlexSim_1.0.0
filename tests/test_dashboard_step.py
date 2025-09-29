@@ -1,6 +1,7 @@
 """Tests pour la fonction ``step_simulation`` du tableau de bord Panel."""
 
 import csv
+from collections import deque
 import sys
 import types
 
@@ -690,6 +691,9 @@ def test_step_simulation_limits_timeline_refresh(monkeypatch):
     monkeypatch.setattr(dashboard, "METRICS_TIMELINE_FULL_REFRESH_INTERVAL", 5)
     dashboard._metrics_timeline_steps_since_refresh = 0
     dashboard.metrics_timeline_buffer = []
+    dashboard.metrics_timeline_window = deque(
+        maxlen=dashboard.METRICS_TIMELINE_WINDOW_SIZE
+    )
     dashboard.export_message = _DummyTable()
 
     sim = Simulator(

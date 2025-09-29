@@ -1,9 +1,10 @@
 """Tests unitaires pour l'agrégation des métriques du tableau de bord."""
 
 from pathlib import Path
-from types import SimpleNamespace
 import ast
 import importlib
+from collections import deque
+from types import SimpleNamespace
 
 import pytest
 
@@ -140,6 +141,11 @@ def test_step_simulation_deduplicates_metrics_snapshots(monkeypatch):
     monkeypatch.setattr(dashboard, "current_run", 1)
     monkeypatch.setattr(dashboard, "runs_metrics_timeline", [None])
     monkeypatch.setattr(dashboard, "metrics_timeline_buffer", [])
+    monkeypatch.setattr(
+        dashboard,
+        "metrics_timeline_window",
+        deque(maxlen=dashboard.METRICS_TIMELINE_WINDOW_SIZE),
+    )
     monkeypatch.setattr(dashboard, "metrics_timeline_last_key", None)
     monkeypatch.setattr(dashboard, "_metrics_timeline_steps_since_refresh", 0)
     monkeypatch.setattr(dashboard, "session_alive", lambda *_, **__: True)
