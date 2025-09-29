@@ -1083,8 +1083,7 @@ def step_simulation():
     # Les PDR détaillés par SF, passerelle et classe sont calculés mais non
     # affichés. Ils seront exportés dans le fichier de résultats.
     update_histogram(metrics)
-    update_map()
-    update_timeline()
+    snapshot_added = False
     if latest_snapshot is not None:
         snapshot_copy = dict(latest_snapshot)
         signature = _snapshot_signature(snapshot_copy)
@@ -1093,6 +1092,7 @@ def step_simulation():
             metrics_timeline_buffer = run_timeline
             metrics_timeline_window.append(snapshot_copy)
             metrics_timeline_last_key = signature
+            snapshot_added = True
             force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
             _metrics_timeline_steps_since_refresh += 1
             refresh_due = (
@@ -1111,6 +1111,9 @@ def step_simulation():
                 )
     else:
         _update_metrics_timeline_pane(metrics_timeline_window)
+    if snapshot_added:
+        update_map()
+        update_timeline()
     if not cont:
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = sim.get_metrics_timeline()
