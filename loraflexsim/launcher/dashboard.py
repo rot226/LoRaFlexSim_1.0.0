@@ -79,6 +79,7 @@ pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
 _latest_global_counters: tuple[int, int] | None = None
 _last_metrics_counters: tuple[int, int] | None = None
+flora_metrics: dict[str, float] | None = None
 
 
 def _get_last_metrics_timeline() -> pd.DataFrame | list[dict] | None:
@@ -447,6 +448,13 @@ fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width
 pdr_table = pn.pane.DataFrame(
     pd.DataFrame(columns=["Node", "PDR", "Recent PDR"]),
     height=200,
+    width=220,
+)
+
+# Tableau de comparaison avec FLoRa (référence historique)
+flora_compare_table = pn.pane.DataFrame(
+    pd.DataFrame(columns=["Metric", "FLoRa", "SFRD", "Diff"]),
+    height=180,
     width=220,
 )
 
@@ -1157,6 +1165,30 @@ def step_simulation():
         pdr_table.object = table_df
         update_histogram(metrics)
 
+    if flora_metrics:
+        source_metrics: dict[str, float]
+        if metrics is not None:
+            source_metrics = metrics
+        elif isinstance(merged_metrics, dict):
+            source_metrics = merged_metrics
+        else:
+            source_metrics = {}
+
+        metrics_rows: list[dict[str, float | str]] = []
+        metrics_keys = ["PDR", "collisions", "throughput_bps", "energy_J"]
+        for key in metrics_keys:
+            flora_val = float(flora_metrics.get(key, 0.0) or 0.0)
+            sim_val = float(source_metrics.get(key, 0.0) or 0.0)
+            metrics_rows.append(
+                {
+                    "Metric": key,
+                    "FLoRa": flora_val,
+                    "SFRD": sim_val,
+                    "Diff": sim_val - flora_val,
+                }
+            )
+        flora_compare_table.object = pd.DataFrame(metrics_rows)
+
     snapshot_added = False
     if has_new_snapshot and snapshot_copy is not None:
         run_timeline.append(snapshot_copy)
@@ -1373,6 +1405,9 @@ def setup_simulation(seed_offset: int = 0):
     start_time = time.time()
     max_real_time = real_time_duration_input.value if real_time_duration_input.value > 0 else None
     pdr_table.object = pd.DataFrame(columns=["Node", "PDR", "Recent PDR"])
+    flora_compare_table.object = pd.DataFrame(
+        columns=["Metric", "FLoRa", "SFRD", "Diff"]
+    )
 
     chrono_callback = pn.state.add_periodic_callback(periodic_chrono_update, period=100, timeout=None)
 
@@ -2015,6 +2050,7 @@ metrics_col = pn.Column(
     throughput_indicator,
     retrans_indicator,
     pdr_table,
+    flora_compare_table,
 )
 metrics_col.width = 220
 
