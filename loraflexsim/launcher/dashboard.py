@@ -70,11 +70,6 @@ runs_events: list[pd.DataFrame] = []
 runs_metrics: list[dict] = []
 runs_metrics_timeline: list[pd.DataFrame | list[dict] | None] = []
 auto_fast_forward = False
-timeline_fig = go.Figure()
-last_event_index = 0
-_TIMELINE_MAX_SEGMENTS = 500
-timeline_success_segments: deque[tuple[float, float, int]] = deque()
-timeline_failure_segments: deque[tuple[float, float, int]] = deque()
 pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
 _latest_global_counters: tuple[int, int] | None = None
@@ -470,9 +465,6 @@ map_pane = pn.pane.Plotly(height=600, sizing_mode="stretch_width")
 sf_hist_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
 hist_metric_select = pn.widgets.Select(name="Histogramme", options=["SF", "D\u00e9lais"], value="SF")
 
-# --- Timeline des paquets ---
-timeline_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
-
 # --- Timeline des métriques cumulées ---
 metrics_timeline_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
 
@@ -609,118 +601,6 @@ def update_map():
     )
     map_pane.object = fig
 
-
-def _ensure_timeline_traces() -> tuple[int, int]:
-    """Ensure that the timeline figure contains persistent traces."""
-
-    global timeline_fig
-
-    if not isinstance(timeline_fig, go.Figure):
-        timeline_fig = go.Figure()
-
-    name_to_index = {trace.name: idx for idx, trace in enumerate(timeline_fig.data)}
-
-    success_idx = name_to_index.get("Succès")
-    if success_idx is None:
-        timeline_fig.add_trace(
-            go.Scattergl(
-                name="Succès",
-                mode="lines",
-                line=dict(color="green"),
-                hoverinfo="none",
-                x=[],
-                y=[],
-            )
-        )
-        success_idx = len(timeline_fig.data) - 1
-
-    failure_idx = name_to_index.get("Échecs")
-    if failure_idx is None:
-        timeline_fig.add_trace(
-            go.Scattergl(
-                name="Échecs",
-                mode="lines",
-                line=dict(color="red"),
-                hoverinfo="none",
-                x=[],
-                y=[],
-            )
-        )
-        failure_idx = len(timeline_fig.data) - 1
-
-    return success_idx, failure_idx
-
-
-def _segments_to_xy(
-    segments: deque[tuple[float, float, int]]
-) -> tuple[list[float | None], list[int | None]]:
-    """Transforme des segments (start, end, node) en listes Plotly."""
-
-    x_values: list[float | None] = []
-    y_values: list[int | None] = []
-    for start, end, node in segments:
-        x_values.extend((start, end, None))
-        y_values.extend((node, node, None))
-    return x_values, y_values
-
-
-def update_timeline():
-    """Mise à jour incrémentale de la timeline des paquets."""
-
-    global sim, timeline_fig, last_event_index
-    global timeline_success_segments, timeline_failure_segments
-
-    if sim is None or not session_alive():
-        timeline_fig = go.Figure()
-        last_event_index = 0
-        timeline_success_segments.clear()
-        timeline_failure_segments.clear()
-        timeline_pane.object = timeline_fig
-        return
-
-    _ensure_timeline_traces()
-
-    if not sim.events_log:
-        timeline_pane.object = timeline_fig
-        return
-
-    for ev in sim.events_log[last_event_index:]:
-        if ev.get("result") is None:
-            continue
-        node_id = int(ev["node_id"])
-        start = float(ev["start_time"])
-        end = float(ev["end_time"])
-        segment = (start, end, node_id)
-        if ev.get("result") == "Success":
-            timeline_success_segments.append(segment)
-        else:
-            timeline_failure_segments.append(segment)
-
-    last_event_index = len(sim.events_log)
-
-    while len(timeline_success_segments) > _TIMELINE_MAX_SEGMENTS:
-        timeline_success_segments.popleft()
-    while len(timeline_failure_segments) > _TIMELINE_MAX_SEGMENTS:
-        timeline_failure_segments.popleft()
-
-    x_success, y_success = _segments_to_xy(timeline_success_segments)
-    x_failure, y_failure = _segments_to_xy(timeline_failure_segments)
-
-    timeline_fig.update_traces(
-        dict(x=x_success, y=y_success), selector=dict(name="Succès")
-    )
-    timeline_fig.update_traces(
-        dict(x=x_failure, y=y_failure), selector=dict(name="Échecs")
-    )
-
-    timeline_fig.update_layout(
-        title="Timeline des paquets",
-        xaxis_title="Temps (s)",
-        yaxis_title="ID nœud",
-        xaxis_range=[0, sim.current_time],
-        margin=dict(l=20, r=20, t=40, b=20),
-    )
-    timeline_pane.object = timeline_fig
 
 
 def _metrics_timeline_to_dataframe(
@@ -1216,7 +1096,6 @@ def step_simulation():
 
     if snapshot_added:
         update_map()
-        update_timeline()
 
     if not cont:
         if current_run >= 1:
@@ -1233,8 +1112,7 @@ def step_simulation():
 def setup_simulation(seed_offset: int = 0):
     """Crée et démarre un simulateur avec les paramètres du tableau de bord."""
     global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
-    global timeline_fig, last_event_index, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
-    global timeline_success_segments, timeline_failure_segments
+    global metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
     global metrics_timeline_last_key, metrics_timeline_window
     global _latest_global_counters, _last_metrics_counters
 
@@ -1274,12 +1152,6 @@ def setup_simulation(seed_offset: int = 0):
     if chrono_callback:
         chrono_callback.stop()
         chrono_callback = None
-
-    timeline_fig = go.Figure()
-    last_event_index = 0
-    timeline_success_segments.clear()
-    timeline_failure_segments.clear()
-    timeline_pane.object = timeline_fig
 
     seed_val = int(seed_input.value)
     seed = seed_val + seed_offset if seed_val != 0 else None
@@ -1476,7 +1348,6 @@ def setup_simulation(seed_offset: int = 0):
             cleanup()
             return
         update_map()
-        update_timeline()
     map_anim_callback = pn.state.add_periodic_callback(anim, period=200, timeout=None)
 
 
@@ -2060,7 +1931,6 @@ center_col = pn.Column(
     heatmap_pane,
     hist_metric_select,
     sf_hist_pane,
-    timeline_pane,
     metrics_timeline_pane,
     pn.Row(
         pn.Column(manual_pos_toggle, position_textarea, width=650),
