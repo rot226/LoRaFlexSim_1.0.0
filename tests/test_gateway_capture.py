@@ -263,6 +263,46 @@ def test_non_orth_multi_sf_capture_respects_matrix_and_preamble():
         assert server.packets_received == 1
 
 
+def test_non_orth_delta_loaded_from_path(tmp_path):
+    matrix = [[10.0] * 6 for _ in range(6)]
+    matrix_path = tmp_path / "matrix.json"
+    matrix_path.write_text(json.dumps(matrix), encoding="utf8")
+
+    gw = Gateway(0, 0, 0)
+    server = NetworkServer()
+    server.gateways = [gw]
+
+    gw.start_reception(
+        1,
+        1,
+        7,
+        -50,
+        1.0,
+        6.0,
+        0.0,
+        868e6,
+        orthogonal_sf=False,
+        non_orth_delta=str(matrix_path),
+    )
+    gw.start_reception(
+        2,
+        2,
+        9,
+        -58,
+        1.0,
+        6.0,
+        0.0,
+        868e6,
+        orthogonal_sf=False,
+        non_orth_delta=str(matrix_path),
+    )
+
+    gw.end_reception(1, server, 1)
+    gw.end_reception(2, server, 2)
+
+    assert server.packets_received == 0
+
+
 def test_non_orth_capture_blocked_by_contaminated_preamble():
     gw = Gateway(0, 0, 0)
     server = NetworkServer()
