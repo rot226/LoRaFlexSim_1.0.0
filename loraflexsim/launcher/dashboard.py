@@ -5,6 +5,7 @@ import sys
 import math
 import subprocess
 import numbers
+from collections import deque
 
 import panel as pn
 import plotly.graph_objects as go
@@ -49,6 +50,31 @@ if pn.state.curdoc:
 # Certains environnements de test stub l'attribut Markdown : assurons un fallback.
 if not hasattr(pn.pane, "Markdown"):
     pn.pane.Markdown = pn.pane.HTML
+
+# Depuis Panel 1.4, ``StaticText`` a été déplacé de ``pn.widgets`` vers
+# ``pn.indicators``. Certaines versions ne proposent donc plus le widget dans
+# ``pn.widgets`` ce qui provoque une ``AttributeError`` lors de l'import. Pour
+# rester compatible avec les différentes versions nous recherchons un widget de
+# remplacement disponible et, à défaut, nous fournissons un substitut minimal.
+if not hasattr(pn.widgets, "StaticText"):
+    if hasattr(pn.indicators, "StaticText"):
+        pn.widgets.StaticText = pn.indicators.StaticText
+    else:
+        class _StaticTextFallback(pn.pane.Markdown):
+            """Fallback minimal pour l'affichage de texte statique."""
+
+            def __init__(self, *args, value: str = "", **kwargs):
+                super().__init__(*args, object=value, **kwargs)
+
+            @property
+            def value(self) -> str:
+                return self.object
+
+            @value.setter
+            def value(self, new_value: str) -> None:
+                self.object = new_value
+
+        pn.widgets.StaticText = _StaticTextFallback
 # Conteneur mutable pour conserver une référence valide à ``pn.state``
 _SESSION_STATE: dict[str, object] = {"state": pn.state}
 
@@ -67,9 +93,38 @@ total_runs = 1
 current_run = 0
 runs_events: list[pd.DataFrame] = []
 runs_metrics: list[dict] = []
+runs_metrics_timeline: list[object] = []
 auto_fast_forward = False
 pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
+first_packet_user_edited = False
+_syncing_first_packet = False
+
+
+METRICS_TIMELINE_WINDOW_SIZE = 600
+METRICS_TIMELINE_FULL_REFRESH_INTERVAL = 50
+_TIMELINE_MAX_SEGMENTS = 600
+
+metrics_timeline_window: deque[dict] = deque(maxlen=METRICS_TIMELINE_WINDOW_SIZE)
+metrics_timeline_buffer: list[dict] = []
+metrics_timeline_last_key: tuple | None = None
+_metrics_timeline_steps_since_refresh = 0
+
+timeline_success_segments: deque[tuple[float, float, int]] = deque(maxlen=_TIMELINE_MAX_SEGMENTS)
+timeline_failure_segments: deque[tuple[float, float, int]] = deque(maxlen=_TIMELINE_MAX_SEGMENTS)
+timeline_fig = go.Figure()
+timeline_pane = pn.pane.Plotly(timeline_fig, height=250, sizing_mode="stretch_width")
+last_event_index = 0
+
+METRICS_TIMELINE_TRACE_COLUMNS = {
+    "PDR": "PDR",
+    "Débit instantané (bps)": "instant_throughput_bps",
+    "Délai instantané (s)": "instant_avg_delay_s",
+    "Collisions": "collisions",
+    "Retransmissions": "retransmissions",
+}
+
+metrics_timeline_pane = pn.pane.Plotly(height=250, sizing_mode="stretch_width")
 
 
 def aggregate_run_metrics(metrics_list: list[dict]) -> dict:
@@ -162,6 +217,174 @@ def aggregate_run_metrics(metrics_list: list[dict]) -> dict:
 
     return aggregated
 
+
+def _create_empty_timeline_figure() -> go.Figure:
+    fig = go.Figure()
+    fig.update_layout(
+        title="Chronologie des transmissions",
+        xaxis_title="Temps (s)",
+        yaxis_title="Identifiant nœud",
+        legend=dict(orientation="h"),
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+    return fig
+
+
+def _create_empty_metrics_timeline_figure() -> go.Figure:
+    fig = go.Figure()
+    fig.update_layout(
+        title="Évolution des métriques",
+        xaxis_title="Temps (s)",
+        yaxis_title="Valeur",
+        legend=dict(orientation="h"),
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+    return fig
+
+
+def _ensure_timeline_records(timeline) -> list[dict]:
+    if timeline is None:
+        return []
+    if isinstance(timeline, pd.DataFrame):
+        try:
+            return timeline.to_dict("records")
+        except Exception:
+            return []
+    if hasattr(timeline, "to_dict"):
+        try:
+            return timeline.to_dict("records")
+        except Exception:
+            pass
+    records: list[dict] = []
+    for entry in timeline:
+        if entry is None:
+            continue
+        if isinstance(entry, dict):
+            records.append(dict(entry))
+        elif hasattr(entry, "_asdict"):
+            records.append(dict(entry._asdict()))
+        elif hasattr(entry, "__dict__"):
+            records.append(dict(entry.__dict__))
+        else:
+            try:
+                records.append(dict(entry))
+            except Exception:
+                continue
+    return records
+
+
+def _metrics_timeline_to_dataframe(timeline) -> pd.DataFrame:
+    records = _ensure_timeline_records(timeline)
+    if not records:
+        return pd.DataFrame()
+    try:
+        return pd.DataFrame(records)
+    except Exception:
+        return pd.DataFrame(records)
+
+
+def _build_metrics_timeline_figure(timeline) -> go.Figure:
+    df = _metrics_timeline_to_dataframe(timeline)
+    fig = _create_empty_metrics_timeline_figure()
+    if df.empty:
+        return fig
+    if "time_s" not in df.columns:
+        return fig
+    times = list(df["time_s"])
+    for name, column in METRICS_TIMELINE_TRACE_COLUMNS.items():
+        if column in df.columns:
+            values = list(df[column])
+            fig.add_scatter(x=times, y=values, mode="lines", name=name)
+    return fig
+
+
+def _set_metrics_timeline_window(timeline) -> deque:
+    records = _ensure_timeline_records(timeline)
+    metrics_timeline_window.clear()
+    if not records:
+        return metrics_timeline_window
+    start = max(0, len(records) - METRICS_TIMELINE_WINDOW_SIZE)
+    for entry in records[start:]:
+        metrics_timeline_window.append(entry)
+    return metrics_timeline_window
+
+
+def _snapshot_signature(snapshot: dict | None) -> tuple | None:
+    if not snapshot:
+        return None
+    signature: list[tuple] = []
+    for key, value in sorted(snapshot.items()):
+        if isinstance(value, numbers.Real):
+            normalised = float(value)
+        elif isinstance(value, (str, bytes)):
+            normalised = value
+        elif isinstance(value, (list, tuple)):
+            normalised = tuple(value)
+        else:
+            normalised = repr(value)
+        signature.append((key, normalised))
+    return tuple(signature)
+
+
+def _update_metrics_timeline_pane(
+    timeline,
+    latest_snapshot: dict | None = None,
+    append: bool = False,
+    force: bool = False,
+) -> None:
+    if force:
+        metrics_timeline_pane.object = _build_metrics_timeline_figure(timeline)
+        return
+
+    if latest_snapshot is None:
+        append = False
+
+    fig = metrics_timeline_pane.object
+    if not isinstance(fig, go.Figure) or not append:
+        df = _metrics_timeline_to_dataframe(timeline)
+        fig = _create_empty_metrics_timeline_figure()
+        if not df.empty and "time_s" in df.columns:
+            times = list(df["time_s"])
+            for name, column in METRICS_TIMELINE_TRACE_COLUMNS.items():
+                if column in df.columns:
+                    values = list(df[column])
+                    fig.add_scatter(x=times, y=values, mode="lines", name=name)
+        metrics_timeline_pane.object = fig
+        return
+
+    target_length = len(timeline)
+    time_value = float(latest_snapshot.get("time_s", target_length))
+
+    for trace in fig.data:
+        column = METRICS_TIMELINE_TRACE_COLUMNS.get(trace.name)
+        if not column:
+            continue
+        xs = list(trace.x) if getattr(trace, "x", None) is not None else []
+        ys = list(trace.y) if getattr(trace, "y", None) is not None else []
+        if target_length > 0 and len(xs) >= target_length:
+            keep = target_length - 1
+            xs = xs[-keep:] if keep > 0 else []
+            ys = ys[-keep:] if keep > 0 else []
+        value = latest_snapshot.get(column)
+        if isinstance(value, numbers.Real):
+            ys.append(float(value))
+        elif value is None:
+            ys.append(None)
+        else:
+            try:
+                ys.append(float(value))
+            except (TypeError, ValueError):
+                ys.append(None)
+        xs.append(time_value)
+        trace.update(x=xs, y=ys)
+
+    metrics_timeline_pane.object = fig
+
+
+timeline_fig = _create_empty_timeline_figure()
+timeline_pane.object = timeline_fig
+metrics_timeline_pane.object = _create_empty_metrics_timeline_figure()
+
 def _get_panel_state() -> object:
     """Return the captured Panel state used across threads."""
 
@@ -201,6 +424,9 @@ def _validate_positive_inputs() -> bool:
     if float(interval_input.value) <= 0:
         export_message.object = "⚠️ L'intervalle doit être supérieur à 0 !"
         return False
+    if float(first_packet_input.value) < 0:
+        export_message.object = "⚠️ Le premier intervalle doit être positif ou nul !"
+        return False
     return True
 
 
@@ -212,9 +438,11 @@ mode_select = pn.widgets.RadioButtonGroup(
     name="Mode d'émission", options=["Aléatoire", "Périodique"], value="Aléatoire"
 )
 interval_input = pn.widgets.FloatInput(name="Intervalle moyen (s)", value=100.0, step=1.0, start=0.1)
+first_packet_input = pn.widgets.FloatInput(name="Premier intervalle (s)", value=100.0, step=1.0, start=0.0)
 packets_input = pn.widgets.IntInput(
     name="Nombre de paquets par nœud (0=infini)", value=80, step=1, start=0
 )
+first_packet_input.value = interval_input.value
 seed_input = pn.widgets.IntInput(
     name="Graine (0 = aléatoire)", value=0, step=1, start=0
 )
@@ -540,6 +768,60 @@ def update_map():
     map_pane.object = fig
 
 
+def _segments_to_series(segments: list[tuple[float, float, int]]):
+    x_values: list[float | None] = []
+    y_values: list[int | None] = []
+    for start, end, node in segments:
+        x_values.extend((start, end, None))
+        y_values.extend((node, node, None))
+    return x_values, y_values
+
+
+def update_timeline() -> None:
+    global last_event_index, timeline_fig
+    if sim is None or not session_alive():
+        return
+
+    events = getattr(sim, "events_log", []) or []
+    if last_event_index >= len(events):
+        return
+
+    for event in events[last_event_index:]:
+        start = float(event.get("start_time", 0.0) or 0.0)
+        end = float(event.get("end_time", start) or start)
+        node = event.get("node_id", 0)
+        try:
+            node_id = int(node)
+        except (TypeError, ValueError):
+            node_id = node if node is not None else 0
+        result = event.get("result", "Success")
+        segment = (start, end, node_id)
+        if str(result).lower() == "success":
+            timeline_success_segments.append(segment)
+        else:
+            timeline_failure_segments.append(segment)
+
+    last_event_index = len(events)
+
+    if not isinstance(timeline_fig, go.Figure):
+        timeline_fig = _create_empty_timeline_figure()
+
+    success_x, success_y = _segments_to_series(list(timeline_success_segments))
+    failure_x, failure_y = _segments_to_series(list(timeline_failure_segments))
+
+    def _ensure_trace(name: str, x, y, color: str):
+        for trace in timeline_fig.data:
+            if trace.name == name:
+                trace.update(x=x, y=y)
+                return trace
+        return timeline_fig.add_scatter(x=x, y=y, mode="lines", name=name, line=dict(color=color))
+
+    _ensure_trace("Succès", success_x, success_y, "green")
+    _ensure_trace("Échecs", failure_x, failure_y, "red")
+
+    timeline_fig.update_layout(yaxis=dict(type="linear"))
+    timeline_pane.object = timeline_fig
+
 
 def update_histogram(metrics: dict | None = None) -> None:
     """Mettre à jour l'histogramme interactif selon l'option sélectionnée."""
@@ -635,6 +917,34 @@ def on_mode_change(event):
 mode_select.param.watch(on_mode_change, "value")
 
 
+def on_interval_update(event):
+    global _syncing_first_packet
+    if _syncing_first_packet:
+        return
+    if first_packet_user_edited:
+        return
+    try:
+        new_value = float(event.new)
+    except (TypeError, ValueError):
+        return
+    _syncing_first_packet = True
+    try:
+        first_packet_input.value = new_value
+    finally:
+        _syncing_first_packet = False
+
+
+def on_first_packet_change(event):
+    global first_packet_user_edited
+    if _syncing_first_packet:
+        return
+    first_packet_user_edited = True
+
+
+interval_input.param.watch(on_interval_update, "value")
+first_packet_input.param.watch(on_first_packet_change, "value")
+
+
 # --- Sélection du profil ADR ---
 def select_adr(module, name: str) -> None:
     global selected_adr_module
@@ -662,6 +972,7 @@ def periodic_chrono_update():
 
 # --- Callback étape de simulation ---
 def step_simulation():
+    global metrics_timeline_last_key, _metrics_timeline_steps_since_refresh
     if sim is None or not session_alive():
         if not session_alive():
             _cleanup_callbacks()
@@ -669,9 +980,15 @@ def step_simulation():
 
     cont = sim.step()
     latest_snapshot = sim.get_latest_metrics_snapshot()
-    metrics = sim.get_metrics()
-
     snapshot_copy = dict(latest_snapshot) if latest_snapshot is not None else None
+    snapshot_key = _snapshot_signature(snapshot_copy)
+
+    if snapshot_key is None or snapshot_key == metrics_timeline_last_key:
+        if not cont:
+            on_stop(None)
+        return cont
+
+    metrics = sim.get_metrics()
     merged_metrics = _merge_metrics_with_snapshot(metrics, snapshot_copy)
     _set_metric_indicators(merged_metrics)
 
@@ -688,16 +1005,66 @@ def step_simulation():
     pdr_table.object = table_df
     update_histogram(metrics)
     update_map()
+    update_timeline()
+
+    timeline_records = _ensure_timeline_records(sim.get_metrics_timeline())
+    if not timeline_records and snapshot_copy is not None:
+        timeline_records = [snapshot_copy]
+
+    deduped: list[dict] = []
+    last_key = None
+    for record in timeline_records:
+        key = _snapshot_signature(record)
+        if key is None or key == last_key:
+            continue
+        deduped.append(record)
+        last_key = key
+
+    if deduped:
+        metrics_timeline_buffer[:] = deduped
+        metrics_timeline_last_key = _snapshot_signature(deduped[-1])
+    else:
+        if snapshot_copy is not None:
+            metrics_timeline_buffer[:] = [snapshot_copy]
+            metrics_timeline_last_key = snapshot_key
+        else:
+            metrics_timeline_buffer.clear()
+
+    window = _set_metrics_timeline_window(metrics_timeline_buffer)
+
+    _metrics_timeline_steps_since_refresh += 1
+    force_refresh = False
+    if (
+        METRICS_TIMELINE_FULL_REFRESH_INTERVAL
+        and _metrics_timeline_steps_since_refresh >= METRICS_TIMELINE_FULL_REFRESH_INTERVAL
+    ):
+        force_refresh = True
+        _metrics_timeline_steps_since_refresh = 0
+
+    latest_for_plot = metrics_timeline_buffer[-1] if metrics_timeline_buffer else snapshot_copy
+    _update_metrics_timeline_pane(
+        window,
+        latest_for_plot,
+        not force_refresh,
+        force_refresh,
+    )
+
+    run_index = max(current_run - 1, 0)
+    while len(runs_metrics_timeline) <= run_index:
+        runs_metrics_timeline.append(None)
+    runs_metrics_timeline[run_index] = [dict(entry) for entry in metrics_timeline_buffer]
 
     if not cont:
         on_stop(None)
-        return
+    return cont
 
 
 # --- Préparation de la simulation ---
 def setup_simulation(seed_offset: int = 0):
     """Crée et démarre un simulateur avec les paramètres du tableau de bord."""
-    global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
+    global sim, sim_callback, map_anim_callback, start_time, chrono_callback
+    global elapsed_time, max_real_time, paused
+    global metrics_timeline_last_key, _metrics_timeline_steps_since_refresh
 
     # Empêcher de relancer si une simulation est déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -724,6 +1091,19 @@ def setup_simulation(seed_offset: int = 0):
     if chrono_callback:
         chrono_callback.stop()
         chrono_callback = None
+
+    timeline_success_segments.clear()
+    timeline_failure_segments.clear()
+    metrics_timeline_buffer.clear()
+    metrics_timeline_window.clear()
+    metrics_timeline_last_key = None
+    _metrics_timeline_steps_since_refresh = 0
+
+    global timeline_fig, last_event_index
+    timeline_fig = _create_empty_timeline_figure()
+    timeline_pane.object = timeline_fig
+    last_event_index = 0
+    metrics_timeline_pane.object = _create_empty_metrics_timeline_figure()
 
     seed_val = int(seed_input.value)
     seed = seed_val + seed_offset if seed_val != 0 else None
@@ -770,6 +1150,7 @@ def setup_simulation(seed_offset: int = 0):
         area_size=float(area_input.value),
         transmission_mode="Random" if mode_select.value == "Aléatoire" else "Periodic",
         packet_interval=float(interval_input.value),
+        first_packet_interval=float(first_packet_input.value),
         packets_to_send=int(packets_input.value),
         adr_node=adr_node_checkbox.value,
         adr_server=adr_server_checkbox.value,
@@ -912,7 +1293,7 @@ def setup_simulation(seed_offset: int = 0):
 
 # --- Bouton "Lancer la simulation" ---
 def on_start(event):
-    global total_runs, current_run, runs_events, runs_metrics
+    global total_runs, current_run, runs_events, runs_metrics, runs_metrics_timeline
 
     # Vérifier qu'une simulation n'est pas déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -933,6 +1314,7 @@ def on_start(event):
     current_run = 1
     runs_events.clear()
     runs_metrics.clear()
+    runs_metrics_timeline.clear()
     setup_simulation(seed_offset=0)
 
 
@@ -971,6 +1353,14 @@ def on_stop(event):
         runs_metrics.append(sim.get_metrics())
     except Exception:
         pass
+
+    if metrics_timeline_buffer:
+        _update_metrics_timeline_pane(
+            metrics_timeline_buffer,
+            metrics_timeline_buffer[-1],
+            False,
+            True,
+        )
 
     if current_run < total_runs:
         if runs_metrics:
@@ -1053,7 +1443,7 @@ def on_stop(event):
 def exporter_csv(event=None):
     """Export simulation results as CSV files in the current directory."""
     dest_dir = os.getcwd()
-    global runs_events, runs_metrics
+    global runs_events, runs_metrics, runs_metrics_timeline
 
     if not runs_events:
         export_message.object = "⚠️ Lance la simulation d'abord !"
@@ -1075,6 +1465,7 @@ def exporter_csv(event=None):
             "instant_avg_delay_s",
             "recent_losses",
         )
+        timeline_paths: list[str] = []
         if runs_metrics:
             metrics_df = pd.json_normalize(runs_metrics)
             if hasattr(metrics_df, "columns"):
@@ -1082,9 +1473,30 @@ def exporter_csv(event=None):
                     if column not in list(metrics_df.columns):
                         metrics_df[column] = float("nan")
             metrics_df.to_csv(metrics_path, index=False, encoding="utf-8")
+
+        if runs_metrics_timeline:
+            for idx, timeline in enumerate(runs_metrics_timeline, start=1):
+                if timeline is None:
+                    continue
+                if isinstance(timeline, pd.DataFrame):
+                    timeline_df = timeline.copy()
+                else:
+                    records = _ensure_timeline_records(timeline)
+                    if not records:
+                        continue
+                    timeline_df = pd.DataFrame(records)
+                if timeline_df.empty:
+                    continue
+                timeline_path = os.path.join(dest_dir, f"metrics_timeline_run{idx}_{timestamp}.csv")
+                timeline_df.to_csv(timeline_path, index=False, encoding="utf-8")
+                timeline_paths.append(timeline_path)
+
         message_lines = [f"✅ Résultats exportés : <b>{chemin}</b>"]
         if runs_metrics:
             message_lines.append(f"Métriques : <b>{metrics_path}</b>")
+        if timeline_paths:
+            formatted = ", ".join(f"<b>{path}</b>" for path in timeline_paths)
+            message_lines.append(f"Timeline : {formatted}")
         message_lines.append("(Ouvre-les avec Excel ou pandas)")
         export_message.object = "<br>".join(message_lines)
 
