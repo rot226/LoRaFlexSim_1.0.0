@@ -56,6 +56,9 @@ def test_step_simulation_updates_metrics(monkeypatch):
         def get_metrics_timeline(self):
             return timeline
 
+        def get_latest_metrics_snapshot(self):
+            return dict(timeline[0])
+
     metrics = {
         "PDR": 0.75,
         "collisions": 2,
@@ -110,7 +113,9 @@ def test_step_simulation_updates_metrics(monkeypatch):
     assert list(pdr_df["PDR"]) == [0.7, 0.8]
     assert list(pdr_df["Recent PDR"]) == [0.6, 0.9]
 
-    assert dashboard.runs_metrics_timeline[0] is timeline
+    stored_timeline = dashboard.runs_metrics_timeline[0]
+    assert isinstance(stored_timeline, list)
+    assert stored_timeline[0] == timeline[0]
 
 
 def test_select_adr_does_not_enable_advanced_degradation(monkeypatch):
@@ -128,11 +133,6 @@ def test_select_adr_does_not_enable_advanced_degradation(monkeypatch):
     monkeypatch.setattr(dashboard, "selected_adr_module", None, raising=False)
     monkeypatch.setattr(
         dashboard,
-        "adr_select",
-        SimpleNamespace(value=None),
-    )
-    monkeypatch.setattr(
-        dashboard,
         "adr_node_checkbox",
         SimpleNamespace(value=False),
     )
@@ -141,10 +141,29 @@ def test_select_adr_does_not_enable_advanced_degradation(monkeypatch):
         "adr_server_checkbox",
         SimpleNamespace(value=False),
     )
+    mock_badge = SimpleNamespace(value=None)
+    monkeypatch.setattr(
+        dashboard,
+        "active_adr_badge",
+        mock_badge,
+        raising=False,
+    )
+    mock_buttons = {
+        "ADR 1": SimpleNamespace(button_type="default"),
+        "ADR 2": SimpleNamespace(button_type="default"),
+    }
+    monkeypatch.setattr(
+        dashboard,
+        "_ADR_BUTTONS",
+        mock_buttons,
+        raising=False,
+    )
 
     dashboard.select_adr(fake_module, "ADR 1")
 
     assert fake_module.calls == [{}]
-    assert dashboard.adr_select.value == "ADR 1"
     assert dashboard.adr_node_checkbox.value is True
     assert dashboard.adr_server_checkbox.value is True
+    assert dashboard.active_adr_badge.value == "ADR 1"
+    assert mock_buttons["ADR 1"].button_type == "primary"
+    assert mock_buttons["ADR 2"].button_type == "default"

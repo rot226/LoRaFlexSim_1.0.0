@@ -240,12 +240,20 @@ num_runs_input = pn.widgets.IntInput(name="Nombre de runs", value=1, start=1)
 adr_node_checkbox = pn.widgets.Checkbox(name="ADR nœud", value=True)
 adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 
-# --- Sélecteur du protocole ADR ---
-adr_select = pn.widgets.Select(
-    name="Protocole ADR",
-    options=list(ADR_MODULES.keys()),
-    value=_DEFAULT_ADR_NAME,
-)
+# --- Sélecteur du protocole ADR (boutons) ---
+adr1_button = pn.widgets.Button(name="ADR 1", button_type="default")
+adr2_button = pn.widgets.Button(name="ADR 2", button_type="default")
+adr3_button = pn.widgets.Button(name="ADR_ML", button_type="default")
+active_adr_badge = pn.widgets.StaticText(name="ADR actif", value=_DEFAULT_ADR_NAME)
+
+_ADR_BUTTONS = {
+    "ADR 1": adr1_button,
+    "ADR 2": adr2_button,
+    "ADR_ML": adr3_button,
+}
+
+for adr_name, button in _ADR_BUTTONS.items():
+    button.button_type = "primary" if adr_name == _DEFAULT_ADR_NAME else "default"
 
 # --- Choix SF et puissance initiaux identiques ---
 fixed_sf_checkbox = pn.widgets.Checkbox(name="Choisir SF unique", value=False)
@@ -1030,8 +1038,9 @@ def select_adr(module, name: str) -> None:
     selected_adr_module = module
     adr_node_checkbox.value = True
     adr_server_checkbox.value = True
-    if adr_select.value != name:
-        adr_select.value = name
+    active_adr_badge.value = name
+    for adr_name, button in _ADR_BUTTONS.items():
+        button.button_type = "primary" if adr_name == name else "default"
     if sim is not None:
         module.apply(sim)
 
@@ -1944,13 +1953,14 @@ show_paths_checkbox.param.watch(lambda event: update_map(), "value")
 _refresh_fast_forward_state_from_inputs()
 
 
-def _on_adr_select(event):
-    module = ADR_MODULES[event.new]
+def _on_adr_button_click(adr_name: str):
+    module = ADR_MODULES[adr_name]
     if module is not selected_adr_module:
-        select_adr(module, event.new)
+        select_adr(module, adr_name)
 
 
-adr_select.param.watch(_on_adr_select, "value")
+for _adr_name, _adr_button in _ADR_BUTTONS.items():
+    _adr_button.on_click(lambda event, name=_adr_name: _on_adr_button_click(name))
 
 # --- Associer les callbacks aux boutons ---
 start_button.on_click(on_start)
@@ -1969,7 +1979,8 @@ controls = pn.WidgetBox(
     num_runs_input,
     adr_node_checkbox,
     adr_server_checkbox,
-    adr_select,
+    pn.Row(adr1_button, adr2_button, adr3_button),
+    active_adr_badge,
     fixed_sf_checkbox,
     sf_value_input,
     fixed_power_checkbox,
