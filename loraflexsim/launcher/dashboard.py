@@ -371,10 +371,27 @@ retrans_indicator = pn.indicators.Number(
 )
 
 
-def _set_metric_indicators(metrics: dict | None) -> None:
-    """Met à jour les indicateurs numériques à partir d'un dictionnaire."""
+def _set_metric_indicators(
+    metrics: dict | None, snapshot: dict | None = None
+) -> None:
+    """Met à jour les indicateurs numériques à partir des données disponibles."""
 
     data = metrics or {}
+    snapshot_data = snapshot or {}
+
+    def _pick(key: str, *, prefer_snapshot: bool = True):
+        if prefer_snapshot:
+            value = snapshot_data.get(key)
+            if value is not None:
+                return value
+        value = data.get(key)
+        if value is not None:
+            return value
+        if not prefer_snapshot:
+            fallback = snapshot_data.get(key)
+            if fallback is not None:
+                return fallback
+        return None
 
     def _assign(indicator, value):
         raw_value = value if value is not None else 0.0
@@ -386,21 +403,21 @@ def _set_metric_indicators(metrics: dict | None) -> None:
         except (TypeError, ValueError):
             indicator.value = 0.0
 
-    _assign(pdr_indicator, data.get("PDR"))
-    _assign(collisions_indicator, data.get("collisions"))
-    _assign(energy_indicator, data.get("energy_J"))
+    _assign(pdr_indicator, _pick("PDR"))
+    _assign(collisions_indicator, _pick("collisions"))
+    _assign(energy_indicator, _pick("energy_J"))
 
-    delay_value = data.get("instant_avg_delay_s")
+    delay_value = _pick("instant_avg_delay_s")
     if delay_value is None:
-        delay_value = data.get("avg_delay_s")
+        delay_value = _pick("avg_delay_s", prefer_snapshot=False)
     _assign(delay_indicator, delay_value)
 
-    throughput_value = data.get("instant_throughput_bps")
+    throughput_value = _pick("instant_throughput_bps")
     if throughput_value is None:
-        throughput_value = data.get("throughput_bps")
+        throughput_value = _pick("throughput_bps", prefer_snapshot=False)
     _assign(throughput_indicator, throughput_value)
 
-    _assign(retrans_indicator, data.get("retransmissions"))
+    _assign(retrans_indicator, _pick("retransmissions"))
 
 # Barre de progression pour l'accélération
 fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width=200, visible=False)
@@ -707,7 +724,21 @@ def _timeline_to_records(
     if timeline is None:
         return []
     if isinstance(timeline, pd.DataFrame):
+        if METRICS_TIMELINE_WINDOW_SIZE > 0 and hasattr(timeline, "tail"):
+            limited = timeline.tail(METRICS_TIMELINE_WINDOW_SIZE)
+            return limited.to_dict("records")
         return timeline.to_dict("records")
+    if isinstance(timeline, list):
+        if METRICS_TIMELINE_WINDOW_SIZE > 0:
+            return timeline[-METRICS_TIMELINE_WINDOW_SIZE :]
+        return timeline
+    if METRICS_TIMELINE_WINDOW_SIZE > 0:
+        limited_deque: deque[dict[str, float | int]] = deque(
+            maxlen=METRICS_TIMELINE_WINDOW_SIZE
+        )
+        for snapshot in timeline:
+            limited_deque.append(snapshot)
+        return list(limited_deque)
     return list(timeline)
 
 
@@ -799,8 +830,12 @@ def _update_metrics_timeline_pane(
     latest_snapshot: dict[str, float | int] | None = None,
     *,
     append: bool = False,
+    force: bool = False,
 ) -> None:
     """Actualise le pane Plotly dédié à la timeline des métriques."""
+
+    if not force and not append and latest_snapshot is None:
+        return
 
     fig = _ensure_metrics_timeline_figure()
 
@@ -1041,79 +1076,113 @@ def step_simulation():
         if not session_alive():
             _cleanup_callbacks()
         return
+
     cont = sim.step()
-    metrics = sim.get_metrics()
     latest_snapshot = sim.get_latest_metrics_snapshot()
-    _set_metric_indicators(metrics)
+
     if len(runs_metrics_timeline) < max(current_run, 1):
-        runs_metrics_timeline.extend([None] * (max(current_run, 1) - len(runs_metrics_timeline)))
+        runs_metrics_timeline.extend(
+            [None] * (max(current_run, 1) - len(runs_metrics_timeline))
+        )
+
     run_timeline: list[dict[str, float | int]] | None = None
+    buffer_changed = False
+
     if current_run >= 1:
         stored_timeline = runs_metrics_timeline[current_run - 1]
         if isinstance(stored_timeline, pd.DataFrame):
             run_timeline = stored_timeline.to_dict("records")
+            runs_metrics_timeline[current_run - 1] = run_timeline
+            buffer_changed = True
+        elif isinstance(stored_timeline, list):
+            run_timeline = stored_timeline
         elif stored_timeline is None:
             run_timeline = []
+            runs_metrics_timeline[current_run - 1] = run_timeline
+            buffer_changed = True
         else:
             run_timeline = list(stored_timeline)
-        runs_metrics_timeline[current_run - 1] = run_timeline
+            runs_metrics_timeline[current_run - 1] = run_timeline
+            buffer_changed = True
     else:
         run_timeline = metrics_timeline_buffer
+
     if run_timeline is None:
         run_timeline = []
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = run_timeline
-    metrics_timeline_buffer = run_timeline
-    metrics_timeline_window = _set_metrics_timeline_window(run_timeline)
-    if run_timeline:
-        metrics_timeline_last_key = _snapshot_signature(run_timeline[-1])
-    else:
-        metrics_timeline_last_key = None
-    table_df = pd.DataFrame(
-        {
-            "Node": list(metrics["pdr_by_node"].keys()),
-            "PDR": list(metrics["pdr_by_node"].values()),
-            "Recent PDR": [
-                metrics["recent_pdr_by_node"][nid]
-                for nid in metrics["pdr_by_node"].keys()
-            ],
-        }
+        buffer_changed = True
+
+    if run_timeline is not metrics_timeline_buffer:
+        metrics_timeline_buffer = run_timeline
+        buffer_changed = True
+
+    previous_last_key = metrics_timeline_last_key
+    if buffer_changed:
+        metrics_timeline_window = _set_metrics_timeline_window(run_timeline)
+        if run_timeline:
+            previous_last_key = _snapshot_signature(run_timeline[-1])
+        else:
+            previous_last_key = None
+        metrics_timeline_last_key = previous_last_key
+
+    signature = (
+        _snapshot_signature(latest_snapshot)
+        if latest_snapshot is not None
+        else None
     )
-    pdr_table.object = table_df
-    # Les PDR détaillés par SF, passerelle et classe sont calculés mais non
-    # affichés. Ils seront exportés dans le fichier de résultats.
-    update_histogram(metrics)
+    has_new_snapshot = (
+        latest_snapshot is not None and signature != previous_last_key
+    )
+    metrics_required = latest_snapshot is None or has_new_snapshot
+    metrics = sim.get_metrics() if metrics_required else None
+
+    snapshot_copy = dict(latest_snapshot) if latest_snapshot is not None else None
+    _set_metric_indicators(metrics, snapshot_copy)
+
+    if metrics is not None:
+        table_df = pd.DataFrame(
+            {
+                "Node": list(metrics["pdr_by_node"].keys()),
+                "PDR": list(metrics["pdr_by_node"].values()),
+                "Recent PDR": [
+                    metrics["recent_pdr_by_node"][nid]
+                    for nid in metrics["pdr_by_node"].keys()
+                ],
+            }
+        )
+        pdr_table.object = table_df
+        update_histogram(metrics)
+
     snapshot_added = False
-    if latest_snapshot is not None:
-        snapshot_copy = dict(latest_snapshot)
-        signature = _snapshot_signature(snapshot_copy)
-        if signature != metrics_timeline_last_key:
-            run_timeline.append(snapshot_copy)
-            metrics_timeline_buffer = run_timeline
-            metrics_timeline_window.append(snapshot_copy)
-            metrics_timeline_last_key = signature
-            snapshot_added = True
-            force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
-            _metrics_timeline_steps_since_refresh += 1
-            refresh_due = (
-                _metrics_timeline_steps_since_refresh
-                >= METRICS_TIMELINE_FULL_REFRESH_INTERVAL
+    if has_new_snapshot and snapshot_copy is not None:
+        run_timeline.append(snapshot_copy)
+        metrics_timeline_window.append(snapshot_copy)
+        metrics_timeline_last_key = signature
+        snapshot_added = True
+        force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
+        _metrics_timeline_steps_since_refresh += 1
+        refresh_due = (
+            _metrics_timeline_steps_since_refresh
+            >= METRICS_TIMELINE_FULL_REFRESH_INTERVAL
+        )
+        if force_full_refresh or refresh_due:
+            _metrics_timeline_steps_since_refresh = 0
+            timeline_for_plot: deque[dict] | list[dict] | None = metrics_timeline_window
+            _update_metrics_timeline_pane(timeline_for_plot, force=True)
+        else:
+            _update_metrics_timeline_pane(
+                metrics_timeline_window,
+                latest_snapshot=snapshot_copy,
+                append=True,
             )
-            if force_full_refresh or refresh_due:
-                _metrics_timeline_steps_since_refresh = 0
-                timeline_for_plot: deque[dict] | list[dict] | None = metrics_timeline_window
-                _update_metrics_timeline_pane(timeline_for_plot)
-            else:
-                _update_metrics_timeline_pane(
-                    metrics_timeline_window,
-                    latest_snapshot=snapshot_copy,
-                    append=True,
-                )
-    else:
-        _update_metrics_timeline_pane(metrics_timeline_window)
+    elif buffer_changed:
+        _update_metrics_timeline_pane(metrics_timeline_window, force=True)
+
     if snapshot_added:
         update_map()
         update_timeline()
+
     if not cont:
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = sim.get_metrics_timeline()
@@ -1309,12 +1378,17 @@ def setup_simulation(seed_offset: int = 0):
 
     initial_metrics = sim.get_metrics()
     update_map()
-    _set_metric_indicators(initial_metrics)
+    latest_snapshot = sim.get_latest_metrics_snapshot()
+    _set_metric_indicators(initial_metrics, latest_snapshot)
     initial_timeline = sim.get_metrics_timeline()
     initial_records = _timeline_to_records(initial_timeline)
     metrics_timeline_buffer = initial_records
     metrics_timeline_window = _set_metrics_timeline_window(initial_timeline)
-    _update_metrics_timeline_pane(metrics_timeline_window)
+    if initial_records:
+        metrics_timeline_last_key = _snapshot_signature(initial_records[-1])
+    else:
+        metrics_timeline_last_key = None
+    _update_metrics_timeline_pane(metrics_timeline_window, force=True)
     chrono_indicator.value = 0
     global node_paths
     node_paths = {n.id: [(n.x, n.y)] for n in sim.nodes}
@@ -1523,7 +1597,8 @@ def on_stop(event):
     pause_button.disabled = pause_prev_disabled
 
     _update_metrics_timeline_pane(
-        _set_metrics_timeline_window(_get_last_metrics_timeline())
+        _set_metrics_timeline_window(_get_last_metrics_timeline()),
+        force=True,
     )
 
 
@@ -1595,7 +1670,8 @@ def exporter_csv(event=None):
         export_message.object = "<br>".join(message_lines)
 
         _update_metrics_timeline_pane(
-            _set_metrics_timeline_window(_get_last_metrics_timeline())
+            _set_metrics_timeline_window(_get_last_metrics_timeline()),
+            force=True,
         )
 
         try:
