@@ -86,6 +86,7 @@ def _install_panel_stub():
     indicators_module = types.ModuleType("panel.indicators")
     indicators_module.Number = _DummyWidget
     indicators_module.Progress = _DummyWidget
+    indicators_module.StaticText = _DummyWidget
 
     pane_module = types.ModuleType("panel.pane")
     pane_module.HTML = _DummyPane
