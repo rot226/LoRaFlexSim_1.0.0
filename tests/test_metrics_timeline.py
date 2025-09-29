@@ -1,7 +1,6 @@
 import pytest
 
-import pytest
-
+from loraflexsim.launcher.channel import Channel
 from loraflexsim.launcher.simulator import Simulator
 
 
@@ -91,3 +90,26 @@ def test_metrics_timeline_accounts_for_server_delay():
     assert entry["PDR"] == pytest.approx(1.0)
     assert entry["instant_throughput_bps"] > 0.0
     assert entry["instant_avg_delay_s"] > 0.0
+
+
+def test_omnet_channel_updates_last_rssi():
+    channel = Channel(
+        phy_model="omnet",
+        shadowing_std=0.0,
+        fast_fading_std=0.0,
+        tx_power_std=0.0,
+        time_variation_std=0.0,
+        fine_fading_std=0.0,
+        pa_non_linearity_std_dB=0.0,
+        phase_noise_std_dB=0.0,
+        freq_offset_std_hz=0.0,
+        sync_offset_std_s=0.0,
+        noise_floor_std=0.0,
+        impulsive_noise_prob=0.0,
+        variable_noise_std=0.0,
+    )
+    rssi1, _ = channel.compute_rssi(14.0, 100.0, sf=7)
+    assert channel.last_rssi_dBm == pytest.approx(rssi1)
+
+    rssi2, _ = channel.compute_rssi(10.0, 150.0, sf=7)
+    assert channel.last_rssi_dBm == pytest.approx(rssi2)
