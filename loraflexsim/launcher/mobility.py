@@ -123,7 +123,7 @@ class RandomWaypoint:
                 return True
         return False
 
-    def assign(self, node):
+    def assign(self, node, current_time: float | None = None):
         """
         Assigne une direction et une vitesse aléatoires à un nœud.
         Initialise également son dernier temps de déplacement.
@@ -136,8 +136,9 @@ class RandomWaypoint:
         node.vy = speed * math.sin(angle)
         node.speed = speed
         node.direction = angle
-        # Initialiser le temps du dernier déplacement à 0 (début de simulation).
-        node.last_move_time = 0.0
+        # Initialiser le temps du dernier déplacement uniquement si absent.
+        default_time = 0.0 if current_time is None else float(current_time)
+        node.last_move_time = getattr(node, "last_move_time", default_time)
 
     def move(self, node, current_time: float):
         """
