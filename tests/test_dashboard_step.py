@@ -1,12 +1,10 @@
 """Tests pour la fonction ``step_simulation`` du tableau de bord Panel."""
 
 import csv
-from collections import deque
 import sys
 import types
 
 import numpy_stub
-import plotly.graph_objects as go
 import pytest
 
 
@@ -80,6 +78,7 @@ def _install_panel_stub():
         "Button",
         "Toggle",
         "TextAreaInput",
+        "StaticText",
     ]:
         setattr(widgets_module, widget_name, _DummyWidget)
 
@@ -443,8 +442,6 @@ def test_step_simulation_updates_indicators(monkeypatch):
 
     monkeypatch.setattr(dashboard, "update_histogram", lambda metrics: None)
     monkeypatch.setattr(dashboard, "update_map", lambda: None)
-    monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
-    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
     original_set_metrics = dashboard._set_metric_indicators
     instant_history: list[tuple[dict, float, float, float, float, float, float]] = []
 
@@ -480,7 +477,6 @@ def test_step_simulation_updates_indicators(monkeypatch):
 
     dashboard.sim = sim
     dashboard.current_run = 1
-    dashboard.runs_metrics_timeline = [None]
 
     while True:
         result = dashboard.step_simulation()
@@ -523,21 +519,6 @@ def test_step_simulation_updates_indicators(monkeypatch):
         assert row["PDR"].iloc[0] == pytest.approx(pdr_value)
         assert row["Recent PDR"].iloc[0] == pytest.approx(expected_recent[node_id])
 
-    timeline_expected = sim.get_metrics_timeline()
-    timeline_recorded = dashboard.runs_metrics_timeline[0]
-
-    def _timeline_to_frame(timeline):
-        if isinstance(timeline, pd.DataFrame):
-            records = timeline.to_dict("records")
-            return pd.DataFrame(records)
-        if timeline is None:
-            return pd.DataFrame()
-        return pd.DataFrame(list(timeline))
-
-    expected_df = _timeline_to_frame(timeline_expected)
-    recorded_df = _timeline_to_frame(timeline_recorded)
-    pd.testing.assert_frame_equal(recorded_df, expected_df)
-
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_step_simulation_updates_after_server_delay(monkeypatch):
@@ -553,8 +534,6 @@ def test_step_simulation_updates_after_server_delay(monkeypatch):
 
     monkeypatch.setattr(dashboard, "update_histogram", lambda metrics: None)
     monkeypatch.setattr(dashboard, "update_map", lambda: None)
-    monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
-    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
     monkeypatch.setattr(dashboard, "session_alive", lambda doc=None, state_container=None: True)
 
     sim = Simulator(
@@ -577,7 +556,6 @@ def test_step_simulation_updates_after_server_delay(monkeypatch):
 
     dashboard.sim = sim
     dashboard.current_run = 1
-    dashboard.runs_metrics_timeline = [None]
 
     metrics_history: list[dict] = []
     original_set_metrics = dashboard._set_metric_indicators
@@ -612,120 +590,6 @@ def test_step_simulation_updates_after_server_delay(monkeypatch):
     assert success_entry["PDR"] == pytest.approx(1.0)
     assert success_entry["instant_avg_delay_s"] > 0.0
     assert success_entry["instant_throughput_bps"] > 0.0
-
-
-class _TimelinePane:
-    def __init__(self):
-        self.object = None
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-def test_step_simulation_limits_timeline_refresh(monkeypatch):
-    monkeypatch.setattr(dashboard, "pdr_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "collisions_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "energy_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "delay_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "throughput_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "retrans_indicator", _DummyIndicator())
-    monkeypatch.setattr(dashboard, "pdr_table", _DummyTable())
-    monkeypatch.setattr(dashboard, "pause_button", _DummyButton())
-    monkeypatch.setattr(dashboard, "fast_forward_button", _DummyButton())
-
-    pane = _TimelinePane()
-    monkeypatch.setattr(dashboard, "metrics_timeline_pane", pane)
-
-    monkeypatch.setattr(dashboard, "update_histogram", lambda metrics: None)
-    monkeypatch.setattr(dashboard, "update_map", lambda: None)
-    monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
-    monkeypatch.setattr(
-        dashboard,
-        "session_alive",
-        lambda doc=None, state_container=None: True,
-    )
-
-    refresh_calls = 0
-
-    class _DummyScatter:
-        def __init__(self, x, y, mode=None, name=None):
-            self.x = list(x)
-            self.y = list(y)
-            self.name = name
-
-        def update(self, *, x, y):
-            self.x = list(x)
-            self.y = list(y)
-
-    class _DummyFigure:
-        def __init__(self):
-            self.data: list[_DummyScatter] = []
-
-        def add_trace(self, trace):
-            self.data.append(trace)
-
-        def add_scatter(self, x, y, mode=None, name=None, **_):
-            self.add_trace(_DummyScatter(x, y, mode=mode, name=name))
-
-        def update_layout(self, **_):
-            pass
-
-    def _simple_build(timeline):
-        nonlocal refresh_calls
-        refresh_calls += 1
-        fig = _DummyFigure()
-        if not timeline:
-            return fig
-        if hasattr(timeline, "to_dict"):
-            records = timeline.to_dict("records")
-        else:
-            records = list(timeline)
-        times = [entry.get("time_s") for entry in records if "time_s" in entry]
-        pdr_values = [entry.get("PDR") for entry in records if "PDR" in entry]
-        if times and pdr_values:
-            fig.add_scatter(x=times, y=pdr_values, mode="lines+markers", name="PDR")
-        return fig
-
-    dummy_go = types.SimpleNamespace(Figure=_DummyFigure, Scatter=_DummyScatter)
-    monkeypatch.setattr(dashboard, "go", dummy_go)
-    monkeypatch.setattr(sys.modules[__name__], "go", dummy_go, raising=False)
-    monkeypatch.setattr(dashboard, "_build_metrics_timeline_figure", _simple_build)
-    monkeypatch.setattr(dashboard, "METRICS_TIMELINE_FULL_REFRESH_INTERVAL", 5)
-    dashboard._metrics_timeline_steps_since_refresh = 0
-    dashboard.metrics_timeline_buffer = []
-    dashboard.metrics_timeline_window = deque(
-        maxlen=dashboard.METRICS_TIMELINE_WINDOW_SIZE
-    )
-    dashboard.export_message = _DummyTable()
-
-    sim = Simulator(
-        num_nodes=1,
-        num_gateways=1,
-        packets_to_send=25,
-        mobility=False,
-        seed=123,
-    )
-
-    dashboard.sim = sim
-    dashboard.current_run = 1
-    dashboard.runs_metrics_timeline = [None]
-
-    while True:
-        result = dashboard.step_simulation()
-        if result is False:
-            break
-        if not getattr(sim, "running", False):
-            break
-
-    timeline_count = len(sim.metrics_timeline)
-    assert timeline_count > 0
-
-    expected_refreshes = 1 + max(0, (timeline_count - 1) // 5)
-    expected_total_calls = expected_refreshes + 1  # rafraîchissement final via on_stop
-    assert refresh_calls <= timeline_count
-    assert isinstance(pane.object, _DummyFigure)
-
-    trace = next((tr for tr in pane.object.data if tr.name == "PDR"), None)
-    assert trace is not None
-    assert len(trace.x) == timeline_count
 
 
 def test_set_metric_indicators_prefers_instant_values(monkeypatch):
@@ -800,73 +664,3 @@ def test_set_metric_indicators_prefers_instant_values(monkeypatch):
     assert throughput.value == pytest.approx(512.0)
     assert retrans.value == pytest.approx(2.0)
 
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-def test_setup_simulation_resets_timeline_between_runs(monkeypatch):
-    """Deux lancements successifs doivent repartir d'une timeline vide."""
-
-    monkeypatch.setattr(dashboard, "update_map", lambda: None)
-    monkeypatch.setattr(dashboard, "update_histogram", lambda _metrics: None)
-    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
-
-    def _fake_update_timeline():
-        fig = dashboard.timeline_fig
-        if not isinstance(fig, dashboard.go.Figure):
-            fig = dashboard.go.Figure()
-            dashboard.timeline_fig = fig
-        fig.add_scatter(x=[0.0, 1.0], y=[0, 0], mode="lines", line=dict(color="blue"))
-        dashboard.last_event_index += 1
-        dashboard.timeline_pane.object = fig
-
-    monkeypatch.setattr(dashboard, "update_timeline", _fake_update_timeline)
-    monkeypatch.setattr(
-        dashboard,
-        "session_alive",
-        lambda doc=None, state_container=None: True,
-    )
-
-    dashboard._cleanup_callbacks()
-    dashboard.sim = None
-    dashboard.sim_callback = None
-    dashboard.map_anim_callback = None
-    dashboard.chrono_callback = None
-    dashboard.current_run = 1
-    dashboard.total_runs = 1
-    dashboard.runs_events.clear()
-    dashboard.runs_metrics.clear()
-    dashboard.runs_metrics_timeline.clear()
-    dashboard.packets_input.value = 1
-    dashboard.num_runs_input.value = 1
-    dashboard.real_time_duration_input.value = 0
-
-    dashboard.setup_simulation()
-
-    assert dashboard.sim is not None
-    assert getattr(dashboard.sim, "running", False)
-
-    while getattr(dashboard.sim, "running", False):
-        dashboard.step_simulation()
-
-    old_figure = dashboard.timeline_fig
-    assert len(old_figure.data) > 0
-    assert dashboard.timeline_pane.object is old_figure
-    assert dashboard.last_event_index > 0
-
-    dashboard.sim = None
-    dashboard.current_run = 1
-    dashboard.runs_events.clear()
-    dashboard.runs_metrics.clear()
-    dashboard.runs_metrics_timeline.clear()
-
-    dashboard.setup_simulation()
-
-    try:
-        assert dashboard.timeline_fig is not old_figure
-        assert dashboard.last_event_index == 0
-        assert len(dashboard.timeline_fig.data) == 0
-        assert dashboard.timeline_pane.object is dashboard.timeline_fig
-        assert len(dashboard.timeline_pane.object.data) == 0
-    finally:
-        dashboard.on_stop(None)
-        dashboard._cleanup_callbacks()
-        dashboard.sim = None

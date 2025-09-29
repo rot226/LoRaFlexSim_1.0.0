@@ -53,9 +53,6 @@ def test_step_simulation_updates_metrics(monkeypatch):
         def get_metrics(self):
             return metrics
 
-        def get_metrics_timeline(self):
-            return timeline
-
         def get_latest_metrics_snapshot(self):
             return dict(timeline[0])
 
@@ -79,24 +76,18 @@ def test_step_simulation_updates_metrics(monkeypatch):
     monkeypatch.setattr(dashboard, "sim", dummy, raising=False)
     monkeypatch.setattr(dashboard, "session_alive", lambda: True)
     monkeypatch.setattr(dashboard, "current_run", 1, raising=False)
-    monkeypatch.setattr(dashboard, "runs_metrics_timeline", [], raising=False)
 
     captured_histogram_metrics = {}
-    captured_timeline_updates = {"called": 0}
+    captured_map_updates = {"count": 0}
 
     def fake_histogram(data):
         captured_histogram_metrics["metrics"] = data
 
     def fake_map():
-        captured_timeline_updates.setdefault("map", 0)
-        captured_timeline_updates["map"] += 1
-
-    def fake_timeline():
-        captured_timeline_updates["called"] += 1
+        captured_map_updates["count"] += 1
 
     monkeypatch.setattr(dashboard, "update_histogram", fake_histogram)
     monkeypatch.setattr(dashboard, "update_map", fake_map)
-    monkeypatch.setattr(dashboard, "update_timeline", fake_timeline)
     monkeypatch.setattr(dashboard, "on_stop", lambda *_: None)
 
     dashboard.step_simulation()
@@ -105,7 +96,7 @@ def test_step_simulation_updates_metrics(monkeypatch):
     assert dashboard.pdr_indicator.value == pytest.approx(0.75)
     assert dashboard.energy_indicator.value == pytest.approx(1.234)
     assert captured_histogram_metrics["metrics"] is metrics
-    assert captured_timeline_updates["called"] == 1
+    assert captured_map_updates["count"] >= 1
 
     pdr_df = dashboard.pdr_table.object
     assert isinstance(pdr_df, pd.DataFrame)
@@ -113,9 +104,6 @@ def test_step_simulation_updates_metrics(monkeypatch):
     assert list(pdr_df["PDR"]) == [0.7, 0.8]
     assert list(pdr_df["Recent PDR"]) == [0.6, 0.9]
 
-    stored_timeline = dashboard.runs_metrics_timeline[0]
-    assert isinstance(stored_timeline, list)
-    assert stored_timeline[0] == timeline[0]
 
 
 def test_select_adr_does_not_enable_advanced_degradation(monkeypatch):

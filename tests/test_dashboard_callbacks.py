@@ -1,7 +1,5 @@
 """Tests pour les callbacks du tableau de bord Panel."""
 
-from collections import deque
-
 import pytest
 
 from tests.test_dashboard_step import _install_panel_stub, _install_pandas_stub
@@ -17,25 +15,32 @@ class _DummyTable:
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_step_simulation_skips_map_updates_without_snapshot(monkeypatch):
-    """Vérifie que la carte et la timeline ne sont rafraîchies que sur nouveau snapshot."""
+def test_step_simulation_updates_map_and_limits_metric_fetches(monkeypatch):
+    """Vérifie que ``step_simulation`` met la carte à jour tout en évitant des calculs inutiles."""
 
     from loraflexsim.launcher import dashboard
 
     class _DummySim:
         def __init__(self):
             self.step_calls = 0
+            self.metrics_calls = 0
             self.running = True
             self.events_log = []
             self.nodes = []
             self.gateways = []
             self.current_time = 0.0
+            self.tx_attempted = 0
+            self.rx_delivered = 0
 
         def step(self):
             self.step_calls += 1
-            return True
+            if self.step_calls == 1:
+                self.tx_attempted = 1
+                self.rx_delivered = 1
+            return self.step_calls < 3
 
         def get_metrics(self):
+            self.metrics_calls += 1
             return {
                 "PDR": 1.0,
                 "collisions": 0,
@@ -50,10 +55,11 @@ def test_step_simulation_skips_map_updates_without_snapshot(monkeypatch):
         def get_latest_metrics_snapshot(self):
             if self.step_calls == 0:
                 return None
-            return {"time_s": 0.0, "tx_attempted": 1, "delivered": 1}
-
-        def get_metrics_timeline(self):
-            return []
+            return {
+                "time_s": float(self.step_calls),
+                "tx_attempted": float(self.tx_attempted),
+                "delivered": float(self.rx_delivered),
+            }
 
     dummy_sim = _DummySim()
 
@@ -61,34 +67,20 @@ def test_step_simulation_skips_map_updates_without_snapshot(monkeypatch):
     monkeypatch.setattr(dashboard, "session_alive", lambda *_, **__: True)
     monkeypatch.setattr(dashboard, "update_histogram", lambda *_: None)
     monkeypatch.setattr(dashboard, "_set_metric_indicators", lambda *_: None)
-    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", lambda *_: None)
     monkeypatch.setattr(dashboard, "pdr_table", _DummyTable())
+    monkeypatch.setattr(dashboard, "on_stop", lambda *_: None)
 
-    dashboard.metrics_timeline_buffer = []
-    dashboard.metrics_timeline_window = deque(
-        maxlen=dashboard.METRICS_TIMELINE_WINDOW_SIZE
-    )
-    dashboard.metrics_timeline_last_key = None
-    dashboard._metrics_timeline_steps_since_refresh = 0
-    dashboard.current_run = 0
-    dashboard.runs_metrics_timeline = []
-
-    calls = {"map": 0, "timeline": 0}
+    map_calls = 0
 
     def _inc_map():
-        calls["map"] += 1
-
-    def _inc_timeline():
-        calls["timeline"] += 1
+        nonlocal map_calls
+        map_calls += 1
 
     monkeypatch.setattr(dashboard, "update_map", _inc_map)
-    monkeypatch.setattr(dashboard, "update_timeline", _inc_timeline)
 
     dashboard.step_simulation()
-    assert calls == {"map": 1, "timeline": 1}
-
     dashboard.step_simulation()
-    assert calls == {"map": 1, "timeline": 1}
-
     dashboard.step_simulation()
-    assert calls == {"map": 1, "timeline": 1}
+
+    assert map_calls == 3
+    assert dummy_sim.metrics_calls == 1

@@ -3,10 +3,6 @@
 from pathlib import Path
 import ast
 import importlib
-from collections import deque
-from types import SimpleNamespace
-
-import pytest
 
 
 def _load_aggregate_function():
@@ -94,84 +90,3 @@ def test_aggregate_run_metrics_weighted_values():
     assert aggregated["throughput_bps"] == expected_throughput
 
 
-@pytest.mark.filterwarnings("ignore::UserWarning")
-def test_step_simulation_deduplicates_metrics_snapshots(monkeypatch):
-    """Vérifie que la timeline n'accumule pas plusieurs fois le même snapshot."""
-
-    dashboard_test_module = importlib.import_module("tests.test_dashboard_step")
-    dashboard = dashboard_test_module.dashboard
-
-    class _DummySimulator:
-        def __init__(self):
-            self._snapshots = [
-                {"time_s": 1.0, "tx_attempted": 10, "delivered": 5},
-                {"time_s": 1.0, "tx_attempted": 10, "delivered": 5},
-            ]
-            self._step_calls = 0
-            self.running = True
-
-        def step(self):
-            self._step_calls += 1
-            return True
-
-        def get_metrics(self):
-            return {
-                "PDR": 0.5,
-                "collisions": 0,
-                "energy_J": 0.0,
-                "instant_avg_delay_s": 0.0,
-                "instant_throughput_bps": 0.0,
-                "retransmissions": 0,
-                "pdr_by_node": {0: 1.0},
-                "recent_pdr_by_node": {0: 1.0},
-            }
-
-        def get_latest_metrics_snapshot(self):
-            index = min(self._step_calls, len(self._snapshots)) - 1
-            if index < 0:
-                return None
-            return dict(self._snapshots[index])
-
-        def get_metrics_timeline(self):
-            return [dict(snap) for snap in self._snapshots[: self._step_calls]]
-
-    updates: list[tuple] = []
-
-    monkeypatch.setattr(dashboard, "sim", _DummySimulator())
-    monkeypatch.setattr(dashboard, "current_run", 1)
-    monkeypatch.setattr(dashboard, "runs_metrics_timeline", [None])
-    monkeypatch.setattr(dashboard, "metrics_timeline_buffer", [])
-    monkeypatch.setattr(
-        dashboard,
-        "metrics_timeline_window",
-        deque(maxlen=dashboard.METRICS_TIMELINE_WINDOW_SIZE),
-    )
-    monkeypatch.setattr(dashboard, "metrics_timeline_last_key", None)
-    monkeypatch.setattr(dashboard, "_metrics_timeline_steps_since_refresh", 0)
-    monkeypatch.setattr(dashboard, "session_alive", lambda *_, **__: True)
-    monkeypatch.setattr(dashboard, "_set_metric_indicators", lambda *_: None)
-    monkeypatch.setattr(dashboard, "update_histogram", lambda *_: None)
-    monkeypatch.setattr(dashboard, "update_map", lambda: None)
-    monkeypatch.setattr(dashboard, "update_timeline", lambda: None)
-    monkeypatch.setattr(
-        dashboard,
-        "metrics_timeline_pane",
-        SimpleNamespace(object=dashboard.go.Figure()),
-    )
-    monkeypatch.setattr(dashboard, "pdr_table", SimpleNamespace(object=None))
-
-    def _record_update(*args, **kwargs):
-        updates.append((args, kwargs))
-
-    monkeypatch.setattr(dashboard, "_update_metrics_timeline_pane", _record_update)
-
-    dashboard.step_simulation()
-    dashboard.step_simulation()
-
-    run_timeline = dashboard.runs_metrics_timeline[dashboard.current_run - 1]
-
-    assert isinstance(run_timeline, list)
-    assert len(run_timeline) == 1
-    assert len(dashboard.metrics_timeline_buffer) == 1
-    assert len(updates) == 1
-    assert dashboard._metrics_timeline_steps_since_refresh == 1
