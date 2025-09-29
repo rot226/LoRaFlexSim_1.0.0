@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Dict, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .simulator import Simulator
 
@@ -17,7 +17,7 @@ _subscribers: Set[WebSocket] = set()
 
 class Command(BaseModel):
     command: str
-    params: Dict[str, Any] = {}
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 
 async def _broadcast(event: str, data: Dict[str, Any] | None = None) -> None:

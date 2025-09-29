@@ -43,8 +43,13 @@ def test_rest_api_status_endpoint_lifecycle() -> None:
             assert initial_payload["status"] == "idle"
             assert initial_payload["metrics"] == {}
 
-            start_payload = web_api.Command(command="start_sim", params={})
-            start_response = await web_api.start_simulation(start_payload)
+            first_payload = web_api.Command(command="start_sim", params={})
+            first_payload.params["custom"] = "value"
+
+            second_payload = web_api.Command(command="start_sim")
+            assert second_payload.params == {}
+
+            start_response = await web_api.start_simulation(second_payload)
             assert start_response["status"] == "started"
 
             await asyncio.sleep(0)
