@@ -422,9 +422,9 @@ def _set_metric_indicators(
         except (TypeError, ValueError):
             indicator.value = 0.0
 
-    _assign(pdr_indicator, _pick("PDR"))
-    _assign(collisions_indicator, _pick("collisions"))
-    _assign(energy_indicator, _pick("energy_J"))
+    _assign(pdr_indicator, _pick("PDR", prefer_snapshot=False))
+    _assign(collisions_indicator, _pick("collisions", prefer_snapshot=False))
+    _assign(energy_indicator, _pick("energy_J", prefer_snapshot=False))
 
     delay_value = _pick("instant_avg_delay_s")
     if delay_value is None:
@@ -436,7 +436,7 @@ def _set_metric_indicators(
         throughput_value = _pick("throughput_bps", prefer_snapshot=False)
     _assign(throughput_indicator, throughput_value)
 
-    _assign(retrans_indicator, _pick("retransmissions"))
+    _assign(retrans_indicator, _pick("retransmissions", prefer_snapshot=False))
 
 # Barre de progression pour l'accélération
 fast_forward_progress = pn.indicators.Progress(name="Avancement", value=0, width=200, visible=False)
