@@ -93,6 +93,19 @@ class NetworkServer:
         # Ensure EXPLoRa-AT grouping is only performed once after initial SNRs
         self.explora_at_groups_assigned = False
 
+    def _notify_uplink_result(self, event_id: int, status: str, **details) -> None:
+        """Propager un résultat d'uplink au simulateur si disponible."""
+
+        if self.simulator is None:
+            return
+        callback = getattr(self.simulator, "notify_uplink_result", None)
+        if callback is None:
+            return
+        try:
+            callback(event_id, status, **details)
+        except TypeError:
+            callback(event_id, status)
+
     def next_beacon_time(self, after_time: float) -> float:
         """Return the next beacon time after ``after_time``."""
         from .lorawan import next_beacon_time
@@ -738,8 +751,7 @@ class NetworkServer:
                 selected_rssi,
                 self.energy_detection_dBm,
             )
-            if self.simulator is not None:
-                self.simulator.notify_uplink_result(event_id, "no_signal")
+            self._notify_uplink_result(event_id, "no_signal")
             return
 
         selection_changed = (
@@ -819,22 +831,20 @@ class NetworkServer:
             try:
                 accept, nwk_skey, app_skey = self.join_server.handle_join(frame)
             except Exception:
-                if self.simulator is not None:
-                    self.simulator.notify_uplink_result(event_id, "collision")
+                self._notify_uplink_result(event_id, "collision")
                 return
             node.nwkskey = nwk_skey
             node.appskey = app_skey
             node.devaddr = accept.dev_addr
             node.activated = True
             self.send_downlink(node, accept, gateway=gw)
-            if self.simulator is not None:
-                self.simulator.notify_uplink_result(
-                    event_id,
-                    "success",
-                    gateway_id=selected_gateway_id,
-                    rssi=rssi,
-                    snr=snr_value,
-                )
+            self._notify_uplink_result(
+                event_id,
+                "success",
+                gateway_id=selected_gateway_id,
+                rssi=rssi,
+                snr=snr_value,
+            )
             return
 
         if node and frame is not None and node.security_enabled:
@@ -847,8 +857,7 @@ class NetworkServer:
                 node.devaddr,
                 0,
             ):
-                if self.simulator is not None:
-                    self.simulator.notify_uplink_result(event_id, "collision")
+                self._notify_uplink_result(event_id, "collision")
                 return
 
         if node and not getattr(node, "activated", True):
@@ -1012,7 +1021,7 @@ class NetworkServer:
                     )
 
         if notify_required and self.simulator is not None:
-            self.simulator.notify_uplink_result(
+            self._notify_uplink_result(
                 event_id,
                 "success",
                 gateway_id=selected_gateway_id,

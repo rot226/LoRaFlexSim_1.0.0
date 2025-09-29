@@ -47,6 +47,9 @@ pn.extension("plotly", raw_css=[
 # Définition du titre de la page via le document Bokeh directement
 if pn.state.curdoc:
     pn.state.curdoc.title = "Simulateur LoRa"
+# Certains environnements de test stub l'attribut Markdown : assurons un fallback.
+if not hasattr(pn.pane, "Markdown"):
+    pn.pane.Markdown = pn.pane.HTML
 # Conteneur mutable pour conserver une référence valide à ``pn.state``
 _SESSION_STATE: dict[str, object] = {"state": pn.state}
 
@@ -369,6 +372,22 @@ throughput_indicator = pn.indicators.Number(name="Débit (bps)", value=0.0, form
 retrans_indicator = pn.indicators.Number(
     name="Retransmissions", value=0.0, format="{value:.1f}"
 )
+
+
+def _merge_metrics_with_snapshot(
+    metrics: dict | None, snapshot: dict | None = None
+) -> dict | None:
+    """Fusionne les métriques agrégées et l'instantané le plus récent."""
+
+    if not metrics and not snapshot:
+        return None
+
+    merged: dict = {}
+    if metrics:
+        merged.update(metrics)
+    if snapshot:
+        merged.update({key: value for key, value in snapshot.items() if value is not None})
+    return merged
 
 
 def _set_metric_indicators(
@@ -828,7 +847,6 @@ def _ensure_metrics_timeline_figure() -> go.Figure:
 def _update_metrics_timeline_pane(
     timeline: pd.DataFrame | list[dict] | None,
     latest_snapshot: dict[str, float | int] | None = None,
-    *,
     append: bool = False,
     force: bool = False,
 ) -> None:
@@ -1138,7 +1156,8 @@ def step_simulation():
     metrics = sim.get_metrics() if metrics_required else None
 
     snapshot_copy = dict(latest_snapshot) if latest_snapshot is not None else None
-    _set_metric_indicators(metrics, snapshot_copy)
+    merged_metrics = _merge_metrics_with_snapshot(metrics, snapshot_copy)
+    _set_metric_indicators(merged_metrics)
 
     if metrics is not None:
         table_df = pd.DataFrame(
@@ -1169,15 +1188,15 @@ def step_simulation():
         if force_full_refresh or refresh_due:
             _metrics_timeline_steps_since_refresh = 0
             timeline_for_plot: deque[dict] | list[dict] | None = metrics_timeline_window
-            _update_metrics_timeline_pane(timeline_for_plot, force=True)
+            _update_metrics_timeline_pane(timeline_for_plot, None, False, True)
         else:
             _update_metrics_timeline_pane(
                 metrics_timeline_window,
-                latest_snapshot=snapshot_copy,
-                append=True,
+                snapshot_copy,
+                True,
             )
     elif buffer_changed:
-        _update_metrics_timeline_pane(metrics_timeline_window, force=True)
+        _update_metrics_timeline_pane(metrics_timeline_window, None, False, True)
 
     if snapshot_added:
         update_map()
@@ -1379,7 +1398,8 @@ def setup_simulation(seed_offset: int = 0):
     initial_metrics = sim.get_metrics()
     update_map()
     latest_snapshot = sim.get_latest_metrics_snapshot()
-    _set_metric_indicators(initial_metrics, latest_snapshot)
+    merged_initial = _merge_metrics_with_snapshot(initial_metrics, latest_snapshot)
+    _set_metric_indicators(merged_initial)
     initial_timeline = sim.get_metrics_timeline()
     initial_records = _timeline_to_records(initial_timeline)
     metrics_timeline_buffer = initial_records
@@ -1388,7 +1408,7 @@ def setup_simulation(seed_offset: int = 0):
         metrics_timeline_last_key = _snapshot_signature(initial_records[-1])
     else:
         metrics_timeline_last_key = None
-    _update_metrics_timeline_pane(metrics_timeline_window, force=True)
+    _update_metrics_timeline_pane(metrics_timeline_window, None, False, True)
     chrono_indicator.value = 0
     global node_paths
     node_paths = {n.id: [(n.x, n.y)] for n in sim.nodes}
@@ -1598,7 +1618,9 @@ def on_stop(event):
 
     _update_metrics_timeline_pane(
         _set_metrics_timeline_window(_get_last_metrics_timeline()),
-        force=True,
+        None,
+        False,
+        True,
     )
 
 
@@ -1671,7 +1693,9 @@ def exporter_csv(event=None):
 
         _update_metrics_timeline_pane(
             _set_metrics_timeline_window(_get_last_metrics_timeline()),
-            force=True,
+            None,
+            False,
+            True,
         )
 
         try:

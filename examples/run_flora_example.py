@@ -15,12 +15,15 @@ if str(ROOT_DIR) not in sys.path:
 from loraflexsim.launcher import Simulator
 from loraflexsim.launcher.adr_standard_1 import apply as adr1
 
+sim: Simulator | None = None
+
 CONFIG = "flora-master/simulations/examples/n100-gw1.ini"
 
 
 def run_example(*, steps: int = 1000, quiet: bool = False) -> Mapping[str, Any]:
     """Exécute le scénario FLoRa de référence et retourne les métriques."""
 
+    global sim
     sim = Simulator(
         flora_mode=True,
         config_file=CONFIG,
@@ -38,7 +41,8 @@ def run_example(*, steps: int = 1000, quiet: bool = False) -> Mapping[str, Any]:
 def main() -> Mapping[str, Any]:
     """Point d'entrée CLI : exécute le scénario et affiche les métriques."""
 
-    return run_example(quiet=False)
+    metrics = run_example(quiet=False)
+    return {"sim": sim, "metrics": metrics}
 
 
 if __name__ == "__main__":
