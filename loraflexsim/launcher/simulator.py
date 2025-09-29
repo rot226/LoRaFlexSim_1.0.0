@@ -2070,6 +2070,7 @@ class Simulator:
             "delivered_count": delivered_count,
             "losses_total": total_losses,
             "recent_losses": recent_losses,
+            "retransmissions": self.retransmissions,
         }
         self.metrics_timeline.append(snapshot)
 
