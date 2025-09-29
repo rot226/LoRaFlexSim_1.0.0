@@ -446,8 +446,14 @@ _METRICS_TIMELINE_TRACES = [
     ("instant_throughput_bps", "Débit instantané (bps)"),
 ]
 
-# Tampon des snapshots utilisés pour mettre à jour la figure incrémentalement.
+# Taille maximale de la fenêtre envoyée à Plotly pour la timeline des métriques.
+METRICS_TIMELINE_WINDOW_SIZE = 500
+
+# Tampon des snapshots complets (utilisé pour l'export) et fenêtre bornée pour l'affichage.
 metrics_timeline_buffer: list[dict[str, float | int]] = []
+metrics_timeline_window: deque[dict[str, float | int]] = deque(
+    maxlen=METRICS_TIMELINE_WINDOW_SIZE
+)
 metrics_timeline_last_key: (
     tuple[float | int | None, float | int | None, float | int | None] | None
 ) = None
@@ -693,6 +699,32 @@ def _metrics_timeline_to_dataframe(
     return df if not df.empty else None
 
 
+def _timeline_to_records(
+    timeline: pd.DataFrame | list[dict] | None,
+) -> list[dict[str, float | int]]:
+    """Normalise une timeline en liste de snapshots (dict)."""
+
+    if timeline is None:
+        return []
+    if isinstance(timeline, pd.DataFrame):
+        return timeline.to_dict("records")
+    return list(timeline)
+
+
+def _set_metrics_timeline_window(
+    timeline: pd.DataFrame | list[dict] | None,
+) -> deque[dict[str, float | int]]:
+    """Met à jour la fenêtre glissante à partir de la timeline fournie."""
+
+    global metrics_timeline_window
+    records = _timeline_to_records(timeline)
+    metrics_timeline_window = deque(
+        records[-METRICS_TIMELINE_WINDOW_SIZE :],
+        maxlen=METRICS_TIMELINE_WINDOW_SIZE,
+    )
+    return metrics_timeline_window
+
+
 def _build_metrics_timeline_figure(
     timeline: pd.DataFrame | list[dict] | None,
 ) -> go.Figure:
@@ -732,6 +764,36 @@ def _build_metrics_timeline_figure(
     return fig
 
 
+def _create_empty_metrics_timeline_figure() -> go.Figure:
+    """Crée une figure Plotly avec les traces attendues mais sans données."""
+
+    fig = go.Figure()
+    for _, label in _METRICS_TIMELINE_TRACES:
+        fig.add_scatter(x=[], y=[], mode="lines+markers", name=label)
+    fig.update_layout(
+        title="Évolution des métriques",
+        xaxis_title="Temps (s)",
+        yaxis_title="Valeur",
+        margin=dict(l=20, r=20, t=40, b=20),
+        legend_title="Métrique",
+    )
+    return fig
+
+
+def _ensure_metrics_timeline_figure() -> go.Figure:
+    """Retourne une figure prête à être mise à jour incrémentalement."""
+
+    expected_names = [label for _, label in _METRICS_TIMELINE_TRACES]
+    fig = metrics_timeline_pane.object
+    if isinstance(fig, go.Figure):
+        current_names = [trace.name for trace in fig.data]
+        if current_names == expected_names:
+            return fig
+    fig = _create_empty_metrics_timeline_figure()
+    metrics_timeline_pane.object = fig
+    return fig
+
+
 def _update_metrics_timeline_pane(
     timeline: pd.DataFrame | list[dict] | None,
     latest_snapshot: dict[str, float | int] | None = None,
@@ -740,43 +802,88 @@ def _update_metrics_timeline_pane(
 ) -> None:
     """Actualise le pane Plotly dédié à la timeline des métriques."""
 
+    fig = _ensure_metrics_timeline_figure()
+
     if append and latest_snapshot is not None:
-        fig = metrics_timeline_pane.object
-        if not isinstance(fig, go.Figure):
-            metrics_timeline_pane.object = _build_metrics_timeline_figure(timeline)
-            return
         time_value = latest_snapshot.get("time_s")
         if time_value is None:
             return
+        window_length = len(timeline) if timeline is not None else None
         for column, label in _METRICS_TIMELINE_TRACES:
             if column not in latest_snapshot:
                 continue
-            value = latest_snapshot[column]
             trace = next((tr for tr in fig.data if tr.name == label), None)
             if trace is None:
-                fig.add_scatter(
-                    x=[time_value],
-                    y=[value],
-                    mode="lines+markers",
-                    name=label,
-                )
                 continue
-            new_x = list(trace.x) if trace.x is not None else []
-            new_y = list(trace.y) if trace.y is not None else []
-            new_x.append(time_value)
-            new_y.append(value)
-            trace.update(x=new_x, y=new_y)
-        fig.update_layout(
-            title="Évolution des métriques",
-            xaxis_title="Temps (s)",
-            yaxis_title="Valeur",
-            margin=dict(l=20, r=20, t=40, b=20),
-            legend_title="Métrique",
-        )
+            current_x = trace.x if trace.x is not None else ()
+            current_y = trace.y if trace.y is not None else ()
+            if window_length is not None:
+                keep = max(window_length - 1, 0)
+                if keep == 0:
+                    trimmed_x: tuple | list = []
+                    trimmed_y: tuple | list = []
+                elif len(current_x) > keep:
+                    trimmed_x = current_x[-keep:]
+                    trimmed_y = current_y[-keep:]
+                else:
+                    trimmed_x = current_x
+                    trimmed_y = current_y
+                if trimmed_x is not current_x or trimmed_y is not current_y:
+                    trace.update(x=trimmed_x, y=trimmed_y)
+            if trace.x is None:
+                trace.x = []
+            if trace.y is None:
+                trace.y = []
+            trace.x += (time_value,)
+            trace.y += (latest_snapshot[column],)
         metrics_timeline_pane.object = fig
         return
 
-    metrics_timeline_pane.object = _build_metrics_timeline_figure(timeline)
+    df = _metrics_timeline_to_dataframe(timeline)
+    if df is None:
+        for trace in fig.data:
+            trace.update(x=[], y=[])
+        metrics_timeline_pane.object = fig
+        return
+
+    if hasattr(df, "tail"):
+        window_df = df.tail(METRICS_TIMELINE_WINDOW_SIZE)
+        if "time_s" not in getattr(window_df, "columns", []):
+            for trace in fig.data:
+                trace.update(x=[], y=[])
+            metrics_timeline_pane.object = fig
+            return
+        time_values = tuple(window_df["time_s"])  # type: ignore[index]
+        for column, label in _METRICS_TIMELINE_TRACES:
+            trace = next((tr for tr in fig.data if tr.name == label), None)
+            if trace is None:
+                continue
+            if column in getattr(window_df, "columns", []):
+                values = tuple(window_df[column])  # type: ignore[index]
+                trace.update(x=time_values, y=values)
+            else:
+                trace.update(x=time_values, y=(None,) * len(time_values))
+        metrics_timeline_pane.object = fig
+        return
+
+    records = df.to_dict("records") if hasattr(df, "to_dict") else []
+    if METRICS_TIMELINE_WINDOW_SIZE > 0:
+        records = records[-METRICS_TIMELINE_WINDOW_SIZE :]
+    filtered_records = [rec for rec in records if "time_s" in rec]
+    if not filtered_records:
+        for trace in fig.data:
+            trace.update(x=[], y=[])
+        metrics_timeline_pane.object = fig
+        return
+
+    time_values = tuple(rec["time_s"] for rec in filtered_records)
+    for column, label in _METRICS_TIMELINE_TRACES:
+        trace = next((tr for tr in fig.data if tr.name == label), None)
+        if trace is None:
+            continue
+        values = tuple(rec.get(column) for rec in filtered_records)
+        trace.update(x=time_values, y=values)
+    metrics_timeline_pane.object = fig
 
 
 def update_histogram(metrics: dict | None = None) -> None:
@@ -929,7 +1036,7 @@ def periodic_chrono_update():
 # --- Callback étape de simulation ---
 def step_simulation():
     global runs_metrics_timeline, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
-    global metrics_timeline_last_key
+    global metrics_timeline_last_key, metrics_timeline_window
     if sim is None or not session_alive():
         if not session_alive():
             _cleanup_callbacks()
@@ -957,6 +1064,7 @@ def step_simulation():
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = run_timeline
     metrics_timeline_buffer = run_timeline
+    metrics_timeline_window = _set_metrics_timeline_window(run_timeline)
     if run_timeline:
         metrics_timeline_last_key = _snapshot_signature(run_timeline[-1])
     else:
@@ -983,6 +1091,7 @@ def step_simulation():
         if signature != metrics_timeline_last_key:
             run_timeline.append(snapshot_copy)
             metrics_timeline_buffer = run_timeline
+            metrics_timeline_window.append(snapshot_copy)
             metrics_timeline_last_key = signature
             force_full_refresh = not isinstance(metrics_timeline_pane.object, go.Figure)
             _metrics_timeline_steps_since_refresh += 1
@@ -992,20 +1101,21 @@ def step_simulation():
             )
             if force_full_refresh or refresh_due:
                 _metrics_timeline_steps_since_refresh = 0
-                timeline_for_plot: pd.DataFrame | list[dict] | None = run_timeline
+                timeline_for_plot: deque[dict] | list[dict] | None = metrics_timeline_window
                 _update_metrics_timeline_pane(timeline_for_plot)
             else:
                 _update_metrics_timeline_pane(
-                    run_timeline,
+                    metrics_timeline_window,
                     latest_snapshot=snapshot_copy,
                     append=True,
                 )
     else:
-        _update_metrics_timeline_pane(run_timeline)
+        _update_metrics_timeline_pane(metrics_timeline_window)
     if not cont:
         if current_run >= 1:
             runs_metrics_timeline[current_run - 1] = sim.get_metrics_timeline()
         metrics_timeline_buffer = []
+        metrics_timeline_window = _set_metrics_timeline_window([])
         metrics_timeline_last_key = None
         _metrics_timeline_steps_since_refresh = 0
         on_stop(None)
@@ -1018,7 +1128,7 @@ def setup_simulation(seed_offset: int = 0):
     global sim, sim_callback, map_anim_callback, start_time, chrono_callback, elapsed_time, max_real_time, paused
     global timeline_fig, last_event_index, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
     global timeline_success_segments, timeline_failure_segments
-    global metrics_timeline_last_key
+    global metrics_timeline_last_key, metrics_timeline_window
 
     # Empêcher de relancer si une simulation est déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -1037,6 +1147,7 @@ def setup_simulation(seed_offset: int = 0):
 
     elapsed_time = 0
     metrics_timeline_buffer = []
+    metrics_timeline_window = _set_metrics_timeline_window([])
     metrics_timeline_last_key = None
     _metrics_timeline_steps_since_refresh = 0
     if current_run >= 1:
@@ -1196,7 +1307,11 @@ def setup_simulation(seed_offset: int = 0):
     initial_metrics = sim.get_metrics()
     update_map()
     _set_metric_indicators(initial_metrics)
-    _update_metrics_timeline_pane(sim.get_metrics_timeline())
+    initial_timeline = sim.get_metrics_timeline()
+    initial_records = _timeline_to_records(initial_timeline)
+    metrics_timeline_buffer = initial_records
+    metrics_timeline_window = _set_metrics_timeline_window(initial_timeline)
+    _update_metrics_timeline_pane(metrics_timeline_window)
     chrono_indicator.value = 0
     global node_paths
     node_paths = {n.id: [(n.x, n.y)] for n in sim.nodes}
@@ -1404,7 +1519,9 @@ def on_stop(event):
     global pause_prev_disabled
     pause_button.disabled = pause_prev_disabled
 
-    _update_metrics_timeline_pane(_get_last_metrics_timeline())
+    _update_metrics_timeline_pane(
+        _set_metrics_timeline_window(_get_last_metrics_timeline())
+    )
 
 
 # --- Export CSV local : Méthode universelle ---
@@ -1474,7 +1591,9 @@ def exporter_csv(event=None):
         message_lines.append("(Ouvre-les avec Excel ou pandas)")
         export_message.object = "<br>".join(message_lines)
 
-        _update_metrics_timeline_pane(_get_last_metrics_timeline())
+        _update_metrics_timeline_pane(
+            _set_metrics_timeline_window(_get_last_metrics_timeline())
+        )
 
         try:
             folder = dest_dir
