@@ -99,3 +99,27 @@ def test_adr_max_does_not_raise_sf_when_power_already_max():
 
     assert node.sf == 7
     assert node.tx_power == 14
+
+
+def test_duplicate_with_nearly_identical_snr_removes_previous_sample():
+    server = NetworkServer()
+    gw1 = Gateway(0, 0, 0)
+    gw2 = Gateway(1, 10, 0)
+    node = Node(0, 0, 0, 7, 14)
+    server.gateways = [gw1, gw2]
+    server.nodes = [node]
+
+    event_id = 42
+    initial_snr = 5.0
+    tiny_delta = 5e-10
+
+    server.receive(event_id, node.id, gw1.id, snir=initial_snr)
+    assert node.gateway_snr_history.get(gw1.id, []) == [initial_snr]
+
+    server.receive(event_id, node.id, gw2.id, snir=initial_snr + tiny_delta)
+
+    assert node.gateway_snr_history.get(gw1.id, []) == []
+    assert pytest.approx(
+        node.gateway_snr_history.get(gw2.id, [])[0], abs=1e-9
+    ) == initial_snr + tiny_delta
+    assert server.duplicate_packets == 1

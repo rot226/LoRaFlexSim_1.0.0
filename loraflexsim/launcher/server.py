@@ -23,6 +23,9 @@ MARGIN_DB = 15.0
 # Typical payload size (in bytes) used when balancing airtime for EXPLoRa-AT
 EXPLORA_AT_PAYLOAD_SIZE = 20
 
+SNR_REL_TOL = 1e-6
+SNR_ABS_TOL = 1e-9
+
 
 class NetworkServer:
     """Représente le serveur de réseau LoRa (collecte des paquets reçus)."""
@@ -139,10 +142,15 @@ class NetworkServer:
             if old_gateway is not None:
                 history = node.gateway_snr_history.get(old_gateway)
                 if history:
-                    try:
-                        history.remove(old_snr)
-                    except ValueError:
-                        pass
+                    for index, value in enumerate(history):
+                        if math.isclose(
+                            value,
+                            old_snr,
+                            rel_tol=SNR_REL_TOL,
+                            abs_tol=SNR_ABS_TOL,
+                        ):
+                            del history[index]
+                            break
 
     @staticmethod
     def _gateway_snr_statistics(node) -> tuple[dict[int, dict[str, float]], int]:
@@ -600,16 +608,26 @@ class NetworkServer:
             and prev_snr is not None
             and gateway_id is not None
             and snr is not None
-            and (prev_gateway != gateway_id or prev_snr != snr)
+            and (
+                prev_gateway != gateway_id
+                or not math.isclose(
+                    prev_snr, snr, rel_tol=SNR_REL_TOL, abs_tol=SNR_ABS_TOL
+                )
+            )
         )
 
         if replace_previous:
             history = node.gateway_snr_history.get(prev_gateway)
             if history:
-                try:
-                    history.remove(prev_snr)
-                except ValueError:
-                    pass
+                for index, value in enumerate(history):
+                    if math.isclose(
+                        value,
+                        prev_snr,
+                        rel_tol=SNR_REL_TOL,
+                        abs_tol=SNR_ABS_TOL,
+                    ):
+                        del history[index]
+                        break
 
         if gateway_id is not None:
             self.event_gateway[event_id] = gateway_id
@@ -628,7 +646,14 @@ class NetworkServer:
             node is not None
             and gateway_id is not None
             and snr is not None
-            and (prev_gateway != gateway_id or prev_snr != snr or prev_gateway is None)
+            and (
+                prev_gateway is None
+                or prev_gateway != gateway_id
+                or prev_snr is None
+                or not math.isclose(
+                    prev_snr, snr, rel_tol=SNR_REL_TOL, abs_tol=SNR_ABS_TOL
+                )
+            )
         ):
             history = node.gateway_snr_history.setdefault(gateway_id, [])
             history.append(snr)
@@ -754,11 +779,19 @@ class NetworkServer:
             self._notify_uplink_result(event_id, "no_signal")
             return
 
-        selection_changed = (
-            selected_gateway_id != previous_gateway_id
-            or (selected_snr is not None and selected_snr != previous_snr)
-            or (selected_snr is None and previous_snr is not None)
-        )
+        selection_changed = selected_gateway_id != previous_gateway_id
+        if not selection_changed:
+            if selected_snr is None:
+                selection_changed = previous_snr is not None
+            elif previous_snr is None:
+                selection_changed = True
+            else:
+                selection_changed = not math.isclose(
+                    selected_snr,
+                    previous_snr,
+                    rel_tol=SNR_REL_TOL,
+                    abs_tol=SNR_ABS_TOL,
+                )
 
         self._apply_best_gateway_selection(
             event_id,
@@ -785,7 +818,12 @@ class NetworkServer:
                 ):
                     for idx in range(len(node.snr_history) - 1, -1, -1):
                         gw_id, snr_sample = node.snr_history[idx]
-                        if gw_id == previous_gateway_id and snr_sample == previous_snr:
+                        if gw_id == previous_gateway_id and math.isclose(
+                            snr_sample,
+                            previous_snr,
+                            rel_tol=SNR_REL_TOL,
+                            abs_tol=SNR_ABS_TOL,
+                        ):
                             del node.snr_history[idx]
                             break
                 logger.debug(
@@ -910,6 +948,9 @@ class NetworkServer:
                     sf = node.sf
                     p_idx = DBM_TO_TX_POWER_INDEX.get(int(node.tx_power), 0)
                     max_power_index = max(TX_POWER_INDEX_TO_DBM.keys())
+
+                    if nstep < 0 and p_idx == 0:
+                        nstep = 0
 
                     if nstep > 0:
                         while nstep > 0 and sf > 7:
