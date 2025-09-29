@@ -824,10 +824,18 @@ class Channel:
                 freq_offset_hz=freq_offset_hz,
                 sync_offset_s=sync_offset_s,
             )
+            attenuation = 0.0
             if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
                 att = self.obstacle_loss.loss(tx_pos, rx_pos)
                 rssi -= att
                 snr -= att
+                attenuation = att
+            noise = getattr(self, "last_noise_dBm", None)
+            if noise is None:
+                noise = self.omnet_phy.noise_floor()
+            self.last_rssi_dBm = rssi
+            self.last_noise_dBm = getattr(self, "last_noise_dBm", noise)
+            self.last_filter_att_dB = attenuation
             return rssi, snr
         loss = self.path_loss(distance)
         if self.obstacle_loss is not None and tx_pos is not None and rx_pos is not None:
