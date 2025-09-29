@@ -284,9 +284,6 @@ mobility_model_select = pn.widgets.Select(
 )
 
 # --- Durée réelle de simulation et bouton d'accélération ---
-sim_duration_input = pn.widgets.FloatInput(
-    name="Durée simulée max (s)", value=0.0, step=1.0, start=0.0
-)
 real_time_duration_input = pn.widgets.FloatInput(name="Durée réelle max (s)", value=86400.0, step=1.0, start=0.0)
 fast_forward_button = pn.widgets.Button(
     name="Accélérer jusqu'à la fin", button_type="primary", disabled=True
@@ -295,15 +292,13 @@ fast_forward_button.disabled = True
 
 
 def _has_simulation_limit_from_inputs() -> bool:
-    return int(packets_input.value) > 0 or float(sim_duration_input.value) > 0.0
+    return int(packets_input.value) > 0
 
 
 def _has_simulation_limit_from_sim() -> bool:
     if sim is None:
         return _has_simulation_limit_from_inputs()
-    has_packets = getattr(sim, "packets_to_send", 0) > 0
-    sim_duration = getattr(sim, "max_sim_time", getattr(sim, "sim_duration_limit", None))
-    return has_packets or (sim_duration is not None and sim_duration > 0.0)
+    return getattr(sim, "packets_to_send", 0) > 0
 
 
 def _refresh_fast_forward_state_from_inputs() -> None:
@@ -1210,7 +1205,7 @@ def setup_simulation(seed_offset: int = 0):
     # Valider que des paquets ou une durée réelle sont définis
     if not _has_simulation_limit_from_inputs() and float(real_time_duration_input.value) <= 0:
         export_message.object = (
-            "⚠️ Définissez un nombre de paquets, une durée simulée ou une durée réelle supérieurs à 0 !"
+            "⚠️ Définissez un nombre de paquets ou une durée réelle supérieurs à 0 !"
         )
         return
 
@@ -1281,7 +1276,6 @@ def setup_simulation(seed_offset: int = 0):
         )
 
 
-    sim_duration_limit = float(sim_duration_input.value)
     flora_mode_enabled = bool(flora_mode_toggle.value)
     phy_model_name = "flora" if flora_mode_enabled else "omnet"
 
@@ -1292,10 +1286,6 @@ def setup_simulation(seed_offset: int = 0):
         transmission_mode="Random" if mode_select.value == "Aléatoire" else "Periodic",
         packet_interval=float(interval_input.value),
         packets_to_send=int(packets_input.value),
-        simulation_duration=(
-            sim_duration_limit if sim_duration_limit > 0.0 else None
-        ),
-        max_sim_time=(sim_duration_limit if sim_duration_limit > 0.0 else None),
         adr_node=adr_node_checkbox.value,
         adr_server=adr_server_checkbox.value,
         mobility=mobility_checkbox.value,
@@ -1423,7 +1413,6 @@ def setup_simulation(seed_offset: int = 0):
     seed_input.disabled = True
     num_runs_input.disabled = True
     real_time_duration_input.disabled = True
-    sim_duration_input.disabled = True
     start_button.disabled = True
     stop_button.disabled = False
     fast_forward_button.disabled = not _has_simulation_limit_from_sim()
@@ -1459,7 +1448,7 @@ def on_start(event):
     # Valider les entrées avant de démarrer
     if not _has_simulation_limit_from_inputs() and float(real_time_duration_input.value) <= 0:
         export_message.object = (
-            "⚠️ Définissez un nombre de paquets, une durée simulée ou une durée réelle supérieurs à 0 !"
+            "⚠️ Définissez un nombre de paquets ou une durée réelle supérieurs à 0 !"
         )
         return
 
@@ -1569,7 +1558,6 @@ def on_stop(event):
     seed_input.disabled = False
     num_runs_input.disabled = False
     real_time_duration_input.disabled = False
-    sim_duration_input.disabled = False
     start_button.disabled = False
     stop_button.disabled = True
     fast_forward_button.disabled = True
@@ -1725,8 +1713,7 @@ def fast_forward(event=None):
         if not _has_simulation_limit_from_sim():
             auto_fast_forward = False
             export_message.object = (
-                "⚠️ Définissez un nombre de paquets par nœud ou une durée simulée supérieure à 0 "
-                "pour utiliser l'accélération."
+                "⚠️ Définissez un nombre de paquets par nœud supérieur à 0 pour utiliser l'accélération."
             )
             return
 
@@ -1780,22 +1767,12 @@ def fast_forward(event=None):
                     if current_sim.packets_to_send > 0
                     else None
                 )
-                sim_duration = getattr(
-                    current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
-                )
                 last = -1
                 while current_sim.event_queue and current_sim.running:
                     current_sim.step()
                     pct: int | None = None
                     if total_packets:
                         pct = int(current_sim.packets_sent / total_packets * 100)
-                    reached_time_limit = (
-                        sim_duration and sim_duration > 0.0 and current_sim.current_time >= sim_duration
-                    )
-                    if sim_duration and sim_duration > 0.0:
-                        pct = int(min(current_sim.current_time / sim_duration * 100, 100))
-                    if reached_time_limit:
-                        pct = 100
                     if pct is not None and pct != last:
                         last = pct
                         if current_session_alive():
@@ -1804,9 +1781,6 @@ def fast_forward(event=None):
                                     current_fast_forward_progress, "value", val
                                 )
                             )
-                    if reached_time_limit:
-                        break
-
                 def update_ui():
                     current_fast_forward_progress.value = 100
                     if not current_session_alive():
@@ -1851,13 +1825,7 @@ def fast_forward(event=None):
             finally:
                 def restore_buttons() -> None:
                     sim_running = getattr(current_sim, "running", False)
-                    sim_duration_limit = getattr(
-                        current_sim, "max_sim_time", getattr(current_sim, "sim_duration_limit", None)
-                    )
-                    has_limit = (
-                        getattr(current_sim, "packets_to_send", 0) > 0
-                        or (sim_duration_limit is not None and sim_duration_limit > 0.0)
-                    )
+                    has_limit = getattr(current_sim, "packets_to_send", 0) > 0
                     current_export_button.disabled = False
                     current_pause_button.disabled = pause_prev_disabled
                     current_stop_button.disabled = not sim_running
@@ -1968,12 +1936,7 @@ def on_packets_change(event):
     _refresh_fast_forward_state_from_inputs()
 
 
-def on_sim_duration_change(event):
-    _refresh_fast_forward_state_from_inputs()
-
-
 packets_input.param.watch(on_packets_change, "value")
-sim_duration_input.param.watch(on_sim_duration_change, "value")
 heatmap_res_slider.param.watch(update_heatmap, "value")
 hist_metric_select.param.watch(lambda event: update_histogram(), "value")
 show_paths_checkbox.param.watch(lambda event: update_map(), "value")
@@ -2023,7 +1986,6 @@ controls = pn.WidgetBox(
     battery_capacity_input,
     payload_size_input,
     node_class_select,
-    sim_duration_input,
     real_time_duration_input,
     pn.Row(start_button, stop_button),
     pn.Row(fast_forward_button, pause_button),

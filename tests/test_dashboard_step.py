@@ -838,7 +838,6 @@ def test_setup_simulation_resets_timeline_between_runs(monkeypatch):
     dashboard.packets_input.value = 1
     dashboard.num_runs_input.value = 1
     dashboard.real_time_duration_input.value = 0
-    dashboard.sim_duration_input.value = 0
 
     dashboard.setup_simulation()
 
