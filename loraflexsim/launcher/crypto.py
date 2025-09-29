@@ -249,7 +249,7 @@ def cmac(key: bytes, msg: bytes) -> bytes:
     n = (len(msg) + 15) // 16
     if n == 0:
         n = 1
-    complete = len(msg) % 16 == 0
+    complete = len(msg) != 0 and len(msg) % 16 == 0
     last = msg[(n - 1) * 16 :]
     if complete:
         last = bytes(x ^ y for x, y in zip(last, K1))
