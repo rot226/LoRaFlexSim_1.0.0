@@ -77,6 +77,8 @@ timeline_success_segments: deque[tuple[float, float, int]] = deque()
 timeline_failure_segments: deque[tuple[float, float, int]] = deque()
 pause_prev_disabled = False
 node_paths: dict[int, list[tuple[float, float]]] = {}
+_latest_global_counters: tuple[int, int] | None = None
+_last_metrics_counters: tuple[int, int] | None = None
 
 
 def _get_last_metrics_timeline() -> pd.DataFrame | list[dict] | None:
@@ -1090,6 +1092,7 @@ def periodic_chrono_update():
 def step_simulation():
     global runs_metrics_timeline, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
     global metrics_timeline_last_key, metrics_timeline_window
+    global _latest_global_counters, _last_metrics_counters
     if sim is None or not session_alive():
         if not session_alive():
             _cleanup_callbacks()
@@ -1144,6 +1147,16 @@ def step_simulation():
             previous_last_key = None
         metrics_timeline_last_key = previous_last_key
 
+    current_counters = (
+        getattr(sim, "tx_attempted", 0),
+        getattr(sim, "rx_delivered", 0),
+    )
+    counters_changed = (
+        _last_metrics_counters is None or current_counters != _last_metrics_counters
+    )
+    if _latest_global_counters != current_counters:
+        _latest_global_counters = current_counters
+
     signature = (
         _snapshot_signature(latest_snapshot)
         if latest_snapshot is not None
@@ -1152,8 +1165,10 @@ def step_simulation():
     has_new_snapshot = (
         latest_snapshot is not None and signature != previous_last_key
     )
-    metrics_required = latest_snapshot is None or has_new_snapshot
+    metrics_required = latest_snapshot is None or has_new_snapshot or counters_changed
     metrics = sim.get_metrics() if metrics_required else None
+    if metrics is not None:
+        _last_metrics_counters = current_counters
 
     snapshot_copy = dict(latest_snapshot) if latest_snapshot is not None else None
     merged_metrics = _merge_metrics_with_snapshot(metrics, snapshot_copy)
@@ -1220,6 +1235,7 @@ def setup_simulation(seed_offset: int = 0):
     global timeline_fig, last_event_index, metrics_timeline_buffer, _metrics_timeline_steps_since_refresh
     global timeline_success_segments, timeline_failure_segments
     global metrics_timeline_last_key, metrics_timeline_window
+    global _latest_global_counters, _last_metrics_counters
 
     # Empêcher de relancer si une simulation est déjà en cours
     if sim is not None and getattr(sim, "running", False):
@@ -1241,6 +1257,8 @@ def setup_simulation(seed_offset: int = 0):
     metrics_timeline_window = _set_metrics_timeline_window([])
     metrics_timeline_last_key = None
     _metrics_timeline_steps_since_refresh = 0
+    _latest_global_counters = None
+    _last_metrics_counters = None
     if current_run >= 1:
         if len(runs_metrics_timeline) < current_run:
             runs_metrics_timeline.extend([None] * (current_run - len(runs_metrics_timeline)))
@@ -1496,12 +1514,15 @@ def on_start(event):
 def on_stop(event):
     global sim, sim_callback, chrono_callback, map_anim_callback, start_time, max_real_time, paused
     global current_run, total_runs, runs_events, auto_fast_forward, runs_metrics_timeline
+    global _latest_global_counters, _last_metrics_counters
     # If called programmatically (e.g. after fast_forward), allow cleanup even
     # if the simulation has already stopped.
     if sim is None or (event is not None and not getattr(sim, "running", False)):
         paused = False
         pause_button.name = "⏸ Pause"
         fast_forward_button.disabled = True
+        _latest_global_counters = None
+        _last_metrics_counters = None
         return
 
     sim.running = False
@@ -1516,6 +1537,9 @@ def on_stop(event):
     if chrono_callback:
         chrono_callback.stop()
         chrono_callback = None
+
+    _latest_global_counters = None
+    _last_metrics_counters = None
 
     try:
         df = sim.get_events_dataframe()
