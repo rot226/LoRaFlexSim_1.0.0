@@ -80,13 +80,14 @@ def _install_panel_stub():
         "Button",
         "Toggle",
         "TextAreaInput",
+        "StaticText",
     ]:
         setattr(widgets_module, widget_name, _DummyWidget)
 
     indicators_module = types.ModuleType("panel.indicators")
     indicators_module.Number = _DummyWidget
     indicators_module.Progress = _DummyWidget
-    indicators_module.StaticText = _DummyWidget
+    indicators_module.StaticText = widgets_module.StaticText
 
     pane_module = types.ModuleType("panel.pane")
     pane_module.HTML = _DummyPane
