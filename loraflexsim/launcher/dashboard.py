@@ -226,7 +226,7 @@ adr_server_checkbox = pn.widgets.Checkbox(name="ADR serveur", value=True)
 adr1_button = pn.widgets.Button(name="ADR 1", button_type="default")
 adr2_button = pn.widgets.Button(name="ADR 2", button_type="default")
 adr3_button = pn.widgets.Button(name="ADR_ML", button_type="default")
-active_adr_badge = pn.indicators.StaticText(name="ADR actif", value=_DEFAULT_ADR_NAME)
+active_adr_badge = pn.widgets.StaticText(name="ADR actif", value=_DEFAULT_ADR_NAME)
 
 _ADR_BUTTONS = {
     "ADR 1": adr1_button,
